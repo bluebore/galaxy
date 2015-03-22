@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <sched.h>
 
 #include <boost/bind.hpp>
 
@@ -19,6 +20,13 @@ extern std::string FLAGS_master_addr;
 extern std::string FLAGS_agent_port;
 
 namespace galaxy {
+
+static int ChildMain(void* args){
+    execl("/bin/sh", "sh", "-c", static_cast<const char*>(args), NULL);
+    /* Exit the child process if execl fails */
+    assert(0);
+    _exit(127);
+}
 
 AgentImpl::AgentImpl() {
     rpc_client_ = new RpcClient();
@@ -63,14 +71,18 @@ void AgentImpl::OpenProcess(const std::string& task_name,
     fclose(fp);
     */
     LOG(INFO,"Fork to run %s", task_name.c_str());
-    pid_t pid = fork();
-    if (pid != 0) {
+    static unsigned long long stack[(8 * 1024 * 1024) / sizeof(unsigned long long)];
+    int pid = clone(&ChildMain, 
+                    &stack[sizeof(stack) / sizeof(stack[0]) - 1], 
+                    CLONE_NEWNS, 
+                    static_cast<void *>(const_cast<char *>(&task_name[0])));
+
+    if (pid == -1) {
+        LOG(WARNING, "start subprocess failed %s", strerror(errno));
         return;
     }
-    execl("/bin/sh", "sh", "-c", task_path.c_str(), NULL);
-    /* Exit the child process if execl fails */
-    assert(0);
-    _exit(127);
+
+    LOG(INFO, "child process pid %d", pid);
 }
 void AgentImpl::RunTask(::google::protobuf::RpcController* controller,
                         const ::galaxy::RunTaskRequest* request,
