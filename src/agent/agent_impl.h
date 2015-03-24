@@ -9,16 +9,17 @@
 
 #include "proto/agent.pb.h"
 #include "proto/master.pb.h"
-
+#include "agent/workspace_manager.h"
+#include "agent/task_manager.h"
 #include "common/thread_pool.h"
-
+#include "agent/workspace.h"
 namespace galaxy {
 
 class RpcClient;
 
 class AgentImpl : public Agent {
 public:
-    AgentImpl();
+    AgentImpl(const std::string _workspace_root_path);
     virtual ~AgentImpl();
 public:
     void Report();
@@ -29,14 +30,13 @@ public:
                          ::galaxy::RunTaskResponse* response,
                          ::google::protobuf::Closure* done);
 private:
-    /// Start a new process
-    void OpenProcess(const std::string& task_name,
-                     const std::string& task_raw,
-                     const std::string& cmd_line);
-private:
     common::ThreadPool thread_pool_;
     RpcClient* rpc_client_;
     Master_Stub* master_;
+    WorkspaceManager* ws_mgr_;
+    TaskManager* task_mgr_;
+    //agent workspace 根目录
+    std::string workspace_root_path_;
 };
 
 } // namespace galaxy

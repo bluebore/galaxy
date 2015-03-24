@@ -40,15 +40,18 @@ CONFIGS('public/sofa-pbrpc@trunk@comake')
 #CONFIGS_32('lib2/ullib')
 #CONFIGS_64('lib2-64/ullib')
 
-agent_sources='common/logging.cc src/flags.cc \
+agent_sources='src/flags.cc\
+               common/logging.cc common/util.cc\
                src/proto/task.proto src/proto/agent.proto src/proto/master.proto \
+               src/agent/task_runner.cc src/agent/task_manager.cc\
+               src/agent/workspace.cc src/agent/workspace_manager.cc \
                src/agent/agent_impl.cc src/agent/agent_main.cc'
-master_sources='common/logging.cc src/flags.cc \
-                src/proto/task.proto src/proto/agent.proto src/proto/master.proto\
-                src/master/master_impl.cc src/master/master_main.cc'
-sdk_sources='common/logging.cc src/sdk/galaxy.cc src/proto/task.proto src/proto/master.proto'
+
+master_sources='src/flags.cc src/proto/task.proto src/proto/agent.proto src/proto/master.proto\
+                common/logging.cc src/master/master_impl.cc src/master/master_main.cc'
+sdk_sources='src/sdk/galaxy.cc src/proto/task.proto src/proto/master.proto'
 sdk_headers='src/sdk/galaxy.h'
-client_sources='src/client/galaxy_client.cc'
+client_sources='common/logging.cc src/client/galaxy_client.cc'
 
 #可执行文件
 #Application('galaxy',Sources(user_sources))
@@ -56,6 +59,7 @@ Application('agent',Sources(agent_sources))
 Application('master',Sources(master_sources))
 #静态库
 StaticLibrary('galaxy',Sources(sdk_sources),HeaderFiles(sdk_headers))
+
 #Client
 Application('galaxy_client',Sources(client_sources), Libraries('./libgalaxy.a'))
 #共享库

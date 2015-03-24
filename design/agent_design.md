@@ -29,3 +29,4 @@ Agent作为单机Demon程序，主要从如下角度进行管理工作：
 * Start , fork 一个子进程，在子进程执行execl task的命令
 * Stop , 在第一步fork是记住pid,作为任务的父pid,通过pid获取 process tree,如何优雅停止process tree,自上而下，还是自下而上？
 * IsRuning , 目前实现方式是检查父pid是否存在
+
