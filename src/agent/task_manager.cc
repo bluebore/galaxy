@@ -75,7 +75,6 @@ int TaskManager::Status(std::vector< TaskStatus >& task_status_vector) {
             status.set_status(RUNNING);
         }else if(ret == 1){
             status.set_status(COMPLETE);
-            Remove(it->first);
         }else{
             if (it->second->ReStart() == 0) {
                 status.set_status(RESTART);
