@@ -87,6 +87,10 @@ public:
                         DefaultWorkspace* workspace)
                        :AbstractTaskRunner(task_info,workspace),
                         _cg_root(cg_root),
+                        _cg_ctrl(NULL),
+                        _mem_ctrl(NULL),
+                        _cpu_ctrl(NULL),
+                        _cpu_acct_ctrl(NULL),
                         collector_(NULL),
                         collector_id_(-1),
                         persistence_path_dir_(), 

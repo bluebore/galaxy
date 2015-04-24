@@ -27,14 +27,14 @@ message HeartBeatRequest {
     optional double used_cpu_share = 6;
     optional int64 mem_share = 7;
     optional int64 used_mem_share = 8;
-    optional int32 version = 9;
+    optional int64 version = 9;
 }
 
 message HeartBeatResponse {
     optional int64 seq_id = 1;
     optional int32 status = 2;
     optional int64 agent_id = 5;
-    optional int32 version = 4;
+    optional int64 version = 4;
 }
 
 message NewJobRequest {

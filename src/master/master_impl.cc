@@ -218,6 +218,11 @@ void MasterImpl::UpdateJobsOnAgent(AgentInfo* agent,
         int64_t task_id = *it;
         if (running_tasks.find(task_id) == running_tasks.end()) {
             TaskInstance& instance = tasks_[task_id];
+            if (instance.status() == KILLED){
+                LOG(INFO,"task %ld has been killed,remove it",task_id);
+                tasks_.erase(task_id);
+                continue;
+            }
             if (instance.status() == DEPLOYING
                     && instance.start_time() + FLAGS_task_deploy_timeout > now_time
                         && !clear_all) {
@@ -239,7 +244,7 @@ void MasterImpl::UpdateJobsOnAgent(AgentInfo* agent,
         }else{
             TaskInstance& instance = tasks_[task_id];
             if(instance.status() != ERROR
-                    && instance.status() != COMPLETE){
+               && instance.status() != COMPLETE){
                 continue;
             }
             int64_t job_id = instance.job_id();
@@ -436,8 +441,10 @@ bool MasterImpl::ScheduleTask(JobInfo* job, const std::string& agent_addr) {
     LOG(INFO, "ScheduleTask on %s", agent_addr.c_str());
     bool ret = rpc_client_->SendRequest(agent.stub, &Agent_Stub::RunTask,
                                         &rt_request, &rt_response, 5, 1);
-    if (!ret) {
+    if (!ret || (rt_response.has_status()
+                 &&rt_response.status() != 0)) {
         LOG(WARNING, "RunTask faild agent= %s", agent_addr.c_str());
+        return false;
     } else {
         agent.running_tasks.insert(task_id);
         agent.task_num ++;
@@ -453,8 +460,8 @@ bool MasterImpl::ScheduleTask(JobInfo* job, const std::string& agent_addr) {
         instance.set_offset(job->running_num);
         job->agent_tasks[agent_addr].insert(task_id);
         job->running_num ++;
+        return true;
     }
-    return ret;
 }
 
 void MasterImpl::CancelTaskOnAgent(AgentInfo* agent, int64_t task_id) {
@@ -508,6 +515,10 @@ void MasterImpl::ScaleDown(JobInfo* job) {
         job->job_name.c_str(), job->running_num, job->replica_num, agent_addr.c_str());
     AgentInfo& agent = agents_[agent_addr];
     CancelTaskOnAgent(&agent, task_id);
+    std::map<int64_t,TaskInstance>::iterator instance_it = tasks_.find(task_id);
+    if(instance_it != tasks_.end()){
+        instance_it->second.set_status(KILLED);
+    }
 }
 
 void MasterImpl::Schedule() {
