@@ -59,7 +59,7 @@ agent_sources='src/flags.cc\
 
 
 master_sources='src/flags.cc src/proto/task.proto src/proto/agent.proto src/proto/master.proto\
-                common/logging.cc src/master/master_impl.cc src/master/master_main.cc '
+                common/logging.cc src/master/master_impl.cc src/master/master_main.cc src/master/scheduler.cc'
 
 sdk_sources='common/logging.cc src/sdk/galaxy.cc src/proto/task.proto src/proto/master.proto'
 sdk_headers='src/sdk/galaxy.h'

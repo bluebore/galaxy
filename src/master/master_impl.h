@@ -24,6 +24,8 @@
 namespace galaxy {
 
 class Agent_Stub;
+class Scheduler;
+
 struct AgentInfo {
     int64_t id;
     std::string addr;
@@ -72,7 +74,6 @@ typedef boost::multi_index::multi_index_container<
     >
 > AgentLoadIndex;
 
-
 struct JobInfo {
     int64_t id;
     int32_t replica_num;
@@ -88,13 +89,17 @@ struct JobInfo {
     bool killed;
 };
 
+//agent load id index
+typedef boost::multi_index::nth_index<AgentLoadIndex,0>::type agent_id_index;
+//agent load cpu left index
+typedef boost::multi_index::nth_index<AgentLoadIndex,1>::type cpu_left_index;
+
 class RpcClient;
 
 class MasterImpl : public Master {
 public:
     MasterImpl();
-    ~MasterImpl() {
-    }
+    virtual ~MasterImpl();
 public:
     void HeartBeat(::google::protobuf::RpcController* controller,
                    const ::galaxy::HeartBeatRequest* request,
@@ -163,6 +168,7 @@ private:
 
     RpcClient* rpc_client_;
     AgentLoadIndex index_;
+    Scheduler* scheduler_;
 };
 
 } // namespace galaxy

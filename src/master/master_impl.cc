@@ -10,24 +10,28 @@
 #include <queue>
 #include "proto/agent.pb.h"
 #include "rpc/rpc_client.h"
+#include "scheduler.h"
 
 extern int FLAGS_task_deploy_timeout;
 extern int FLAGS_agent_keepalive_timeout;
 
 namespace galaxy {
-//agent load id index
-typedef boost::multi_index::nth_index<AgentLoadIndex,0>::type agent_id_index;
-//agent load cpu left index
-typedef boost::multi_index::nth_index<AgentLoadIndex,1>::type cpu_left_index;
-
 
 MasterImpl::MasterImpl()
     : next_agent_id_(0),
       next_task_id_(0),
-      next_job_id_(0) {
+      next_job_id_(0),
+      rpc_client_(NULL),
+      scheduler_(NULL) {
     rpc_client_ = new RpcClient();
+    scheduler_ =  new LoadBalanceScheduler();
     thread_pool_.AddTask(boost::bind(&MasterImpl::Schedule, this));
     thread_pool_.AddTask(boost::bind(&MasterImpl::DeadCheck, this));
+}
+
+MasterImpl::~MasterImpl() {
+    delete rpc_client_;
+    delete scheduler_;
 }
 
 void MasterImpl::TerminateTask(::google::protobuf::RpcController* /*controller*/,
@@ -567,90 +571,20 @@ void MasterImpl::Schedule() {
     thread_pool_.DelayTask(1000, boost::bind(&MasterImpl::Schedule, this));
 }
 
-//负载计算
-//目前使用3个因数
-//1、当前机器mem使用量，负载与内存使用量成正比，与内存总量成反比，但是需要考虑内存使用量为零情况
-//   需要设置一个默认值比如1 byte,避免总负债变为零
-//2、当前机器的cpu使用量，负载与cpu使用量成正比，与cpu总量成反比，同时需要考虑内存使用量为0状态
-//3、当前机器上的任务数，负载与任务数成正比，需要考虑为0情况
-//例子:
-//   一台机器内存10g 使用量4g ,cpu数5个，使用量1.0，任务数1 当前负载load = 4/10 * 1.0/5 * 1 = 0.08
 double MasterImpl::CalcLoad(const AgentInfo& agent){
     if(agent.mem_share <= 0 || agent.cpu_share <= 0.0 ){
         LOG(FATAL,"invalid agent input ,mem_share %ld,cpu_share %f",agent.mem_share,agent.cpu_share);
         return 0.0;
     }
-    int64_t mem_used = agent.mem_used > 0 ? agent.mem_used : 1;
-    double cpu_used = agent.cpu_used > 0 ? agent.cpu_used : 0.1;
-    double mem_factor = mem_used/static_cast<double>(agent.mem_share);
-    double cpu_factor = cpu_used/agent.cpu_share;
-    double task_count_factor = agent.running_tasks.size() > 0 ? agent.running_tasks.size() : 0.1;
-    return task_count_factor * mem_factor * cpu_factor;
-
+    return scheduler_->CalcLoad(&agent);
 }
 
 std::string MasterImpl::AllocResource(const JobInfo& job){
     LOG(INFO,"alloc resource for job %ld,mem_require %ld, cpu_require %f",
         job.id,job.mem_share,job.cpu_share);
     agent_lock_.AssertHeld();
-    std::string addr;
-    cpu_left_index& cidx = boost::multi_index::get<1>(index_);
-    // NOTO first iterator value not satisfy requirement
-    cpu_left_index::iterator it = cidx.lower_bound(job.cpu_share);
-    cpu_left_index::iterator it_start = cidx.begin();
-    cpu_left_index::iterator cur_agent;
-    bool last_found = false;
-    double current_min_load = 0;
-    if(it != cidx.end() 
-            && it->mem_left >= job.mem_share
-            && it->cpu_left >= job.cpu_share){
-        LOG(DEBUG, "alloc resource for job %ld list agent %s cpu left %lf mem left %ld",
-                job.id,
-                it->agent_addr.c_str(),
-                it->cpu_left,
-                it->mem_left);
-        last_found = true;
-        current_min_load = it->load;
-        addr = it->agent_addr;
-        cur_agent = it;
-    }
-    for(;it_start != it;++it_start){
-        LOG(DEBUG, "alloc resource for job %ld list agent %s cpu left %lf mem left %ld",
-                job.id,
-                it_start->agent_addr.c_str(),
-                it_start->cpu_left,
-                it_start->mem_left);
-        //判断内存是否满足需求
-        if(it_start->mem_left < job.mem_share){
-            continue;
-        }
-        //第一次赋值current_min_load;
-        if(!last_found){
-            current_min_load = it_start->load;
-            addr = it_start->agent_addr;
-            last_found = true;
-            cur_agent = it;
-            continue;
-        }
-        //找到负载更小的节点
-        if(current_min_load > it_start->load){
-            addr = it_start->agent_addr;
-            current_min_load = it_start->load;
-            cur_agent = it;
-        }
-    }
-    if(last_found){
-        LOG(INFO,"alloc resource for job %ld on host %s with load %f cpu left %f mem left %ld",
-                job.id,addr.c_str(),
-                current_min_load,
-                cur_agent->cpu_left,
-                cur_agent->mem_left);
-    }else{
-        LOG(WARNING,"no enough  resource to alloc for job %ld",job.id);
-    }
-    return addr;
+    return scheduler_->PickAgent(&index_, &job);
 }
-
 
 void MasterImpl::SaveIndex(const AgentInfo& agent){
     agent_lock_.AssertHeld();
