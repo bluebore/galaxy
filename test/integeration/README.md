@@ -7,25 +7,9 @@
 * nose
 以下是具体安装步骤
 ```
-
-git clone https://github.com/BaiduPS/sofa-pbrpc
-#安装前记得修改depends.mk里面protobuf安装目录
-cd sofa-pbrpc/python && python setup.py install
-
-#安装 pip
-请参照pip.baidu.com
-
-#安装nose
-pip install nose
+sh build-env-internal.sh
 ```
 
-
-### galaxy python sdk 加入到 PYTHONPATH
-进入目录[console backend](../../console/backend/)
-```
-sh compile-proto.sh
-export PYTHONPATH=`pwd`/src
-```
 ### 本地运行集成测试
 sh inte-test-on-local.sh
 

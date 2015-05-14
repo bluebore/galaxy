@@ -123,8 +123,15 @@ message NodeInstance {
     optional int32 task_num = 4;
     optional double cpu_share = 5;
     optional int64 mem_share = 6;
-    optional double cpu_used = 7;
-    optional int64 mem_used = 8;
+    //节点被分配的cpu个数
+    optional double cpu_allocated = 7;
+    //节点被分配的mem数
+    optional int64 mem_allocated = 8;
+
+    //节点内存实际使用数
+    optional int64 mem_used = 9;
+    //节点cpu实际使用个数
+    optional double cpu_used = 10;
 }
 
 message ListNodeRequest {

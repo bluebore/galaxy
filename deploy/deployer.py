@@ -95,7 +95,7 @@ def build_parser(deployer):
                        usage=usage)
     subparsers = parser.add_subparsers()
     stop_sub = subparsers.add_parser("stop",
-    		                     help="stop apps on all hosts")
+                                 help="stop apps on all hosts")
     stop_sub.add_argument('-v',
                           default=False,
                           dest="show_output",
@@ -172,7 +172,7 @@ def build_parser(deployer):
    
     start_sub.set_defaults(func=deployer.start)
     init_sub = subparsers.add_parser("init",
-    		                     help="init all nodes")
+                                 help="init all nodes")
     init_sub.add_argument('-v',
                           default=False,
                           dest="show_output",
@@ -198,7 +198,7 @@ def build_parser(deployer):
     init_sub.set_defaults(func=deployer.init)
  
     clean_sub = subparsers.add_parser("clean",
-    		                     help="clean all nodes")
+                                 help="clean all nodes")
     clean_sub.add_argument('-v',
                           default=False,
                           dest="show_output",
@@ -224,7 +224,7 @@ def build_parser(deployer):
     clean_sub.set_defaults(func=deployer.clean)
      
     migrate_sub = subparsers.add_parser("migrate",
-    		                 help="migrate all apps")
+                             help="migrate all apps")
     migrate_sub.add_argument('-v',
                           default=False,
                           dest="show_output",
@@ -253,6 +253,7 @@ def build_parser(deployer):
 
 
     return parser
+
 
 class Deployer(object):
     def __init__(self):
@@ -302,14 +303,14 @@ class Deployer(object):
                     print "exec %s on %s %s"%(key,node,RichText.render_green_text("succssfully"))
                 else: 
                     print "exec %s on %s %s"%(key,node,RichText.render_red_text("error"))
-    
+
     def fetch(self,options):
         self.password = options.password
         self.user = options.user
         for app in options.module.APPS:
             print "fetch app %s"%RichText.render_green_text(app['name']) 
             fetch_cmd = "mkdir -p %s && cd %s  && wget -O tmp.tar.gz %s && tar -zxvf tmp.tar.gz"%(app['workspace'], 
- 		      							          app['workspace'],
+                                                  app['workspace'],
                                                                                   app['package'])
             print "exec %s"%fetch_cmd
             for host in app['hosts']:

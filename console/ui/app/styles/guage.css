@@ -1,0 +1,80 @@
+.d3-guage{
+    margin-right:15px;
+}
+.d3-gauge.simple .outer-circle {
+  fill         :  #ccc;
+  stroke       :  #000;
+  stroke-width :  0.5px;
+}
+
+.d3-gauge.simple .inner-circle {
+  fill         :  #fff;
+  stroke       :  #E0E0E0;
+  stroke-width :  2px;
+}
+
+.d3-gauge.simple .label {
+  fill      :  #333;
+  font-size :  24px;
+}
+
+.d3-gauge.simple .major-tick {
+  stroke       :  #333;
+  stroke-width :  2px;
+}
+
+.d3-gauge.simple .minor-tick {
+  stroke       :  #666;
+  stroke-width :  1px;
+}
+
+.d3-gauge.simple .major-tick-label {
+  fill         :  darkblue;
+  stroke-width :  2px;
+  font-size    :  15px;
+}
+
+.d3-gauge.simple .needle {
+  fill         :  #dc3912;
+  stroke       :  #c63310;
+  fill-opacity :  0.7;
+}
+
+.d3-gauge.simple .needle-container {
+  fill         :  #4684EE;
+  stroke       :  #666;
+  fill-opacity :  1;
+}
+
+.d3-gauge.simple .current-value {
+  fill         :  #000;
+  stroke-width :  0px;
+}
+
+.d3-gauge.simple .green-zone {
+  fill :  #FF9900
+}
+
+.d3-gauge.simple .yellow-zone {
+  fill :  #FF9900
+}
+
+.d3-gauge.simple .red-zone {
+  fill :  #DC3912
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

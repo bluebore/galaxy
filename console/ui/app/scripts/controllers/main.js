@@ -38,7 +38,7 @@ angular.module('galaxy.ui.ctrl',[])
       });
     };
 
-$http.get("/service/list?user=9527&master="+config.masterAddr)
+$http.get("/console/service/list?user=9527&master="+config.masterAddr)
          .success(function(data){
           if(data.status == 0 ){
                $scope.serviceList = data.data;  
@@ -95,7 +95,7 @@ $http.get("/service/list?user=9527&master="+config.masterAddr)
       });
       promot.result.then(function(result){
         if(result){
-          $http.get("/service/kill?id="+id+"&master="+config.masterAddr)
+          $http.get("/console/service/kill?id="+id+"&master="+config.masterAddr)
                .success(function(data){
                   if(data.status == 0){
                     notify({ message:'kill服务成功'} );
@@ -118,7 +118,7 @@ $http.get("/service/list?user=9527&master="+config.masterAddr)
 angular.module('galaxy.ui.ctrl').controller('UpdateServiceModalIntanceCtrl',function($scope,$modalInstance,$http,$route,config,service,notify){
         $scope.service = service;
         $scope.update = function(){
-             $http.get('/service/update?id='+$scope.service.job_id+"&replicate="+$scope.service.replica_num+"&master="+config.masterAddr)
+             $http.get('/console/service/update?id='+$scope.service.job_id+"&replicate="+$scope.service.replica_num+"&master="+config.masterAddr)
                   .success(function(data){
                         if(data.status == 0){ 
                           notify({ message:'更新服务成功'} );
@@ -147,7 +147,7 @@ angular.module('galaxy.ui.ctrl').controller('CreateServiceModalInstanceCtrl',
     $http(
       {
         method:"POST",
-        url:'/service/create?master='+config.masterAddr, 
+        url:'/console/service/create?master='+config.masterAddr, 
         data:$scope.deployTpl,
         headers:{'Content-Type': 'application/x-www-form-urlencoded'},
         transformRequest: function(obj) {

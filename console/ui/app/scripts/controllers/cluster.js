@@ -12,6 +12,7 @@ angular.module('galaxy.ui.ctrl')
                                           $http,
                                           $routeParams,
                                           $log,
+                                          $interval,
                                           notify,
                                           config,
                                           $location){
@@ -33,24 +34,32 @@ angular.module('galaxy.ui.ctrl')
              }
            });
           }  
-
-
-           $scope.machineList = [];
-           $http.get("/cluster/status?master="+config.masterAddr)
-                .success(function(data){
-                    if(data.status == 0){
-                        $scope.machineList = data.data.machinelist;
-                        $scope.total_node_num = data.data.total_node_num;
-                        $scope.total_cpu_num = data.data.total_cpu_num;
-                        $scope.total_cpu_used = data.data.total_cpu_used;
-                        $scope.total_mem_used = data.data.total_mem_used;
-                        $scope.total_mem_num = data.data.total_mem_num;
-                        $scope.total_task_num = data.data.total_task_num;
-                    }else{
-                    
-                    }
-                })
-                .error(function(){})
+          $scope.cpuUsage = 0;
+          $scope.memUsage = 0;
+          $scope.machineList = [];
+          var get_status = function(){
+               $http.get("/console/cluster/status?master="+config.masterAddr)
+                  .success(function(data){
+                      if(data.status == 0){
+                          $scope.machineList = data.data.machinelist;
+                          $scope.total_node_num = data.data.total_node_num;
+                          $scope.total_cpu_num = data.data.total_cpu_num;
+                          $scope.total_cpu_allocated = data.data.total_cpu_allocated;
+                          $scope.total_mem_allocated = data.data.total_mem_allocated;
+                          $scope.total_mem_num = data.data.total_mem_num;
+                          $scope.total_task_num = data.data.total_task_num;
+                          $scope.total_mem_used = data.data.total_mem_used;
+                          $scope.total_cpu_used = data.data.total_cpu_used;
+                          $scope.cpuUsage = data.data.cpu_usage_p;
+                          $scope.memUsage = data.data.mem_usage_p;
+                      }else{
+                      
+                      }
+                  })
+             .error(function(){})
+           }
+           get_status();
+           $interval(get_status,5000);
     
 }
 )

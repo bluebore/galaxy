@@ -1,4 +1,19 @@
  <div class="service-list">
+ 
+<div class="ui statistics">
+   
+
+    <div cluster-gauge></div>
+ <div class="red statistic">
+        <div class="value">{{total_mem_used}}/{{total_mem_allocated}}</div>
+        <div class="label">实际使用量/总内存分配量 </div>
+      </div>
+      <div class="red statistic">
+        <div class="value">{{total_cpu_used}}/{{total_cpu_allocated}} </div>
+        <div class="label">实际使用量/总CPU分配量 </div>
+    </div>
+
+  </div> 
 <div class="ui statistics">
       <div class="blue statistic">
         <div class="value">{{total_node_num}}</div>
@@ -16,26 +31,16 @@
         <div class="value">{{total_task_num}}</div>
         <div class="label">集群总任务</div>
       </div>
-  </div>  
-<div class="ui statistics">
-      <div class="red statistic">
-        <div class="value">{{total_mem_used}}</div>
-        <div class="label">总内存使用量 </div>
-      </div>
-      <div class="red statistic">
-        <div class="value">{{total_cpu_used}} </div>
-        <div class="label">总CPU使用量 </div>
-      </div>
+  </div>
      
-    </div>  
 <table class="table service-table">
     <thead>
       <tr>
         <th>#id</th>
         <th>节点名称</th>
         <th>任务数</th>
-        <th>cpu(used/total)</th>
-        <th>mem(used/total)</th>
+        <th>cpu(allocated/total)</th>
+        <th>mem(allocated/total)</th>
       </tr>
     </thead>
     <tbody>
@@ -43,8 +48,8 @@
         <td>{{machine.id}}</td>
         <td>{{machine.addr}}</td>
         <td><a href ng-click="listTaskByAgent(machine)">{{machine.task_num}}</a></td>
-        <td>{{machine.cpu_used}}/{{machine.cpu_share}}</td>
-        <td>{{machine.mem_used}}/{{machine.mem_share}}</td>
+        <td>{{machine.cpu_allocated}}/{{machine.cpu_share}}</td>
+        <td>{{machine.mem_allocated}}/{{machine.mem_share}}</td>
       </tr>
     </tbody>
   </table>  
