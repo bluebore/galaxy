@@ -819,8 +819,12 @@ void MasterImpl::Schedule() {
         uint32_t deploy_step_size = job.deploy_step_size;
         //just for log
         uint32_t old_deploying_tasks_size = job.deploying_tasks.size();
-        for ( ;job.deploying_tasks.size() < deploy_step_size
-             && job.running_num < job.replica_num ;) {
+        int max_deploying_try_times = deploy_step_size - old_deploying_tasks_size;
+        for (int deploying_times = 0;
+                job.deploying_tasks.size() < deploy_step_size
+                    && job.running_num < job.replica_num 
+                    && deploying_times < max_deploying_try_times;
+                        ++deploying_times) {
             LOG(INFO, "[Schedule] Job[%s] running %d tasks, replica_num %d",
                 job.job_name.c_str(), job.running_num, job.replica_num);
             std::string agent_addr = AllocResource(job);
