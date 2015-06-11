@@ -166,6 +166,22 @@ int AbstractCtrl::AttachTask(pid_t pid) {
     return 0;
 }
 
+int MemoryCtrl::SetKillMode(int mode) {
+#ifndef _BD_KERNEL_
+    // memory.kill_mode is only support in internal kernel
+    LOG(WARNING, "kill mode set only support in BD internal kernel");
+    return 0;
+#endif
+    std::string kill_mode = _my_cg_root + "/" + "memory.kill_mode";
+    int ret = common::util::WriteIntToFile(kill_mode, mode);
+    if (ret < 0) {
+        LOG(FATAL, "fail to set kill_mode %d for %s",
+                mode, _my_cg_root.c_str()); 
+        return -1;
+    }
+    return 0;
+}
+
 int MemoryCtrl::SetLimit(int64_t limit) {
     std::string limit_file = _my_cg_root + "/" + "memory.limit_in_bytes";
     int ret = common::util::WriteIntToFile(limit_file, limit);
@@ -286,6 +302,13 @@ int ContainerTaskRunner::Prepare() {
         if (cpu_limit < cpu_core) {
             cpu_limit = cpu_core;
         }
+    }
+
+    const int GROUP_KILL_MODE = 1;
+    if (_mem_ctrl->SetKillMode(GROUP_KILL_MODE) != 0) {
+        LOG(FATAL, "fail to set memory kill mode for task %ld",
+                m_task_info.task_id());
+        return -1;
     }
 
     if (_mem_ctrl->SetLimit(mem_size) != 0) {

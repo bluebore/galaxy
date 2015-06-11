@@ -53,6 +53,7 @@ public:
     //update memory.soft_limit_in_bytes.
     int SetSoftLimit(int64_t soft_limit);
     ~MemoryCtrl(){}
+    int SetKillMode(int mode);
 };
 
 class CpuCtrl:public AbstractCtrl{

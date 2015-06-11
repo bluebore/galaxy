@@ -185,6 +185,7 @@ private:
 
     void KilledTaskCallback(
             int64_t job_id, 
+            std::string agent_addr,
             const KillTaskRequest*, 
             KillTaskResponse*, bool, int);
 private:
