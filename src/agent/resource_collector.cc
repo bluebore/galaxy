@@ -119,6 +119,7 @@ public:
     }
 
     void Clear() {
+        collector_times_ = 0;
         is_cleared_ = true; 
     }
 
@@ -270,14 +271,18 @@ public:
     }
 
     void Clear() {
+        collector_times_ = 0;
         is_cleared_ = true; 
     }
     double GetCpuUsage();
+
+    double GetCpuCoresUsage();
 
     long GetMemoryUsage() {
         return cgroup_statistics_cur_.memory_rss_in_bytes;
     }
 private:
+    void CalcCpuUsage();
     std::string cgroup_name_;
     // global resource statistics
     ResourceStatistics global_statistics_prev_;
@@ -291,13 +296,29 @@ private:
     long collector_times_;
     common::Mutex mutex_;
     bool is_cleared_;
+    double cpu_cur_usage_;
+    double cpu_cores_cur_usage_;
 };
+
+double CGroupResourceCollectorImpl::GetCpuCoresUsage() {
+    common::MutexLock lock(&mutex_);
+    CalcCpuUsage();
+    return cpu_cores_cur_usage_;
+}
 
 double CGroupResourceCollectorImpl::GetCpuUsage() {
     common::MutexLock lock(&mutex_);
+    CalcCpuUsage();
+    return cpu_cur_usage_;
+}
+
+void CGroupResourceCollectorImpl::CalcCpuUsage() {
+    mutex_.AssertHeld();
     if (is_cleared_) {
         LOG(WARNING, "need try again"); 
-        return 0.0;
+        cpu_cur_usage_ = 0.0;
+        cpu_cores_cur_usage_ = 0.0;
+        return;
     }
 
     long global_cpu_before = 
@@ -333,19 +354,25 @@ double CGroupResourceCollectorImpl::GetCpuUsage() {
             global_statistics_cur_.cpu_cores);
 
     if (global_cpu_after - global_cpu_before == 0) {
-        return 0.0; 
+        cpu_cur_usage_ = 0.0;
+        cpu_cores_cur_usage_ = 0.0;
+        return; 
     }
 
     double rs = (cgroup_cpu_after - cgroup_cpu_before) / (double)(global_cpu_after - global_cpu_before) ; 
     rs /= radio;
-    LOG(DEBUG, "p prev :%ld p post:%ld g pre:%ld g post:%ld radir:%f rs:%f", 
+    cpu_cur_usage_ = rs;
+    cpu_cores_cur_usage_ = 
+        rs * cgroup_statistics_cur_.cpu_cores_limit;
+    LOG(DEBUG, "p prev :%ld p post:%ld g pre:%ld g post:%ld radir:%f cpu_cur_usage:%lf cpu_cores_cur_usage:%lf", 
             cgroup_cpu_before, 
             cgroup_cpu_after,
             global_cpu_before,
             global_cpu_after,
             radio,
-            rs);
-    return rs;
+            cpu_cur_usage_,
+            cpu_cores_cur_usage_);
+    return;
 }
 
 bool CGroupResourceCollectorImpl::CollectStatistics() {
@@ -404,6 +431,10 @@ double CGroupResourceCollector::GetCpuUsage() {
 
 long CGroupResourceCollector::GetMemoryUsage() {
     return impl_->GetMemoryUsage();
+}
+
+double CGroupResourceCollector::GetCpuCoresUsage() {
+    return impl_->GetCpuCoresUsage();
 }
 
 CGroupResourceCollector::~CGroupResourceCollector() {

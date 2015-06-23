@@ -6,6 +6,7 @@
 
 #include "agent/resource_manager.h"
 #include "common/logging.h"
+#include "agent/dynamic_resource_scheduler.h"
 
 namespace galaxy{
 
@@ -24,6 +25,14 @@ int ResourceManager::Allocate(const TaskResourceRequirement& requirement,
     resource_.the_left_cpu -= requirement.cpu_limit;
     resource_.the_left_mem -= requirement.mem_limit;
 
+    // dynamic scheduler to release
+    DynamicResourceScheduler* scheduler = GetDynamicResourceScheduler();
+    if (scheduler->Allocate(requirement) != 0) {
+        LOG(WARNING, "no enough resource in scheduler require %lf",
+                requirement.cpu_limit);
+        return -1; 
+    }
+     
     TaskResourceRequirement req(requirement);
     task_req_map_[task_id] = req;
     return 0;
@@ -69,6 +78,12 @@ void ResourceManager::Remove(int64_t task_id){
 
     resource_.the_left_cpu += it->second.cpu_limit;
     resource_.the_left_mem += it->second.mem_limit;
+
+    // dynamic scheduler to release
+    DynamicResourceScheduler* scheduler 
+        = GetDynamicResourceScheduler();
+    scheduler->Release(it->second);
+
     task_req_map_.erase(it);
 }
 

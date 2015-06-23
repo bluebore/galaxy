@@ -585,7 +585,7 @@ void MasterImpl::HeartBeat(::google::protobuf::RpcController* /*controller*/,
         }
         agent->mem_used += inner_it->second.memory_usage();
         //
-        agent->cpu_used += inner_it->second.cpu_usage() * inner_it->second.info().required_cpu();
+        agent->cpu_used += inner_it->second.cpu_usage();
     }
     SaveIndex(*agent);
     done->Run();

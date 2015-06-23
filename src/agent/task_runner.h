@@ -6,6 +6,7 @@
 
 #ifndef AGENT_TASK_RUNNER_H
 #define AGENT_TASK_RUNNER_H
+#include <map>
 #include <boost/function.hpp>
 #include "proto/task.pb.h"
 #include "common/mutex.h"
@@ -102,6 +103,7 @@ protected:
     int m_has_retry_times;
     int m_task_state;
     int downloader_id_;
+    std::map<std::string, std::string> envs_;
 };
 
 class CommandTaskRunner:public AbstractTaskRunner{

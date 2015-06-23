@@ -38,7 +38,7 @@ angular.module('galaxy.ui.ctrl',[])
       });
     };
 
-$http.get("/console/service/list?user=9527&master="+config.masterAddr)
+$http.get(config.rootPrefixPath + "service/list?user=9527&master="+config.masterAddr)
          .success(function(data){
           if(data.status == 0 ){
                $scope.serviceList = data.data;  
@@ -110,7 +110,7 @@ $http.get("/console/service/list?user=9527&master="+config.masterAddr)
       });
       promot.result.then(function(result){
         if(result){
-          $http.get("/console/service/kill?id="+id+"&master="+config.masterAddr)
+          $http.get(config.rootPrefixPath + "service/kill?id="+id+"&master="+config.masterAddr)
                .success(function(data){
                   if(data.status == 0){
                     notify({ message:'kill服务成功'} );
@@ -133,7 +133,7 @@ $http.get("/console/service/list?user=9527&master="+config.masterAddr)
 angular.module('galaxy.ui.ctrl').controller('UpdateServiceModalIntanceCtrl',function($scope,$modalInstance,$http,$route,config,service,notify){
         $scope.service = service;
         $scope.update = function(){
-             $http.get('/console/service/update?id='+$scope.service.job_id+"&replicate="+$scope.service.replica_num+"&master="+config.masterAddr)
+             $http.get(config.rootPrefixPath + 'service/update?id='+$scope.service.job_id+"&replicate="+$scope.service.replica_num+"&master="+config.masterAddr)
                   .success(function(data){
                         if(data.status == 0){ 
                           notify({ message:'更新服务成功'} );
@@ -155,7 +155,7 @@ angular.module('galaxy.ui.ctrl').controller('CreateServiceModalInstanceCtrl',
   $scope.disableBtn=false;
   $scope.alerts = [];
   $scope.defaultPkgType = [{name:'FTP',id:0},{name:'HTTP',id:1},{name:'P2P',id:2},{name:'BINARY',id:3}];
-  $scope.deployTpl = {name:"",startCmd:"",tag:"",pkgType:0,pkgSrc:"",deployStepSize:5,replicate:0,memoryLimit:3,cpuShare:0.5,oneTaskPerHost:false};
+  $scope.deployTpl = {groupId:"",name:"",startCmd:"",tag:"",pkgType:0,pkgSrc:"",deployStepSize:5,replicate:0,memoryLimit:3,cpuShare:0.5,oneTaskPerHost:false};
   if ($cookies.lastServiceForm != undefined && 
       $cookies.lastServiceForm != null){
       try{
@@ -163,19 +163,49 @@ angular.module('galaxy.ui.ctrl').controller('CreateServiceModalInstanceCtrl',
       }finally{
       }
   }
-  $http.get("/console/tag/list?master="+config.masterAddr)
+  $http.get(config.rootPrefixPath + "tag/list?master="+config.masterAddr)
          .success(function(data){
              $scope.tagList = data.data;
   });
+  $http.get(config.rootPrefixPath + "quota/mygroups")
+         .success(function(data){
+             $scope.groupList = data.data;
+  });
+  $scope.selectGroup = null;
+  $scope.groupUpdate = function(){
+      if ($scope.selectGroup != null){
+          $http.get(config.rootPrefixPath + "quota/groupstat?id="+ $scope.selectGroup.id)
+               .success(function(data){
+                $scope.groupStat = data.data.stat;
+                $scope.deployTpl.groupId = $scope.selectGroup.id;
+            });
+      }
+  }
   $scope.showAdvanceOption = false;
   $scope.ok = function () {
     $scope.alerts = [];
-    $scope.disableBtn=true;
     $cookies.lastServiceForm = JSON.stringify($scope.deployTpl);
+    if ($scope.groupStat == null ){
+        $scope.alerts.push({msg: '请选择quota组'});
+        return ;
+    }
+    var totalCpuRequire = $scope.deployTpl.replicate * $scope.deployTpl.cpuShare;
+    var totalMemRequire = $scope.deployTpl.replicate * $scope.deployTpl.memoryLimit * 1024 * 1024 * 1024;
+
+    if(totalCpuRequire > $scope.groupStat.total_cpu_left){
+        $scope.alerts.push({msg: 'cpu超出总配额'});
+        return;
+    }
+    if(totalMemRequire > $scope.groupStat.total_mem_left){ 
+        $scope.alerts.push({msg: '内存超出总配额'});
+        return;
+    }
+
+    $scope.disableBtn=true;
     $http(
       {
         method:"POST",
-        url:'/console/service/create?master='+config.masterAddr, 
+        url:config.rootPrefixPath + 'service/create?master='+config.masterAddr, 
         data:$scope.deployTpl,
         headers:{'Content-Type': 'application/x-www-form-urlencoded'},
         transformRequest: function(obj) {

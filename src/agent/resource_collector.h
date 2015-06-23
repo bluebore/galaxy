@@ -12,6 +12,8 @@
 namespace galaxy {
 
 class ResourceCollector {
+public:
+    virtual ~ResourceCollector() {}
 protected: 
     friend class ResourceCollectorEngine;
     virtual bool CollectStatistics() = 0;
@@ -26,6 +28,7 @@ public:
     void Clear();
     double GetCpuUsage();   
     long GetMemoryUsage();
+    double GetCpuCoresUsage();
 protected:
     virtual bool CollectStatistics();
 private:

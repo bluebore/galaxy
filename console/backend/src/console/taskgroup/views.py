@@ -7,6 +7,7 @@
 # Date: 2015-03-30
 import logging
 from common import http
+from common import decorator as D
 from galaxy import wrapper
 from bootstrap import settings
 from console.taskgroup import helper
@@ -25,12 +26,14 @@ def str_pretty(total_bytes):
     return "%sG"%(total_bytes/(1024*1024*1024))
 
 
+@D.api_auth_required
 @t_decorator.task_group_id_required
 def update_task_group(request):
     pass
 
 
 
+@D.api_auth_required
 def get_task_status(request):
     builder = http.ResponseBuilder()
     id = request.GET.get('id',None)
@@ -54,13 +57,14 @@ def get_task_status(request):
     for task in tasklist:
         task['mem_used'] = str_pretty(task['mem_used'])
         task['mem_limit'] = str_pretty(task['mem_limit'])
-        task['cpu_used'] ="%0.2f"%(task['cpu_limit'] * task['cpu_used'])
+        task['cpu_used'] ="%0.2f"%( task['cpu_used'])
         if task['status'] in statics:
             statics[task['status']] += 1
         if task['agent_addr']:
             task['path'] = "http://"+task['agent_addr'].split(":")[0]+":8181/data/galaxy/"+str(task['id'])
     return builder.ok(data={'needInit':False,'taskList':tasklist,'statics':statics}).build_json()
 
+@D.api_auth_required
 def get_job_sched_history(request):
     builder = http.ResponseBuilder()
     id = request.GET.get('id',None)
@@ -75,7 +79,7 @@ def get_job_sched_history(request):
     for task in tasklist:
         task['mem_used'] = str_pretty(task['mem_used'])
         task['mem_limit'] = str_pretty(task['mem_limit'])
-        task['cpu_used'] ="%0.2f"%(task['cpu_limit'] * task['cpu_used'])
+        task['cpu_used'] ="%0.2f"% (task['cpu_used'])
         if task['agent_addr']:
             task['path'] = "http://"+task['agent_addr'].split(":")[0]+":8181/gc/"+ task['gc_path'].replace("/home/galaxy/agent/work_dir/gc/","")
     return builder.ok(data={'needInit':False,'taskList':tasklist}).build_json()

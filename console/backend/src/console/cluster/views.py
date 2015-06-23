@@ -8,6 +8,7 @@
 
 from bootstrap import settings
 from common import http
+from common import decorator as D
 from galaxy import wrapper
 SHOW_G_BYTES_LIMIT = 1024 * 1024 * 1024
 SHOW_T_BYTES_LIMIT = 1024 * 1024 * 1024 * 1024
@@ -20,7 +21,7 @@ def str_pretty(total_bytes):
     else:
         return "%sT"%(total_bytes/(SHOW_T_BYTES_LIMIT))
 
-
+@D.api_auth_required
 def get_status(req):
     builder = http.ResponseBuilder()
     master_addr = req.GET.get('master',None)
@@ -49,7 +50,8 @@ def get_status(req):
         total_cpu_used += machine.cpu_used 
         machine.mem_share = str_pretty(machine.mem_share)
         machine.mem_allocated = str_pretty(machine.mem_allocated)
-        machine.cpu_used = '%0.0f'%machine.cpu_allocated
+        machine.cpu_used = '%0.1f'%machine.cpu_allocated
+        machine.cpu_allocated = '%0.1f'%machine.cpu_allocated
         ret.append(machine.__dict__)
     mem_usage_p = 0
     cpu_usage_p = 0

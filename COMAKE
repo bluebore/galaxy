@@ -57,7 +57,8 @@ agent_sources='src/flags.cc\
                src/agent/resource_collector.cc \
                src/agent/resource_manager.cc \
                src/agent/resource_collector_engine.cc \
-               src/agent/utils.cc '
+               src/agent/utils.cc \
+               src/agent/dynamic_resource_scheduler.cc'
 
 
 master_sources='src/flags.cc src/proto/task.proto src/proto/agent.proto src/proto/master.proto\
@@ -85,6 +86,23 @@ tera_sdk_sources='src/monitor/sdk/monitor_tera_client.cc'
 tera_sdk_headers='src/monitor/sdk/monitor_tera_client.h'
 monitor_sources='common/logging.cc common/util.cc src/flags.cc src/monitor/monitor_main.cc src/monitor/monitor_impl.cc'
 
+gssh_sources='src/gssh/pam_galaxy.c'
+agent_service_sources='src/flags.cc\
+               common/logging.cc common/util.cc\
+               src/proto/task.proto src/proto/agent.proto src/proto/master.proto \
+               src/agent/task_runner.cc src/agent/task_manager.cc\
+               src/agent/cgroup.cc\
+               src/agent/workspace.cc src/agent/workspace_manager.cc \
+               src/agent/agent_impl.cc \
+               src/agent/downloader_manager.cc src/agent/curl_downloader.cc \
+               src/agent/binary_downloader.cc \
+               src/agent/resource_collector.cc \
+               src/agent/resource_manager.cc \
+               src/agent/resource_collector_engine.cc \
+               src/agent/utils.cc \
+               src/agent/dynamic_resource_scheduler.cc'
+agent_password_test_sources=agent_service_sources+' src/gssh/agent_password_test.cc'
+gssh_password_sources='src/proto/agent.proto common/logging.cc src/gssh/gssh_password.cc'
 
 #Application('galaxy',Sources(user_sources))
 Application('agent',Sources(agent_sources))
@@ -103,8 +121,9 @@ Application('agent_mock', Sources(agent_mock_sources));
 Application('master_mock', Sources(master_mock_sources));
 StaticLibrary('tera_client', Sources(tera_sdk_sources),HeaderFiles(tera_sdk_headers));
 Application('monitor_agent', Sources(monitor_sources), HeaderFiles(tera_sdk_headers), Libraries('./libtera_client.a'));
+Application('agent_password_test', Sources(agent_password_test_sources));
+Application('gssh_password', Sources(gssh_password_sources));
 #共享库
-#SharedLibrary('galaxy',Sources(user_sources),HeaderFiles(user_headers))
+SharedLibrary('pam_galaxy',Sources(gssh_sources),LinkDeps(False))
 #子目录
 #Directory('demo')
-

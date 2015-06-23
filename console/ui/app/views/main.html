@@ -22,6 +22,7 @@
         <td><a href ng-click="updateService(service)"><span class="glyphicon glyphicon-cog" aria-hidden="true"></span></a><a href ng-click="killService(service.job_id)"><span class="glyphicon glyphicon-remove" aria-hidden="true"></span></a></td>
       </tr>
     </tbody>
-  </table>  
+</table>
+   <span ng-if="serviceList.length <= 0 "> 无数据</span>
 </div>
 <!--service list end -->

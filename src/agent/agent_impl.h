@@ -39,6 +39,10 @@ public:
                          const ::galaxy::KillTaskRequest* request,
                          ::galaxy::KillTaskResponse* response,
                          ::google::protobuf::Closure* done);
+   virtual void SetPassword(::google::protobuf::RpcController* controller,
+                            const ::galaxy::SetPasswordRequest* request,
+                            ::galaxy::SetPasswordResponse* response,
+                            ::google::protobuf::Closure* done);
 private:
     common::ThreadPool thread_pool_;
     RpcClient* rpc_client_;

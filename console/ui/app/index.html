@@ -35,11 +35,12 @@
       <div class="container" >
         <!--header start-->
         <div class="header">
-          <div id="galaxy">Galaxy</div><div id="console">控制台</div>
+            <div id="galaxy">Galaxy</div><div id="console">控制台</div>
+            <div id="user"><a href="" >{{user.username}}</a></div>
         </div>
         <!-- header end-->
         <!--nav div-->
-        <div> 
+        <div > 
           <div class="toggle-nav">
           </div>
           <div class="layout-nav">
@@ -54,7 +55,7 @@
           <!--end of nav div -->
 
           <!--content page-->
-          <div >
+          <div class="content-container" >
             <div class="loading-mask" router-loader ng-show="showloader">
               <div class="ui mini text loader" style="display:block ">加载中...</div>
             </div>
@@ -102,6 +103,7 @@
     <script src="scripts/controllers/setup.js"></script>
     <script src="scripts/controllers/task.js"></script>
     <script src="scripts/controllers/tag.js"></script>
+    <script src="scripts/controllers/quota.js"></script>
     <script src="scripts/utils/treeview.js"></script>
     <script src="scripts/utils/promot.js"></script>
     <script src="scripts/utils/angular.easypiechart.js"></script>

@@ -45,6 +45,10 @@ var galaxy = angular.module('galaxy.ui', [
         templateUrl: 'views/cluster.html',
         controller: 'ClusterCtrl'
       })
+      .when('/quota', {
+        templateUrl: 'views/quota.html',
+        controller: 'QuotaCtrl'
+      })
       .when('/cluster/tag',{
         templateUrl: 'views/tag.html',
         controller: 'TagPageCtrl'
@@ -58,7 +62,8 @@ var galaxy = angular.module('galaxy.ui', [
         redirectTo: '/'
       });
   })
-  .controller('AppCtrl',['$scope','$rootScope','$http','$location','notify',function($scope,$rootScope,$http,$location,notify){
+  .controller('AppCtrl',['$scope','$rootScope','$http','$location','notify','config',function($scope,$rootScope,$http,$location,notify,config){
+      $scope.user = config.user;
       notify.config({duration:1000,templateUrl:'views/notify/notice.html'});
   }]);
   function getParameterByName(name) {
@@ -76,9 +81,21 @@ var galaxy = angular.module('galaxy.ui', [
     if(masterAddr ==null && $cookies.masterAddr != undefined ){
         masterAddr = $cookies.masterAddr;
     }
-    return $http.get("console/conf/get").then(function(response) {
-            galaxy.constant("config", {config:response.data.data.config,masterAddr:masterAddr,home:response.data.data.home,service:response.data.data.service});
-        }, function(errorResponse) {
+    var rootPrefixPath = "/";
+    return $http.get(rootPrefixPath+"conf/get").then(function(response) {
+            if (response.data.status == -2) {
+                   window.location=response.data.msg;
+            }else{
+                 galaxy.constant("config", {config:response.data.data.config,
+                                       masterAddr:masterAddr,
+                                       home:response.data.data.home,
+                                       service:response.data.data.service,
+                                       user:response.data.data.user,
+                                       rootPrefixPath:rootPrefixPath});
+
+
+            }
+         }, function(errorResponse) {
 
      });
   }

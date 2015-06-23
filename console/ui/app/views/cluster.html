@@ -58,9 +58,11 @@
     </div>
 
 </div>
-<div class="service-list"> 
-    
-<table class="table table-striped service-table">
+<div class="service-list">
+    <div class="form-group">
+         <input ng-model="searchText" ng-change="filterMachine()" type="text" class="form-control" placeholder="搜索机器">
+     </div>
+    <table class="table table-striped service-table">
     <thead>
       <tr>
         <th>#id</th>

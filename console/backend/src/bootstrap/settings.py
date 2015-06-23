@@ -36,7 +36,7 @@ INSTALLED_APPS = (
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'console'
+    'bootstrap'
 )
 
 MIDDLEWARE_CLASSES = (
@@ -57,12 +57,19 @@ ROOT_URLCONF = 'bootstrap.urls'
 # https://docs.djangoproject.com/en/1.7/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
-    }
+  'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'galaxy_console',
+        'USER': 'root',
+        'PASSWORD': 'galaxy',
+        'HOST': 'cq01-rdqa-pool056.cq01.baidu.com',
+        'PORT': '3306'
+    }        
 }
 
+TEMPLATE_DIRS = (
+    os.path.join(BASE_DIR,'templates'),
+)
 # Internationalization
 # https://docs.djangoproject.com/en/1.7/topics/i18n/
 
@@ -79,7 +86,7 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/1.7/howto/static-files/
-STATIC_URL = '/static/'
+STATIC_URL = '/statics/'
 
 LOGGING = {
     'version': 1,
@@ -96,5 +103,16 @@ LOGGING = {
         },
     },
 }
+STATICFILES_DIRS = (
+   os.path.join(BASE_DIR, "statics"),
+)
+AUTHENTICATION_BACKENDS = ('common.cas.UUAPBackend',)
+
 GALAXY_MASTER='localhost:8102'
 GALAXY_CLIENT_BIN='/home/users/wangtaize/workspace/ps/se/galaxybk/galaxy_client'
+UUAP_CAS_SERVER='http://itebeta.baidu.com:8100/login'
+MY_HOST='http://cq01-rdqa-pool056.cq01.baidu.com:8989/'
+UUAP_VALIDATE_URL='http://itebeta.baidu.com:8100/serviceValidate'
+UIC_SERVICE="http://uuap.baidu.com:8086/ws/UserRemoteService?wsdl"
+UIC_KEY="uuapclient-18-4x4g9aNftempiJaHnelz"
+

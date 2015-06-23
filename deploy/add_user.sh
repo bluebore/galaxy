@@ -82,40 +82,40 @@ if [ "$directoy_list" != "" ]; then
 fi
 
 cat <<EOF > /etc/profile.d/galaxy_${user_name}.sh
-if [ \$# -gt 0 ]; then
-    echo "Galaxy Limit Init ..."
+if [ \$# -gt 0 -a "\$1" == "cg_limit" ]; then
+    echo "Galaxy Limit Init ..." >&2
     mkdir -p $CG_ROOT/cpu/${user_name}
     mkdir -p $CG_ROOT/memory/${user_name}
 
     echo ${cpu_limit} > $CG_ROOT/cpu/${user_name}/cpu.cfs_quota_us
     if [ $? -ne 0 ]; then
-        echo "set cpu limit fail"
+        echo "set cpu limit fail" >&2
         exit 1
     fi
     echo ${memory_limit} > $CG_ROOT/memory/${user_name}/memory.limit_in_bytes
     if [ $? -ne 0 ]; then
-        echo "set memory limit fail"
+        echo "set memory limit fail" >&2
         exit 2
     fi
 
-    echo \$1 >> ${CG_ROOT}/cpu/${user_name}/tasks
-    echo \$1 >> ${CG_ROOT}/memory/${user_name}/tasks
+    echo \$2 >> ${CG_ROOT}/cpu/${user_name}/tasks
+    echo \$2 >> ${CG_ROOT}/memory/${user_name}/tasks
     exit 0
 else
     if [ "\$USER" == "$user_name" ]; then
-        echo "== Welcome to Galaxy =="
-        sudo  /etc/profile.d/galaxy_${user_name}.sh \$\$
+        echo "== Welcome to Galaxy ==" >&2
+        sudo  /etc/profile.d/galaxy_${user_name}.sh cg_limit \$\$
         if [ \$? -ne 0 ]; then
-            echo "Galaxy Init fail, exit"
+            echo "Galaxy Init fail, exit" >&2
             exit 1
         fi
-        echo "------------------------------------"
-        echo "CPU Cores:    |  ${cpu_cores}       "
-        echo "Memory Limit: |  ${memory_gbytes} GB"
+        echo "------------------------------------" >&2
+        echo "CPU Cores:    |  ${cpu_cores}       " >&2
+        echo "Memory Limit: |  ${memory_gbytes} GB" >&2
         if [ "$directoy_list" != "" ]; then
-        echo "Directories:  |  ${directoy_list}   "
+        echo "Directories:  |  ${directoy_list}   " >&2
         fi
-        echo "------------------------------------"
+        echo "------------------------------------" >&2
     fi
 fi
 EOF

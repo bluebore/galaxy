@@ -46,7 +46,7 @@ angular.module('galaxy.ui.ctrl')
           $scope.totalItems = 0;
           $scope.currentPage = 1;
           var get_status = function(){
-               $http.get("/console/cluster/status?master="+config.masterAddr)
+               $http.get(config.rootPrefixPath + "cluster/status?master="+config.masterAddr)
                   .success(function(data){
                       if(data.status == 0){
                           $scope.allMachineList = data.data.machinelist;
@@ -74,20 +74,43 @@ angular.module('galaxy.ui.ctrl')
              .error(function(){})
            }
            get_status();
-           $interval(get_status,10000);
-            $scope.pageChanged = function() {
+           $scope.pageChanged = function() {
                   $scope.totalItems = $scope.allMachineList.length;
                   var startIndex = ($scope.currentPage - 1) * $scope.pageSize;
-                          var endIndex = startIndex + $scope.pageSize;
-                          if(endIndex > $scope.totalItems){
-                             endIndex = $scope.totalItems;
-                          }
-                          $scope.machineList = $scope.allMachineList.slice(startIndex, endIndex);
+                  var endIndex = startIndex + $scope.pageSize;
+                  if(endIndex > $scope.totalItems){
+                     endIndex = $scope.totalItems;
+                  }
+                  $scope.machineList = $scope.allMachineList.slice(startIndex, endIndex);
 
             };
             $scope.setPage = function (pageNo) {
                 $scope.currentPage = pageNo;
             };
+           $scope.searchText = "";
+           $scope.filterMachine = function(){
+
+               if ($scope.searchText == null || $scope.searchText == "") {
+                   return;
+               }
+               var filteredMachineList = new Array;
+               for (var index in $scope.allMachineList ){
+
+                   if ($scope.allMachineList[index].addr.indexOf($scope.searchText) >= 0) {
+                       filteredMachineList.push($scope.allMachineList[index]);
+                   }
+               }
+               $scope.pageSize = 10;
+               $scope.totalItems = filteredMachineList.length;
+               $scope.currentPage = 1;
+               var startIndex = ($scope.currentPage - 1) * $scope.pageSize;
+               var endIndex = startIndex + $scope.pageSize;
+               if(endIndex > $scope.totalItems){
+                    endIndex = $scope.totalItems;
+               }
+
+               $scope.machineList = filteredMachineList.slice(startIndex, endIndex);
+           }
 
 }
 );

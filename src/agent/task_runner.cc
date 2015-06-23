@@ -265,10 +265,22 @@ void AbstractTaskRunner::StartTaskAfterFork(std::vector<int>& fd_vector,int stdo
     task_num_env <<"TASK_NUM="<<m_task_info.job_replicate_num();
     std::stringstream task_user_env;
     task_user_env <<"USER="<<pw->pw_uid;
-    char *env[] = {const_cast<char*>(task_id_env.str().c_str()),
-                   const_cast<char*>(task_num_env.str().c_str()),
-                   const_cast<char*>(task_user_env.str().c_str()),
-                   NULL};
+
+    int env_size = envs_.size() + 4;
+    char* env[env_size];
+    env[0] = const_cast<char*>(task_id_env.str().c_str());
+    env[1] = const_cast<char*>(task_num_env.str().c_str());
+    env[2] = const_cast<char*>(task_user_env.str().c_str());
+
+    std::map<std::string, std::string>::iterator it = envs_.begin();
+    for (int i = 3; it != envs_.end(); ++it, i++) {
+        std::string env_str = it->first;
+        env_str.append("=");
+        env_str.append(it->second);
+        env[i] = const_cast<char*>(env_str.c_str());
+    }
+
+    env[envs_.size() + 3] = NULL;
 
     execve("/bin/sh", argv, env);
     LOG(FATAL,"fail to kill exec %s errno %d %s",

@@ -3,6 +3,7 @@ body {
   padding-top: 20px;
   padding-bottom: 20px;
   font-family: Arial, sans-serif;
+  background-color: rgb(237, 237, 237);
 }
 
 /* Everything but the jumbotron gets side spacing for mobile first views */
@@ -52,14 +53,14 @@ body {
   display: inline-block;
 }
 .header #galaxy{
-  font-size: 25px;
+  font-size: 20px;
   color: #777;
   padding-left: 20px;
   padding-top: 5px;
   font-weight: 400;
 }
 .header #console{
-  font-size: 20px;
+  font-size: 16px;
   padding-top: 5px;
   color: #333;
   padding-left: 10px;
@@ -72,7 +73,7 @@ body {
   font-size: 20px;
 }
 .toggle-nav ,.layout-nav{
-    background: #fafafa;
+    background: #fff;
     width: 216px;
     font-size: 14px;
 
@@ -89,17 +90,18 @@ body {
   box-sizing: border-box;
   transition: width cubic-bezier(0.4,0.0,0.2,1) 0.2s,border-radius cubic-bezier(0.4,0.0,0.2,1) 0.2s;
   visibility: visible;
+  margin:10px 10px 0px 10px;
 }
 
 .layout-nav{
   display: block;
-  top: 56px;
+  top: 45px;
   left: 0;
+  box-shadow: 0 0 2px rgba(0,0,0,0.1);
   bottom: 32px;
   padding: 24px 0 0 0;
   transition: left cubic-bezier(0.4,0.0,0.2,1) 0.2s,top cubic-bezier(0.4,0.0,0.2,1) 0.2s,visibility 0 linear 0;
   overflow: hidden;
-  box-shadow: none;
   z-index: 2;
   position: fixed;
 }
@@ -142,12 +144,14 @@ body {
   position: relative;
   color: #777;
 }
-
+.layout-nav,.toggle-nav{
+    margin:8px 8px 8px 8px;
+}
 .header {
   -webkit-user-select: none;
   margin: 0;
   padding: 0;
-  height: 56px;
+  height: 45px;
   background-color: #fff;
   position: fixed;
   top: 0;
@@ -160,7 +164,7 @@ body {
 }
 .loading-mask , .content-viewport{
   position: absolute;
-  top: 56px;
+  top: 45px;
   left: 216px;
   bottom: 0;
   right: 0;
@@ -172,6 +176,8 @@ body {
   padding: 24px 28px 48px;
   overflow-y:scroll;
   overflow-x:auto;
+  margin:8px 8px 8px 16px;
+  box-shadow: 0 0 2px rgba(0,0,0,0.1);
 }
 
 .content-viewport > .service-list > .service-table{
@@ -266,6 +272,8 @@ body {
 }
 .tag-cloud .label{
     margin-right:10px;
+    display:inline-block;
+    margin-bottom:10px;
 }
 
 .cluster-status-list{
@@ -292,7 +300,8 @@ body {
  margin-bottom:10px;
 }
 .card .ez-chart{
-    display:inline-block;
+    display:block;
+    float:left;
     margin-right:25px;
 }
 .card .ez-chart .chart-label{
@@ -304,7 +313,18 @@ body {
  height:180px;
 }
 
+.group-resource-status{
+ width:100%;
+ height:190px;
+}
+
 .resource-total{
     width:550px;
     height:180px;
+}
+
+#user{
+  float: right;
+  margin-top: 14px;
+  margin-right: 20px;
 }

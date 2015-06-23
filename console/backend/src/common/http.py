@@ -61,8 +61,8 @@ class ResponseBuilder(object):
             .add_context_attr('data', data)
         return self
 
-    def error(self, msg):
-        self.add_context_attr("status", -1)\
+    def error(self, msg, status = -1):
+        self.add_context_attr("status", status)\
             .add_context_attr('msg', msg)
         return self
 
@@ -121,10 +121,8 @@ class ResponseBuilder(object):
         # TODO 改善content这个变量名称
         if not self.content:
             self.content = {}
-        root_url = self.request.build_absolute_uri("/")
-        self.content["root_url"] = root_url
         return shortcuts.render_to_response(template, self.content,
-                    context_instance=context.RequestContext(self.request))
+               context_instance=context.RequestContext(self.request))
 
     def build(self):
         if not self.content:
@@ -220,7 +218,7 @@ class HttpClient(object):
         assert url
         assert req_data
         req = self._build_req(url, req_data=req_data, headers=headers)
-        return self._do_service(req, timeout=timeout, headers=headers,
+        return self._do_service(req, timeout=timeout,
                                 content_to_file=content_to_file)
 
     def _build_req(self, url, req_data=None, headers=None):

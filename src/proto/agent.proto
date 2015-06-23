@@ -4,6 +4,11 @@ package galaxy;
 option cc_generic_services = true;
 option py_generic_services = true;
 
+enum AgentResourceScheduleMode {
+    kAgentResourceScheduleStatic = 0;
+    kAgentResourceScheduleDynamic = 1;
+}
+
 message RunTaskRequest {
     optional int64 task_id = 1;
     optional string task_name = 2;
@@ -16,6 +21,8 @@ message RunTaskRequest {
     optional int64 job_id = 9; // use to rebuild master
     optional double cpu_limit = 10;
     optional string monitor_conf = 11;
+
+    optional AgentResourceScheduleMode schedule_mode = 12;
 }
 
 message RunTaskResponse {
@@ -31,8 +38,18 @@ message KillTaskResponse {
     optional string gc_path = 3;
 }
 
+message SetPasswordRequest {
+    optional string user_name = 1;
+    optional string password = 2;    
+}
+
+message SetPasswordResponse {
+    optional int32 status = 1;    
+}
+
 service Agent {
     rpc RunTask(RunTaskRequest) returns(RunTaskResponse);
     rpc KillTask(KillTaskRequest) returns(KillTaskResponse);
+    rpc SetPassword(SetPasswordRequest) returns (SetPasswordResponse);
 }
 

@@ -14,6 +14,7 @@
 #include "proto/task.pb.h"
 #include "common/httpserver.h"
 #include <gflags/gflags.h>
+#include "agent/dynamic_resource_scheduler.h"
 
 DECLARE_string(master_addr);
 DECLARE_string(agent_port);
@@ -22,6 +23,7 @@ DECLARE_int32(agent_http_server_threads);
 DECLARE_string(agent_work_dir);
 DECLARE_double(cpu_num);
 DECLARE_int64(mem_bytes);
+DECLARE_string(pam_pwd_dir);
 
 namespace galaxy {
 
@@ -44,6 +46,14 @@ AgentImpl::AgentImpl() {
     resource.the_left_cpu = resource.total_cpu;
     resource.the_left_mem = resource.total_mem;
     resource_mgr_ = new ResourceManager(resource);
+
+    // give all idle cpu to scheduler 
+    DynamicResourceScheduler* dy_scheduler 
+        = GetDynamicResourceScheduler();
+    TaskResourceRequirement require;
+    require.cpu_limit = resource.total_cpu;
+    dy_scheduler->Release(require);
+
     if (!rpc_client_->GetStub(FLAGS_master_addr, &master_)) {
         assert(0);
     }
@@ -193,6 +203,37 @@ void AgentImpl::KillTask(::google::protobuf::RpcController* /*controller*/,
     response->set_gc_path(gc_path);
     done->Run();
 }
+
+void AgentImpl::SetPassword(::google::protobuf::RpcController* controller,
+                            const ::galaxy::SetPasswordRequest* request,
+                            ::galaxy::SetPasswordResponse* response,
+                            ::google::protobuf::Closure* done) {
+    (void)controller;
+    std::string user_name = request->user_name();
+    std::string password = request->password();
+    std::string pwd_file_name = FLAGS_pam_pwd_dir + "/" + user_name + ".pwd";
+    FILE* fh = fopen(pwd_file_name.c_str(), "w");
+    int ret = 0;
+    if (fh) {
+        fprintf(fh, "%s", password.c_str());
+        ret = fclose(fh);
+        if (ret == 0) {
+            ret = chmod(pwd_file_name.c_str(), 
+                        S_IRUSR | S_IWUSR);   //chmod 600
+        }
+    }
+    if (!fh || ret != 0) {
+        LOG(WARNING, "write password to %s failed, err:[%d, %s]", 
+            pwd_file_name.c_str(),
+            errno, strerror(errno));
+        response->set_status(-1);
+        done->Run();
+        return;
+    }
+    response->set_status(0);
+    done->Run();
+}
+
 } // namespace galxay
 
 /* vim: set expandtab ts=4 sw=4 sts=4 tw=100: */

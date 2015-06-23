@@ -43,13 +43,18 @@ NavTree.prototype._parsePath = function(hash){
         },pathArray);
         return pathArray;
 }
+
+
+
 NavTree.prototype._processHomePage = function(self,pathArray){
       var activeParentIndex  = 0;
       if(pathArray.length == 1 ){
         if(pathArray[0] =="cluster"){
-          activeParentIndex = 1;
-        }else if(pathArray[0]== 'setup'){        
           activeParentIndex = 2;
+        }else if(pathArray[0]== 'setup'){        
+          activeParentIndex = 3;
+        }else if(pathArray[0]== 'quota'){
+            activeParentIndex = 1;
         }
 
       }
@@ -75,8 +80,8 @@ NavTree.prototype._processClusterPage = function(self, pathArray){
     var activeChildIndex = 0;
     if (pathArray.length == 2) {
         var subpage = pathArray[1];
-        for (var index in self.homeNavSetting[1].children) {
-            if (self.homeNavSetting[1].children[index].subpage == subpage) {
+        for (var index in self.homeNavSetting[2].children) {
+            if (self.homeNavSetting[2].children[index].subpage == subpage) {
                 activeChildIndex = index;
             }
         }
@@ -84,7 +89,7 @@ NavTree.prototype._processClusterPage = function(self, pathArray){
     for (var index in self.homeNavSetting) {
         self._cleanSelected(self, self.homeNavSetting[index]);
     }
-    self._markSelected(self, 1, activeChildIndex);
+    self._markSelected(self, 2, activeChildIndex);
     self.$scope.treeModel = self.homeNavSetting;
 }
 

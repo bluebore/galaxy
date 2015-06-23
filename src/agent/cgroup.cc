@@ -23,10 +23,12 @@
 #include "agent/resource_collector_engine.h"
 #include "agent/utils.h"
 #include <gflags/gflags.h>
+#include "agent/dynamic_resource_scheduler.h"
 
 DECLARE_string(task_acct);
 DECLARE_string(cgroup_root); 
 DECLARE_int32(agent_cgroup_clear_retry_times);
+DECLARE_bool(agent_dynamic_scheduler_switch);
 
 namespace galaxy {
 
@@ -222,6 +224,7 @@ int CpuCtrl::SetCpuShare(int64_t cpu_share) {
     return 0;
 
 }
+
 int CpuCtrl::SetCpuPeriod(int64_t cpu_period) {
     std::string cpu_period_file = _my_cg_root + "/" + "cpu.cfs_period_us";
     int ret = common::util::WriteIntToFile(cpu_period_file, cpu_period);
@@ -336,7 +339,21 @@ int ContainerTaskRunner::Prepare() {
                 m_task_info.task_id()); 
         return -1;
     }
-    
+
+    std::string cgroup_name = 
+        boost::lexical_cast<std::string>(m_task_info.task_id());
+    // do dynamic scheduler regist
+    if (FLAGS_agent_dynamic_scheduler_switch) {
+        DynamicResourceScheduler* scheduler = 
+            GetDynamicResourceScheduler();
+        scheduler->RegistCgroupPath(cgroup_name, cpu_core, cpu_limit);
+        //scheduler->SetFrozen(cgroup_name, 12 * 1000);
+        scheduler->UnFrozen(cgroup_name);
+    }
+
+    std::string cpu_limit_file = FLAGS_cgroup_root +"/cpu/" + cgroup_name + "/cpu.cfs_quota_us";
+    envs_.insert(std::pair<std::string, std::string>("CPU_LIMIT_FILE", cpu_limit_file));
+
     int ret = Start();
     if (0 != ret) {
         return ret;
@@ -504,7 +521,7 @@ int ContainerTaskRunner::StartMonitor() {
 
 void ContainerTaskRunner::Status(TaskStatus* status) {
     if (collector_ != NULL) {
-        status->set_cpu_usage(collector_->GetCpuUsage());
+        status->set_cpu_usage(collector_->GetCpuCoresUsage());
         status->set_memory_usage(collector_->GetMemoryUsage());
         LOG(WARNING, "cpu usage %f memory usage %ld",
                 status->cpu_usage(), status->memory_usage());
@@ -742,6 +759,15 @@ bool ContainerTaskRunner::RecoverMonitor(const std::string& persistence_path) {
 }
 
 int ContainerTaskRunner::Clean() {
+    // dynamic scheduler unregist
+    if (FLAGS_agent_dynamic_scheduler_switch) {
+        DynamicResourceScheduler* scheduler = 
+            GetDynamicResourceScheduler();
+        std::string cgroup_name = 
+            boost::lexical_cast<std::string>(m_task_info.task_id());
+        scheduler->UnRegistCgroupPath(cgroup_name);
+    }
+
     if (_cg_ctrl != NULL) {
         int status = _cg_ctrl->Destroy(m_task_info.task_id());
         LOG(INFO,"destroy cgroup for task %ld with status %d",m_task_info.task_id(),status);

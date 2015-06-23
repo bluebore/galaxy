@@ -12,6 +12,9 @@
 #include <signal.h>
 #include <gflags/gflags.h>
 
+#include "agent/resource_collector_engine.h"
+#include "agent/dynamic_resource_scheduler.h"
+
 DECLARE_string(agent_port);
 DECLARE_int32(agent_http_port);
 DECLARE_string(master_addr);
@@ -36,6 +39,14 @@ int main(int argc, char* argv[]) {
     sofa::pbrpc::RpcServer rpc_server(options);
 
     galaxy::AgentImpl* agent_service = new galaxy::AgentImpl();
+
+    // use for atexit regist
+    galaxy::ResourceCollectorEngine* engine = 
+        galaxy::GetResourceCollectorEngine();
+    engine = engine;
+    galaxy::DynamicResourceScheduler* dy_scheduler = 
+        galaxy::GetDynamicResourceScheduler();
+    dy_scheduler = dy_scheduler;
 
     if (!rpc_server.RegisterService(agent_service)) {
         return EXIT_FAILURE;
