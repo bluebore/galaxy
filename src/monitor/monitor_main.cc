@@ -13,6 +13,7 @@
 #include <gflags/gflags.h>
 
 DECLARE_string(monitor_conf_path);
+DECLARE_int32(task_id);
 
 static volatile bool s_quit = false;
 static void SignalIntHandler(int /*sig*/) {

@@ -298,8 +298,11 @@ void AbstractTaskRunner::StartMonitorAfterFork(std::vector<int>& fd_vector,int s
     std::string conf_path = std::string(cur_path) + "/galaxy_monitor/";
     std::string conf_file = conf_path + "monitor.conf";
     //chdir(conf_path.c_str());
+    std::stringstream ss_task_id;
+    ss_task_id << m_task_info.task_id();
     std::string cmd_line = std::string("/home/galaxy/monitor/")
-        + std::string("monitor_agent --monitor_conf_path=") + conf_file;
+        + std::string("monitor_agent --monitor_conf_path=") + conf_file
+        + std::string(" --task_id=") + ss_task_id.str();
     char *argv[] = {const_cast<char*>("sh"), const_cast<char*>("-c"),
         const_cast<char*>(cmd_line.c_str()), NULL};
     std::stringstream task_id_env;

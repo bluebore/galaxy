@@ -11,16 +11,23 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <boost/bind.hpp>
+#include <gflags/gflags.h>
 #include "common/asm_atomic.h"
 #include "common/logging.h"
 #include "common/util.h"
 #include "monitor_impl.h"
 
+DECLARE_int32(task_id);
+
 namespace galaxy {
 MonitorImpl::MonitorImpl() {
     running_ = false;
+    tera_running_ = false;
+    log_rolling_ = false;
     msg_forbit_time_ = 60;
+    tera_client_ = new MonitorTeraClient();
     thread_pool_.AddTask(boost::bind(&MonitorImpl::Reporting, this));
+    thread_pool_.AddTask(boost::bind(&MonitorImpl::Saving, this));
 }
 MonitorImpl::~MonitorImpl() {
     std::map<std::string, Watch*>::iterator watch_it;
@@ -44,6 +51,10 @@ MonitorImpl::~MonitorImpl() {
     for (rule_it == rule_list_.begin(); rule_it != rule_list_.end();
             rule_it++) {
         delete *rule_it;
+    }
+    if (NULL != tera_client_) {
+        delete tera_client_;
+        tera_client_ = NULL;
     }
     return;
 }
@@ -86,6 +97,12 @@ bool MonitorImpl::ParseConfig(const std::string conf_path) {
             watch_ptr->reg.assign(args[2]);
             watch_ptr->count = 0;
             watch_map_[args[0]] = watch_ptr;
+        } else if (sscanf(line.c_str(), "<alive>:%s", value)) {
+            Watch *watch_ptr = new Watch();
+            watch_ptr->item_name.assign("alive");
+            watch_ptr->count = 0;
+            watch_ptr->last_rolling_time = time(NULL);
+            watch_map_[watch_ptr->item_name] = watch_ptr;
         } else if (sscanf(line.c_str(), "<trigger>:%s", value)) {
             std::vector<std::string> args;
             std::string input(value);
@@ -120,7 +137,20 @@ bool MonitorImpl::ParseConfig(const std::string conf_path) {
             rule_ptr->trigger = trigger_map_.find(args[1])->second;
             rule_ptr->action = action_map_.find(args[2])->second;
             rule_list_.push_back(rule_ptr);
+        } else if (sscanf(line.c_str(), "<tera_conf>:%s", value)) {
+            tera_flag_.assign(value);
+        } else if (sscanf(line.c_str(), "<task_name>:%s", value)) {
+            job_name_.assign(value);
+        } else if (sscanf(line.c_str(), "<table_name>:%s", value)) {
+            table_name_.assign(value);
         }
+    }
+    if (table_name_.size() == 0 || job_name_.size() == 0) {
+        return false;
+    }
+    
+    if (OK == tera_client_->Init(tera_flag_, table_name_)) {
+        tera_running_ = true;
     }
     return true;
 }
@@ -140,6 +170,7 @@ void MonitorImpl::Run() {
     fin.seekg(seek, std::ios::beg);
     std::string line;
     running_ = true;
+    log_rolling_ = false;
 
     while (running_) {
         if (fin.peek() == EOF) {  
@@ -153,20 +184,29 @@ void MonitorImpl::Run() {
             } else if (st_tmp->st_ino != st_mark->st_ino) {
                 fin.close();
                 fin.clear();
+                seek = 0;
                 fin.open(log_path.c_str());
                 delete st_mark;
                 st_mark = st_tmp;
                 continue;
-            } else if (seek != 0) {
-                delete st_tmp;
-                fin.clear();  
-                fin.seekg(seek, std::ios::beg);  
-                sleep(1);  
-                continue;  
-            } else {
-                delete st_tmp;
-                sleep(1);
+            } else if (st_tmp->st_mtime == st_mark->st_mtime) {
+                log_rolling_ = false;
+                delete st_mark;
+                st_mark = st_tmp;
                 continue;
+            } else {
+                log_rolling_ = true;
+                delete st_mark;
+                st_mark = st_tmp;
+                if (seek != 0) {
+                    fin.clear();  
+                    fin.seekg(seek, std::ios::beg);  
+                    sleep(1);  
+                    continue;  
+                } else {
+                    sleep(1);
+                    continue;
+                }
             }
         }
         getline(fin, line);
@@ -182,7 +222,7 @@ bool MonitorImpl::ExecRule(std::string src) {
     for (std::vector<Rule*>::iterator it = rule_list_.begin();
             it != rule_list_.end(); it++) {
         if (Matching(src, (*it)->watch)) {
-            LOG(INFO, "Matching hit %s", src.c_str());
+            //LOG(INFO, "Matching hit %s", src.c_str());
         }
     }
     return true;
@@ -190,9 +230,15 @@ bool MonitorImpl::ExecRule(std::string src) {
 
 bool MonitorImpl::Matching(std::string src, Watch* watch) {
     assert(watch != NULL);
+    if (watch->item_name == "alive" && log_rolling_ == true)
+    {
+        watch->last_rolling_time = time(NULL);
+        return true;
+    }
     boost::cmatch mat;
     if (boost::regex_search(src.c_str(), mat, watch->reg)) {
         common::atomic_inc(&watch->count);
+        common::atomic_inc(&watch->cnt_sec);
         return true;
     }
     return false;
@@ -241,17 +287,49 @@ bool MonitorImpl::Treating(Action* act) {
 }
 
 void MonitorImpl::Reporting() {
-    for (std::vector<Rule*>::iterator it = rule_list_.begin();
-            it != rule_list_.end(); it++) {
-        if (!Judging(&((*it)->watch->count), (*it)->trigger)) {
-            continue;
-        }
-        if (!Treating((*it)->action)) {
-            continue;
+    if (running_) {
+        for (std::vector<Rule*>::iterator it = rule_list_.begin();
+                it != rule_list_.end(); it++) {
+            if ((*it)->watch->item_name == "alive") {
+                if (time(NULL) - (*it)->watch->last_rolling_time >= 
+                        (*it)->trigger->range) {
+                    (*it)->watch->last_rolling_time = time(NULL);
+                } else {
+                    continue;
+                }
+            } else if (!Judging(&((*it)->watch->count), (*it)->trigger) 
+                    && log_rolling_ == true) {
+                continue;
+            }
+            if (!Treating((*it)->action)) {
+                continue;
+            }
         }
     }
     thread_pool_.DelayTask(3000, boost::bind(&MonitorImpl::Reporting, this));
     return;
+}
+
+
+void MonitorImpl::Saving() {
+    if (running_ && tera_running_) {
+        monitor_record_t* rec = new monitor_record_t();
+        std::stringstream ss_task_id;
+        ss_task_id << FLAGS_task_id;
+        std::stringstream ss_group_id;
+        ss_group_id << FLAGS_task_id%10;
+        std::stringstream ss_time_stamp;
+        ss_time_stamp << time(NULL);
+        rec->key = ss_group_id.str() + job_name_ + ss_time_stamp.str() 
+            + ss_task_id.str();
+        for (std::vector<Rule*>::iterator it = rule_list_.begin();
+                it != rule_list_.end(); it++) {
+            rec->column_list[(*it)->watch->item_name] = (*it)->watch->cnt_sec;
+            common::atomic_swap(&((*it)->watch->cnt_sec), 0);
+        }
+        tera_client_->Add(rec);
+    }
+    thread_pool_.DelayTask(1000, boost::bind(&MonitorImpl::Saving, this));
 }
 }
 

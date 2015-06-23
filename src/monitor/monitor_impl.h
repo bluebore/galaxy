@@ -12,6 +12,7 @@
 #include <string>
 #include <boost/regex.hpp>
 #include "common/thread_pool.h"
+#include "sdk/monitor_tera_client.h"
 
 namespace galaxy {
 
@@ -20,6 +21,8 @@ struct Watch {
     std::string regex;
     boost::regex reg;
     int count;
+    int cnt_sec;
+    double last_rolling_time;
 };
 
 struct Trigger {
@@ -53,6 +56,7 @@ private:
     bool ExecRule(std::string src);
     bool Matching(std::string src, Watch* watch);
     void Reporting();
+    void Saving();
     bool Judging(int *cnt, Trigger* trigger);
     bool Treating(Action* action);
     void Split(std::string& src, std::string& delim, std::vector<std::string>* ret);
@@ -65,6 +69,12 @@ private:
     std::vector<Rule*> rule_list_;
     double msg_forbit_time_;
     bool running_;
+    bool tera_running_;
+    bool log_rolling_;
+    std::string job_name_;
+    std::string table_name_;
+    std::string tera_flag_;
+    MonitorTeraClient* tera_client_;
 };
 }
 
