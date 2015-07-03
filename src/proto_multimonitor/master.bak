@@ -1,0 +1,136 @@
+
+package galaxy;
+
+import "task.proto";
+
+option cc_generic_services = true;
+option py_generic_services = true;
+
+enum MasterCommandType {
+    HEART_BEAT = 0;
+    // Task control
+    LAUNCH_TASK = 1;
+    KILL_TASK = 2;
+    CLEAN_TAKS = 3;     // before GC time, agent should be clean without command ?
+    // Container Control
+    CREATE_CONTAINER = 4;   
+    DESTORY_CONTAINER = 5;
+    UPDATE_CONTAINER = 6;
+}
+
+message HeartBeatRequest {
+    optional int64 seq_id = 1;      // id for communicate
+    optional int64 agent_id = 2 [default = -1];
+    optional string agent_addr = 3;
+    repeated TaskStatus task_status = 4;
+    optional double cpu_share = 5;
+    optional double used_cpu_share = 6;
+    optional int64 mem_share = 7;
+    optional int64 used_mem_share = 8;
+    optional int64 version = 9;
+    repeated int64 port_in_use = 10;
+}
+
+message HeartBeatResponse {
+    optional int64 seq_id = 1;
+    optional int32 status = 2;
+    optional int64 agent_id = 5;
+    optional int64 version = 4;
+}
+
+message NewJobRequest {
+    optional string job_name = 2;
+    optional bytes job_raw = 3;
+    optional string cmd_line = 4;
+    optional int32 replica_num = 5;
+    optional double cpu_share = 6;
+    optional int64 mem_share = 7;
+}
+
+message NewJobResponse {
+    optional int32 status = 2;
+    optional int64 job_id = 3;
+}
+
+message UpdateJobRequest {
+    optional int64 job_id = 3;
+    optional int32 replica_num = 4;
+};
+message UpdateJobResponse {
+    optional int32 status = 2;
+}
+
+message TerminateTaskRequest {
+    optional int64 task_id = 2;
+}
+
+message TerminateTaskResponse {
+    optional int32 status = 2;
+}
+
+// List task
+message TaskInstance {
+    optional TaskInfo info = 1;
+    optional int32 status = 2;
+    optional string agent_addr = 3;
+    optional int64 job_id = 4;
+    optional int32 start_time = 5;
+    optional int32 offset = 6;
+    optional double cpu_usage = 7;
+    optional int64 memory_usage = 8;
+}
+message ListTaskRequest {
+    optional int64 job_id = 2;
+    optional int64 task_id = 3;
+    optional string agent_addr = 4;
+}
+message ListTaskResponse {
+    repeated TaskInstance tasks = 2;
+}
+
+message JobInstance {
+    optional int64 job_id = 2;
+    optional string job_name = 3;
+    optional int32 running_task_num = 4;
+    optional int32 replica_num = 5;
+}
+message ListJobRequest {
+}
+message ListJobResponse {
+    repeated JobInstance jobs = 2; 
+}
+
+message KillJobRequest {
+    optional int64 job_id = 2;
+}
+message KillJobResponse {
+}
+
+message NodeInstance {
+    optional int64 node_id = 2;
+    optional string addr = 3;
+    optional int32 task_num = 4;
+    optional double cpu_share = 5;
+    optional int64 mem_share = 6;
+    optional double cpu_used = 7;
+    optional int64 mem_used = 8;
+}
+
+message ListNodeRequest {
+}
+message ListNodeResponse {
+    repeated NodeInstance nodes = 2;
+}
+
+service Master {
+    rpc HeartBeat(HeartBeatRequest) returns(HeartBeatResponse);
+
+    rpc NewJob(NewJobRequest) returns(NewJobResponse);
+    rpc UpdateJob(UpdateJobRequest) returns(UpdateJobResponse);
+    rpc KillJob(KillJobRequest) returns(KillJobResponse);
+    rpc TerminateTask(TerminateTaskRequest) returns(TerminateTaskResponse);
+    rpc ListTask(ListTaskRequest) returns(ListTaskResponse);
+    rpc ListJob(ListJobRequest) returns(ListJobResponse);
+    rpc ListNode(ListNodeRequest) returns(ListNodeResponse);
+}
+
