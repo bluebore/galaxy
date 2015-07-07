@@ -1,0 +1,45 @@
+package galaxy;
+
+import "monitor.proto";
+
+option cc_generic_services = true;
+option py_generic_services = true;
+
+enum MonitorTableType {
+    TableSec = 0;
+    TableMin = 1;
+    TableHour = 2;
+}
+
+enum MonitorMasterRespStatus {
+    RespOK = 0;
+    RespNoData = 1;
+    RespError = 2;
+    RespFinish = 3;
+}
+
+message ScanMonitorDataRequest {
+    optional int64 message_sequence = 1;
+    optional string job_name = 2;
+    optional MonitorTableType task_type = 3;
+    optional int32 task_id = 4;
+    optional int64 start_timestamp = 5;
+    optional int64 end_timestamp = 6;
+    optional string column_family = 7;
+    optional int32 record_cnt = 8;
+}
+
+message MonitorRecord {
+    optional int64 timestamp = 1;
+    optional string value = 2;
+}
+
+message ScanMonitorDataResponse {
+    optional int64 message_sequence = 1;
+    optional MonitorMasterRespStatus status = 2;
+    repeated MonitorRecord records = 3;
+}
+
+service MonitorMaster {
+    rpc ScanMonitorData(ScanMonitorDataRequest) returns(ScanMonitorDataResponse);
+}

@@ -1,0 +1,32 @@
+package galaxy;
+
+import "monitor.proto"
+
+option cc_generic_services = true;
+option py_generic_services = true;
+
+message AddMonitorJobRequest {
+    optional string target_log;
+    optional string job_name;
+    optional string table_name;
+    repeated WatchMsg watchs;
+    repeated TriggerMsg triggers;
+    repeated ActionMsg actions;
+    repeated RuleMsg rules;
+}
+message AddMonitorJobResponse {
+    optional int32 status;
+}
+
+message KillMonitorJobRequest {
+    optional string job_name;
+}
+
+message KillMonitorJobResponse {
+    optional int32 status;
+}
+
+service MonitorMaster {
+    rpc AddMonitorJob(AddMonitorJobRequest) returns(AddMonitorJobResponse);
+    rpc KillMonitorJob(KillMonitorJobRequest) returns(KillMonitorJobResponse);
+}

@@ -1,0 +1,38 @@
+
+package galaxy;
+
+enum TaskState {
+    DEPLOYING = 0;
+    RUNNING = 2;
+    KILLED = 3;
+    RESTART = 4;
+    ERROR = 5;
+    COMPLETE = 6;
+}
+
+message TaskStatus{
+    optional int64 task_id = 1;
+    optional int32 status = 2;  //deploying,starting,running,error
+    optional double cpu_usage = 3;
+    optional int64 memory_usage = 4;
+    optional int64 job_id = 5; // use to rebuild master 
+}
+
+message MonitorConf {
+    optional string monitor_job = 1;
+    optional string monitor_conf = 2;
+}
+
+message TaskInfo{
+    optional int64 task_id = 1;
+    optional string task_name = 2;
+    optional bytes task_raw = 3;
+    optional string cmd_line = 4;
+    optional double required_cpu = 5;
+    optional int64 required_mem = 6;
+    optional int32 fail_retry_times = 7;
+    optional int32 task_offset=8;
+    optional int32 job_replicate_num = 9;
+    optional int64 job_id = 10; // use to rebuild master
+    repeated MonitorConf m_conf = 11;
+}

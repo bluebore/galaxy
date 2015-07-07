@@ -39,6 +39,7 @@ CONFIGS('third-64/gtest@1.6.0.100')
 CONFIGS('third-64/libcurl@base')
 CONFIGS('third-64/leveldb@base')
 CONFIGS('third-64/gflags@gflags_2-0-0-100_PD_BL')
+CONFIGS('public/tera@tera_2-1-10-29836_PD_BL')
 
 #为32位/64位指定不同的依赖路径.
 #CONFIGS_32('lib2/ullib')
@@ -81,6 +82,8 @@ agent_utils_sources='src/agent/utils.cc common/logging.cc test/agent_utils_test.
 agent_utils_remove_sources='src/agent/utils.cc common/logging.cc test/agent_utils_remove_test.cc'
 agent_mock_sources='src/proto/master.proto common/logging.cc src/proto/task.proto src/proto/agent.proto test/pb_file_parser.cc test/agent_test_mock.cc'
 master_mock_sources='src/proto/master.proto src/proto/task.proto test/pb_file_parser.cc test/master_test_mock.cc'
+tera_sdk_sources='src/monitor/sdk/monitor_tera_client.cc'
+tera_sdk_headers='src/monitor/sdk/monitor_tera_client.h'
 monitor_sources='common/logging.cc common/util.cc src/flags.cc src/monitor/monitor_main.cc src/monitor/monitor_impl.cc'
 
 gssh_sources='src/gssh/pam_galaxy.c'
@@ -116,7 +119,8 @@ Application('agent_utils_test', Sources(agent_utils_sources));
 Application('agent_utils_remove_test', Sources(agent_utils_remove_sources));
 Application('agent_mock', Sources(agent_mock_sources));
 Application('master_mock', Sources(master_mock_sources));
-Application('monitor_agent', Sources(monitor_sources));
+StaticLibrary('tera_client', Sources(tera_sdk_sources),HeaderFiles(tera_sdk_headers));
+Application('monitor_agent', Sources(monitor_sources), HeaderFiles(tera_sdk_headers), Libraries('./libtera_client.a'));
 Application('agent_password_test', Sources(agent_password_test_sources));
 Application('gssh_password', Sources(gssh_password_sources));
 #共享库
