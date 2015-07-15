@@ -29,7 +29,9 @@ typedef boost::multi_index::nth_index<AgentLoadIndex,0>::type agent_id_index;
 //agent load cpu left index
 typedef boost::multi_index::nth_index<AgentLoadIndex,1>::type cpu_left_index;
 
+const int TASK_ID_SPAN = 1000;
 const std::string TAG_KEY_PREFIX = "TAG::";
+const std::string TASK_ID_KEY = "NEXT_TASK_ID";
 struct KillPriorityCell {
     int64_t priority;
     int64_t task_id;
@@ -63,6 +65,7 @@ MasterImpl::MasterImpl()
     rpc_client_ = new RpcClient();
     thread_pool_.AddTask(boost::bind(&MasterImpl::Schedule, this));
     thread_pool_.AddTask(boost::bind(&MasterImpl::DeadCheck, this));
+    next_stage_task_id_ = 0;
 }
 
 bool MasterImpl::Recover() {
@@ -103,6 +106,12 @@ bool MasterImpl::Recover() {
                 return false;
             }
             UpdateTag(entity);
+            it->Next();
+            continue;
+        }
+        if (job_key.find(TASK_ID_KEY) == 0) {
+            next_task_id_ = atol(job_cell.c_str());
+            LOG(INFO, "recover next task id from persistence %ld", next_task_id_);
             it->Next();
             continue;
         }
@@ -600,6 +609,13 @@ void MasterImpl::HeartBeat(::google::protobuf::RpcController* /*controller*/,
     for (int i = 0; i < task_num; i++) {
         assert(request->task_status(i).has_task_id());
         int64_t task_id = request->task_status(i).task_id();
+
+        // TODO not good enough, but it might play a role
+        if (next_task_id_ <= task_id) {
+            next_task_id_ = task_id + TASK_ID_SPAN; 
+            LOG(INFO, "next task id span to %ld", next_task_id_);
+        }
+
         TaskInstance& instance = tasks_[task_id];
         running_tasks.insert(task_id);
         int task_status = request->task_status(i).status();
@@ -874,9 +890,15 @@ bool MasterImpl::ScheduleTask(JobInfo* job, const std::string& agent_addr) {
         assert(ret);
     }
     int64_t task_id = next_task_id_++;
+    
     while(tasks_.find(task_id) != tasks_.end()){
         task_id = next_task_id_++;
     }
+
+    if (next_stage_task_id_ <= next_task_id_) {
+        UpdateNextTaskID();
+    }
+
     RunTaskRequest rt_request;
     rt_request.set_task_id(task_id);
     rt_request.set_task_name(job->job_name);
@@ -1526,6 +1548,20 @@ void MasterImpl::UpdateTag(const PersistenceTagEntity& entity) {
             entity.agents(index).c_str());
     }
     tags_[entity.tag()] = agent_set;
+}
+
+void MasterImpl::UpdateNextTaskID() {
+    next_stage_task_id_ = next_task_id_ + TASK_ID_SPAN;
+    LOG(INFO, "Persistence next stage id %ld", next_stage_task_id_);
+    next_stage_task_id_ = next_task_id_ + TASK_ID_SPAN;
+    std::string key = TASK_ID_KEY;
+    std::string value = boost::lexical_cast<std::string>(next_stage_task_id_);
+    leveldb::Status write_status = 
+        persistence_handler_->Put(
+                leveldb::WriteOptions(), key, value);
+    if (!write_status.ok()) {
+        LOG(WARNING, "[ASSERT] next stage persistence failed"); 
+    }
 }
 
 } // namespace galaxy
