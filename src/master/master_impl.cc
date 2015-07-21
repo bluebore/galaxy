@@ -498,8 +498,8 @@ void MasterImpl::UpdateJobsOnAgent(AgentInfo* agent,
                 }
             }
             if (instance.status() != ERROR
-               && instance.status() != COMPLETE) {
-                
+               && instance.status() != COMPLETE
+               && instance.status() != KILLED) {
                 continue;
             }
             //释放资源
@@ -566,9 +566,16 @@ void MasterImpl::HeartBeat(::google::protobuf::RpcController* /*controller*/,
                            ::galaxy::HeartBeatResponse* response,
                            ::google::protobuf::Closure* done) {
     const std::string& agent_addr = request->agent_addr();
+    common::timer::AutoTimer timer(100, agent_addr.c_str(), "heartbeat");
     LOG(DEBUG, "HeartBeat from %s task_status_size  %d ", agent_addr.c_str(),request->task_status_size());
-    int now_time = common::timer::now_time();
+    int64_t now_time_ms = common::timer::get_micros() / 1000;
+    int32_t now_time = static_cast<int32_t>(now_time_ms / 1000000);
     MutexLock lock(&agent_lock_);
+    int64_t time_check_point = common::timer::get_micros() / 1000;
+    if (time_check_point - now_time_ms > 100) {
+        LOG(WARNING, "heartbeat wait time cost %ld", 
+                time_check_point - now_time_ms);
+    }
     std::map<std::string, AgentInfo>::iterator it;
     it = agents_.find(agent_addr);
     AgentInfo* agent = NULL;
@@ -952,7 +959,8 @@ bool MasterImpl::ScheduleTask(JobInfo* job, const std::string& agent_addr) {
     rt_request.set_monitor_conf(job->monitor_conf);
     rt_request.set_version(job->version);
     RunTaskResponse rt_response;
-    LOG(INFO, "ScheduleTask on %s", agent_addr.c_str());
+    LOG(INFO, "ScheduleTask %ld job %ld on %s", 
+            task_id, job->id, agent_addr.c_str());
     LOG(DEBUG, "monitor conf %s", job->monitor_conf.c_str());
     agent_lock_.Unlock();
     bool ret = rpc_client_->SendRequest(agent.stub, &Agent_Stub::RunTask,
@@ -960,8 +968,10 @@ bool MasterImpl::ScheduleTask(JobInfo* job, const std::string& agent_addr) {
     agent_lock_.Lock();
     if (!ret || (rt_response.has_status() 
               && rt_response.status() != 0)) {
-        LOG(WARNING, "RunTask faild agent= %s", agent_addr.c_str());
+        LOG(WARNING, "RunTask faild agent= %s, job %ld", 
+                agent_addr.c_str(), job->id);
         job->trace.set_deploy_failed_count(job->trace.deploy_failed_count() + 1);
+        job->sched_agent[agent_addr] = common::timer::now_time();
         return false;
     } else {
         agent.running_tasks.insert(task_id);
@@ -993,21 +1003,22 @@ void MasterImpl::KilledTaskCallback(
     if (failed || 
             (response->has_status()
                 && response->status() != 0)) {
-        LOG(WARNING, "kill task %ld failed status %d, rpc err_code %d",
+        LOG(WARNING, "kill task %ld on %s failed status %d, rpc err_code %d",
                 request->task_id(),
+                agent_addr.c_str(),
                 response->status(),
                 err_code);
-        MutexLock lock(&agent_lock_);
-        if (agents_.find(agent_addr) != agents_.end()) {
-            AgentInfo& agent = agents_[agent_addr];
-            thread_pool_.DelayTask(100, 
-                    boost::bind(
-                        &MasterImpl::DelayRemoveZombieTaskOnAgent, 
-                        this, &agent, request->task_id()));
-        } else {
-            LOG(WARNING, "task with id %ld no need to kill, agent info is missing", 
-                    request->task_id()); 
-        }
+        //MutexLock lock(&agent_lock_);
+        //if (agents_.find(agent_addr) != agents_.end()) {
+        //    AgentInfo& agent = agents_[agent_addr];
+        //    thread_pool_.DelayTask(100, 
+        //            boost::bind(
+        //                &MasterImpl::DelayRemoveZombieTaskOnAgent, 
+        //                this, &agent, request->task_id()));
+        //} else {
+        //    LOG(WARNING, "task with id %ld no need to kill, agent info is missing", 
+        //            request->task_id()); 
+        //}
     } else {
         MutexLock lock(&agent_lock_);
         std::string root_path;

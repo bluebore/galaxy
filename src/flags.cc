@@ -50,6 +50,7 @@ DEFINE_string(monitor_conf_path, "", "path of monitor conf");
 DEFINE_string(pam_pwd_dir, "/tmp/", "directory that stores galaxy-ssh passwords on agent node");
 DEFINE_int32(master_reschedule_error_delay_time, 5000, "master for error job on the same agent reschedule delay time");
 DEFINE_int32(master_keep_update_interval, 1000, "interval of master keep task mete update");
-
+DEFINE_int32(agent_heartbeat_timeout, 5000, "agent heartbeat rpc timeout");
+DEFINE_int32(agent_heartbeat_interval, 5000, "agent heartbeat interval");
 
 /* vim: set expandtab ts=4 sw=4 sts=4 tw=100: */

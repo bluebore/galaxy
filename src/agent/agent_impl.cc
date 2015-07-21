@@ -24,6 +24,8 @@ DECLARE_string(agent_work_dir);
 DECLARE_double(cpu_num);
 DECLARE_int64(mem_bytes);
 DECLARE_string(pam_pwd_dir);
+DECLARE_int32(agent_heartbeat_timeout);
+DECLARE_int32(agent_heartbeat_interval);
 
 namespace galaxy {
 
@@ -95,13 +97,20 @@ void AgentImpl::Report() {
         addr.c_str(),request.task_status_size(), FLAGS_cpu_num,
         request.used_cpu_share(), FLAGS_mem_bytes, request.used_mem_share(),version_);
     bool ret = rpc_client_->SendRequest(master_, &Master_Stub::HeartBeat,
-                                &request, &response, 5, 1);
+                                &request, &response, FLAGS_agent_heartbeat_timeout / 1000, 1);
     version_ = response.version();
-    LOG(INFO,"Report response version is %d ",version_);
+    int delaytime = FLAGS_agent_heartbeat_interval;
     if (!ret) {
-        LOG(WARNING, "Report to master failed");
+        delaytime -= FLAGS_agent_heartbeat_timeout;
+        if (delaytime <= 0) {
+            delaytime = 100;     
+        }
+        LOG(WARNING, "Report to master failed, delay %d ms to heartbeat again",
+                delaytime);
     }
-    thread_pool_.DelayTask(5000, boost::bind(&AgentImpl::Report, this));
+    LOG(INFO,"Report response version is %d timeout %ld delaytime %d", 
+            version_, FLAGS_agent_heartbeat_timeout, delaytime);
+    thread_pool_.DelayTask(delaytime, boost::bind(&AgentImpl::Report, this));
 }
 
 void AgentImpl::RunTask(::google::protobuf::RpcController* /*controller*/,
