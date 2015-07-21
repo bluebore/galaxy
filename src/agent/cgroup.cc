@@ -563,7 +563,7 @@ void ContainerTaskRunner::Status(TaskStatus* status) {
                 status->cpu_usage(), status->memory_usage());
     }
     status->set_job_id(m_task_info.job_id());
-    
+    status->set_task_meta_version(m_task_info.version());
     if (m_task_state == KILLED) {
         // be kill by master no need check running
         status->set_status(KILLED);

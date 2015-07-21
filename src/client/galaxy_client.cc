@@ -24,6 +24,9 @@ DEFINE_double(cpu_soft_limit, 0.0, "cpu soft limit which is lower than cpu limit
 DEFINE_double(cpu_limit, 0.0, "cpu limit which a task can reach but not overtop");
 DEFINE_int32(deploy_step_size ,0, "how many tasks can be deployed in concurrent");
 DEFINE_bool(one_task_per_host , false, "every node just run one task of job");
+DEFINE_bool(is_updating , false, "if true galaxy will update job if it's meta has been updated");
+DEFINE_string(new_package, "", "the address of package");
+DEFINE_int32(update_step_size, 0, "conncurrent size when updating job");
 DEFINE_int64(task_id, -1, "the identify of task");
 DEFINE_int64(job_id, -1, "the identify of job");
 DEFINE_string(agent_addr, "", "the address of a agent shown by listnode");
@@ -52,7 +55,9 @@ int ProcessNewJob(){
         return -1;
     }
     std::string task_raw;
-    if (!boost::starts_with(FLAGS_task_raw, "ftp://")) {
+    if (!boost::starts_with(FLAGS_task_raw, "ftp://")
+        &&!boost::starts_with(FLAGS_task_raw, "http://"))
+ {
         FILE* fp = fopen(FLAGS_task_raw.c_str(), "r");
         if (fp == NULL) {
             fprintf(stderr, "Open %s for read fail\n", FLAGS_task_raw.c_str());
@@ -165,8 +170,20 @@ int KillJob(){
 int UpdateJob(){
     galaxy::Galaxy* galaxy = galaxy::Galaxy::ConnectGalaxy(FLAGS_master_addr);
     galaxy::JobDescription job;
+    galaxy::PackageDescription package;
+    package.source = "";
+    job.pkg = package;
+    job.is_updating = false;
+    job.update_step_size = 0;
     job.replicate_count = FLAGS_replicate_num;
     job.job_id  =  FLAGS_job_id;
+    if (FLAGS_is_updating) {
+        job.is_updating = true;
+    }
+
+    if (!FLAGS_new_package.empty()) {
+        job.pkg.source = FLAGS_new_package;
+    }
     galaxy->UpdateJob(job);
     return 0;
 }

@@ -171,10 +171,12 @@ class GalaxySDK(object):
             LOG.exception('fail to list jobs')
         return False,[]
 
-    def update_job(self,id,replicate_num):
+    def update_job(self, id, replicate_num, package):
         req = master_pb2.UpdateJobRequest()
         req.job_id = int(id)
         req.replica_num = int(replicate_num)
+        req.job_raw = package 
+        req.is_updating = True
         master = master_pb2.Master_Stub(self.channel)
         controller = client.Controller()
         controller.SetTimeout(1.5)

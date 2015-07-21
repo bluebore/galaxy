@@ -48,6 +48,7 @@ public:
    virtual void Killed() = 0;
    virtual ~TaskRunner(){}
    virtual int Clean() { return 0;}
+   virtual void UpdateTaskInfo(const TaskInfo& task_infi) = 0;
 };
 
 class AbstractTaskRunner:public TaskRunner{
@@ -71,6 +72,7 @@ public:
     int IsProcessRunning(pid_t pid);
     virtual int Stop();
     int ReStart();
+    void UpdateTaskInfo(const TaskInfo& task_info);
     void AsyncDownload(boost::function<void()> callback);
     // do something after stop
     virtual void StopPost() = 0;

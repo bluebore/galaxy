@@ -22,6 +22,7 @@ DECLARE_string(master_checkpoint_path);
 DECLARE_int32(master_max_len_sched_task_list);
 DECLARE_int32(master_safe_mode_last);
 DECLARE_int32(master_reschedule_error_delay_time);
+DECLARE_int32(master_keep_update_interval);
 
 namespace galaxy {
 //agent load id index
@@ -63,6 +64,7 @@ MasterImpl::MasterImpl()
     rpc_client_ = new RpcClient();
     thread_pool_.AddTask(boost::bind(&MasterImpl::Schedule, this));
     thread_pool_.AddTask(boost::bind(&MasterImpl::DeadCheck, this));
+    thread_pool_.AddTask(boost::bind(&MasterImpl::KeepUpdate, this));
 }
 
 bool MasterImpl::Recover() {
@@ -130,6 +132,9 @@ bool MasterImpl::Recover() {
         job_info.deploy_step_size = cell.deploy_step_size();
         job_info.one_task_per_host = false;
         job_info.cpu_limit = cell.cpu_share();
+        job_info.version = 0;
+        job_info.is_updating = false;
+        job_info.update_step_size = 0;
         if (cell.has_cpu_limit() 
                 && cell.cpu_limit() > job_info.cpu_share) {
             job_info.cpu_limit = cell.cpu_limit();
@@ -137,12 +142,21 @@ bool MasterImpl::Recover() {
         if (job_info.deploy_step_size == 0) {
             job_info.deploy_step_size = job_info.replica_num;
         }
-        if(cell.has_one_task_per_host()){
+        if (cell.has_one_task_per_host()) {
             job_info.one_task_per_host = cell.one_task_per_host();
         }
         job_info.killed = cell.killed();
         for (int i = 0; i < cell.restrict_tags_size(); i++) {
             job_info.restrict_tags.insert(cell.restrict_tags(i));
+        }
+        if (cell.has_version()) {
+            job_info.version = cell.version();
+        }
+        if (cell.has_is_updating()) {
+            job_info.is_updating = cell.is_updating();
+        }
+        if (cell.has_update_step_size()) {
+            job_info.update_step_size = cell.update_step_size();
         }
         job_info.running_num = 0;
         job_info.scale_down_time = 0;
@@ -362,7 +376,8 @@ void MasterImpl::DeadCheck() {
             LOG(INFO, "[DeadCheck] Agent %s dead, %lu task fail",
                 agent.addr.c_str(), agent.running_tasks.size());
             std::set<int64_t> running_tasks;
-            UpdateJobsOnAgent(&agent, running_tasks, true);
+            std::set<int64_t> need_update_tasks;
+            UpdateJobsOnAgent(&agent, running_tasks, need_update_tasks, true);
             RemoveIndex(agent.id);
             //agents_.erase(*node);
             it->second.erase(node);
@@ -385,6 +400,7 @@ void MasterImpl::DeadCheck() {
 
 void MasterImpl::UpdateJobsOnAgent(AgentInfo* agent,
                                    const std::set<int64_t>& running_tasks,
+                                   const std::set<int64_t>& need_update_tasks,
                                    bool clear_all) {
     std::set<int64_t> internal_running_tasks = running_tasks;
     agent_lock_.AssertHeld();
@@ -526,7 +542,20 @@ void MasterImpl::UpdateJobsOnAgent(AgentInfo* agent,
         // TODO rt_instance.mutable_info->set_offset()
         //      rt_instance.mutable_info->set_start_time()
         job_info.agent_tasks[agent_addr].insert(rt_task_id);
-        //thread_pool_.DelayTask(100, boost::bind(&MasterImpl::DelayRemoveZombieTaskOnAgent,this, agent, *rt_it));
+    }
+
+    std::set<int64_t>::iterator nu_it = need_update_tasks.begin();
+    for (; nu_it != need_update_tasks.end(); ++nu_it) {
+        int64_t nu_task_id = *nu_it;
+        if (tasks_.find(nu_task_id) == tasks_.end()) {
+            continue;
+        }
+        TaskInstance& instance = tasks_[nu_task_id];
+        JobInfo& job_info = jobs_[instance.job_id()];
+        if (instance.status() != RUNNING) {
+            continue;
+        }
+        job_info.need_update_tasks.insert(nu_task_id);
     }
 }
 
@@ -596,6 +625,7 @@ void MasterImpl::HeartBeat(::google::protobuf::RpcController* /*controller*/,
     //@TODO maybe copy out of lock
     int task_num = request->task_status_size();
     std::set<int64_t> running_tasks;
+    std::set<int64_t> need_update_tasks;
     bool report_err = false;
     for (int i = 0; i < task_num; i++) {
         assert(request->task_status(i).has_task_id());
@@ -613,6 +643,12 @@ void MasterImpl::HeartBeat(::google::protobuf::RpcController* /*controller*/,
             //response->set_agent_id(agent->id);
             //response->set_version(agent->version);
             //done->Run();
+        }
+        JobInfo& job = jobs_[request->task_status(i).job_id()];
+        if (request->task_status(i).has_task_meta_version() 
+            &&job.version != request->task_status(i).task_meta_version()) {
+            LOG(INFO, "task %ld job %ld need update", task_id, job.id);
+            need_update_tasks.insert(task_id);
         }
         instance.set_job_id(request->task_status(i).job_id());
         LOG(DEBUG, "Task %d status: %s",
@@ -644,6 +680,9 @@ void MasterImpl::HeartBeat(::google::protobuf::RpcController* /*controller*/,
                     request->task_status(i).memory_usage());
             LOG(DEBUG, "%d use memory %ld", task_id, instance.memory_usage());
         }
+        if (request->task_status(i).has_task_meta_version()) {
+            instance.mutable_info()->set_version(request->task_status(i).task_meta_version());
+        }
     }
 
     // if report err only update task state not update job
@@ -653,8 +692,8 @@ void MasterImpl::HeartBeat(::google::protobuf::RpcController* /*controller*/,
         done->Run();
         return;
     }
-
-    UpdateJobsOnAgent(agent, running_tasks);
+    std::set<int64_t> arg_holder;
+    UpdateJobsOnAgent(agent, running_tasks, arg_holder);
     std::set<int64_t>::iterator rt_it = agent->running_tasks.begin();
     agent->mem_used = 0 ;
     agent->cpu_used = 0.0 ;
@@ -723,6 +762,7 @@ void MasterImpl::UpdateJob(::google::protobuf::RpcController* /*controller*/,
         return;
     }
     MutexLock lock(&agent_lock_);
+    LOG(INFO, "update job %ld request", request->job_id());
     int64_t job_id = request->job_id();
     std::map<int64_t, JobInfo>::iterator it = jobs_.find(job_id);
     if (it == jobs_.end()) {
@@ -734,7 +774,15 @@ void MasterImpl::UpdateJob(::google::protobuf::RpcController* /*controller*/,
     JobInfo& job = it->second;
     int64_t old_replica_num = job.replica_num;
     job.replica_num = request->replica_num();
-
+    if (request->has_job_raw() 
+        && !request->job_raw().empty()
+        && request->job_raw().compare(job.job_raw) != 0 ){
+        LOG(INFO, "job %ld updates it's package ", job.id);
+        job.version ++;
+        job.job_raw = request->job_raw();
+        job.is_updating = request->is_updating();
+    }
+    
     if (!PersistenceJobInfo(job)) {
         // roll back 
         job.replica_num = old_replica_num;
@@ -815,6 +863,9 @@ void MasterImpl::NewJob(::google::protobuf::RpcController* /*controller*/,
     job.cpu_share = request->cpu_share();
     job.mem_share = request->mem_share();
     job.cpu_limit = job.cpu_share;
+    job.is_updating = false;
+    job.version = 0;
+    job.update_step_size = 0;
     if (request->has_cpu_limit() 
             && request->cpu_limit() > job.cpu_share) {
         job.cpu_limit = request->cpu_limit();
@@ -889,6 +940,7 @@ bool MasterImpl::ScheduleTask(JobInfo* job, const std::string& agent_addr) {
     rt_request.set_job_id(job->id);
     rt_request.set_cpu_limit(job->cpu_limit);
     rt_request.set_monitor_conf(job->monitor_conf);
+    rt_request.set_version(job->version);
     RunTaskResponse rt_response;
     LOG(INFO, "ScheduleTask on %s", agent_addr.c_str());
     LOG(DEBUG, "monitor conf %s", job->monitor_conf.c_str());
@@ -1433,11 +1485,14 @@ bool MasterImpl::PersistenceJobInfo(const JobInfo& job_info) {
     cell.set_cpu_limit(job_info.cpu_limit);
     cell.set_monitor_conf(job_info.monitor_conf);
     cell.set_one_task_per_host(job_info.one_task_per_host);
+    cell.set_version(job_info.version);
+    cell.set_is_updating(job_info.is_updating);
+    cell.set_update_step_size(job_info.update_step_size);
     std::set<std::string>::iterator it = job_info.restrict_tags.begin();
     for (; it != job_info.restrict_tags.end(); ++it) {
         cell.add_restrict_tags(*it);
     }
-    LOG(DEBUG, "cell name: %s replica_num: %d cmd_line: %s cpu_share: %lf mem_share: %ld deloy_step_size: %d tags:%s monitor_conf:%s",
+    LOG(DEBUG, "cell name: %s replica_num: %d cmd_line: %s cpu_share: %lf mem_share: %ld deloy_step_size: %d tags:%s monitor_conf:%s version %d",
             cell.job_name().c_str(),
             cell.replica_num(),
             cell.cmd_line().c_str(),
@@ -1445,7 +1500,8 @@ bool MasterImpl::PersistenceJobInfo(const JobInfo& job_info) {
             cell.mem_share(),
             cell.deploy_step_size(),
             boost::algorithm::join(cell.restrict_tags(), ",").c_str(),
-            cell.monitor_conf().c_str()
+            cell.monitor_conf().c_str(),
+            cell.version()
         );
     // check persistence_handler init
     if (persistence_handler_ == NULL) {
@@ -1526,6 +1582,69 @@ void MasterImpl::UpdateTag(const PersistenceTagEntity& entity) {
             entity.agents(index).c_str());
     }
     tags_[entity.tag()] = agent_set;
+}
+
+void MasterImpl::KeepUpdate() {
+    MutexLock lock(&agent_lock_);
+    std::map<int64_t, JobInfo>::iterator job_it = jobs_.begin();
+    for (; job_it != jobs_.end(); ++job_it) {
+        if (!job_it->second.is_updating) {
+            continue;
+        }
+        JobInfo& job_info = job_it->second;
+        // 更新正在更新的队列
+        std::set<int64_t>::iterator u_it = job_info.updating_tasks.begin();
+        for (;u_it != job_info.updating_tasks.end(); ++u_it) {
+            TaskInstance& instance = tasks_[*u_it];
+            if (instance.info().version() != job_info.version) {
+                continue;
+            }
+            job_info.updating_tasks.erase(*u_it);
+        }
+        int32_t updating_size = job_info.updating_tasks.size();
+        if (updating_size >= job_info.update_step_size){
+            continue;
+        }
+        // 这里这么做考虑到rpc时，释放掉锁，set的迭代器可能被破坏
+        // 所以转换成vector
+        std::vector<int64_t> ineed_update_tasks;
+        std::set<int64_t>::iterator u_task_it = job_info.need_update_tasks.begin();
+        for (;u_task_it != job_info.need_update_tasks.end(); ++u_task_it) {
+            ineed_update_tasks.push_back(*u_task_it);
+        }
+        for (uint32_t i = 0; 
+            updating_size < job_info.update_step_size 
+            && i < ineed_update_tasks.size();
+            updating_size++, i++) {
+            int64_t task_id = ineed_update_tasks[i];
+            TaskInstance& instance = tasks_[task_id];
+            AgentInfo& agent =  agents_[instance.agent_addr()];
+            UpdateTaskRequest req;
+            req.set_task_id(task_id);
+            req.set_task_raw(job_info.job_raw);
+            req.set_version(job_info.version);
+            UpdateTaskResponse response;
+            agent_lock_.Unlock();
+            LOG(INFO, "send update cmd to agent %s to update task %ld", 
+                    instance.agent_addr().c_str(),
+                    task_id);
+            bool ret = rpc_client_->SendRequest(agent.stub, &Agent_Stub::UpdateTask,
+                                                &req, &response, 5, 1);
+            agent_lock_.Lock();
+            if (!ret || response.status() != 0) {
+                LOG(FATAL, "fail to send update cmd to agent , task id %ld, job id %ld, agent %s",
+                  task_id,
+                  job_info.id,
+                  instance.agent_addr().c_str());
+            }else {
+                LOG(INFO, "send to agent %s update cmd successfully task %ld,job %ld ", 
+                   instance.agent_addr().c_str(), task_id, job_info.id);
+                job_info.updating_tasks.insert(task_id);
+            }
+
+        }
+    }
+    thread_pool_.DelayTask(FLAGS_master_keep_update_interval, boost::bind(&MasterImpl::KeepUpdate, this));
 }
 
 } // namespace galaxy

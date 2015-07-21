@@ -33,7 +33,7 @@ public:
     int Start(const int64_t& task_info_id);
     int Remove(const int64_t& task_info_id);
     int Status(std::vector<TaskStatus>& task_status_vector, int64_t id = -1);
-
+    int Update(const ::galaxy::TaskInfo& task_info);
 private:
     common::Mutex * m_mutex;
     std::map<int64_t,TaskRunner*> m_task_runner_map;

@@ -104,6 +104,16 @@ struct JobInfo {
     std::set<std::string> restrict_tags;
     std::map<std::string, int32_t> sched_agent;
     JobInstanceTrace trace;
+    //更新步长
+    int32_t update_step_size;
+    //用于更新操作
+    int32_t version;
+    //更新task队列
+    std::set<int64_t> updating_tasks;
+    //版本号不匹配任务
+    std::set<int64_t> need_update_tasks;
+    //控制是否更新
+    bool is_updating;
 };
 
 class RpcClient;
@@ -162,9 +172,11 @@ private:
     bool UpdatePersistenceTag(const PersistenceTagEntity& entity);
     void DeadCheck();
     void Schedule();
+    void KeepUpdate();
     bool ScheduleTask(JobInfo* job, const std::string& agent_addr);
     void UpdateJobsOnAgent(AgentInfo* agent,
                            const std::set<int64_t>& running_tasks,
+                           const std::set<int64_t>& need_update_tasks,
                            bool clear_all = false);
     bool CancelTaskOnAgent(AgentInfo* agent, int64_t task_id);
     void ScaleDown(JobInfo* job, int killed_num);

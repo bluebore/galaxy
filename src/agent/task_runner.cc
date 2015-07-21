@@ -346,6 +346,21 @@ int AbstractTaskRunner::ReStart(){
     return 0;
 }
 
+void AbstractTaskRunner::UpdateTaskInfo(const TaskInfo& task_info) {
+    if (task_info.version() == m_task_info.version()) {
+        LOG(WARNING,"no need update task info , they have the same version %d",
+           task_info.version());
+        return;
+    }
+    LOG(WARNING, "update task %ld with new version %d", task_info.task_id(),
+       task_info.version());
+    // support pkg update
+    m_task_info.set_version(task_info.version());
+    m_task_info.set_task_raw(task_info.task_raw());
+    AsyncDownload(boost::bind(&AbstractTaskRunner::ReStart, this));
+}
+
+
 void CommandTaskRunner::StopPost() {
     if (collector_ != NULL) {
         collector_->Clear();
@@ -383,7 +398,7 @@ void CommandTaskRunner::Status(TaskStatus* status) {
         LOG(WARNING, "cpu usage %f memory usage %ld",
                 status->cpu_usage(), status->memory_usage());
     }
-    
+    status->set_task_meta_version(m_task_info.version());
     status->set_job_id(m_task_info.job_id());
     LOG(INFO, "task with id %ld state %d", 
             m_task_info.task_id(),

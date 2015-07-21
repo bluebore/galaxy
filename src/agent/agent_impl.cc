@@ -118,7 +118,11 @@ void AgentImpl::RunTask(::google::protobuf::RpcController* /*controller*/,
     task_info.set_task_offset(request->task_offset());
     task_info.set_job_replicate_num(request->job_replicate_num());
     task_info.set_job_id(request->job_id());
-    task_info.set_monitor_conf(request->monitor_conf()); 
+    task_info.set_monitor_conf(request->monitor_conf());
+    task_info.set_version(0);
+    if (request->has_version()) {
+        task_info.set_version(request->version());
+    }
     if (request->has_cpu_limit()) {
         task_info.set_limited_cpu(request->cpu_limit());
     } else {
@@ -233,6 +237,22 @@ void AgentImpl::SetPassword(::google::protobuf::RpcController* controller,
     response->set_status(0);
     done->Run();
 }
+
+void AgentImpl::UpdateTask(::google::protobuf::RpcController* /*controller*/,
+                            const UpdateTaskRequest* request,
+                            UpdateTaskResponse* response,
+                            ::google::protobuf::Closure* done) {
+    LOG(INFO, "update task %ld", request->task_id()); 
+    ::galaxy::TaskInfo task_info;
+    task_info.set_version(request->version());
+    task_info.set_task_raw(request->task_raw());
+    task_info.set_task_id(request->task_id());
+    int ret = task_mgr_->Update(task_info);
+    response->set_status(ret);
+    done->Run();
+}
+
+
 
 } // namespace galxay
 
