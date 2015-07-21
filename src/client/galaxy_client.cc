@@ -5,7 +5,7 @@
 // Author: yanshiguang02@baidu.com
 
 #include "sdk/galaxy.h"
-
+#include <iostream>
 #include <cstdio>
 #include <cstdlib>
 #include <errno.h>
@@ -168,6 +168,7 @@ int KillJob(){
 }
 
 int UpdateJob(){
+    std::cout << "update job" << std::endl;
     galaxy::Galaxy* galaxy = galaxy::Galaxy::ConnectGalaxy(FLAGS_master_addr);
     galaxy::JobDescription job;
     galaxy::PackageDescription package;
@@ -180,7 +181,9 @@ int UpdateJob(){
     if (FLAGS_is_updating) {
         job.is_updating = true;
     }
-
+    if (FLAGS_update_step_size > 0) {
+        job.update_step_size =FLAGS_update_step_size;
+    }
     if (!FLAGS_new_package.empty()) {
         job.pkg.source = FLAGS_new_package;
     }

@@ -406,7 +406,8 @@ void MasterImpl::UpdateJobsOnAgent(AgentInfo* agent,
     agent_lock_.AssertHeld();
     const std::string& agent_addr = agent->addr;
     assert(!agent_addr.empty());
-    LOG(INFO,"update jobs on agent %s",agent_addr.c_str());
+    LOG(INFO,"update jobs on agent %s , task count %d, need update task count %d",
+           agent_addr.c_str(), running_tasks.size(), need_update_tasks.size());
     int32_t now_time = common::timer::now_time();
     std::set<int64_t>::iterator it = agent->running_tasks.begin();
     std::vector<int64_t> del_tasks;
@@ -547,6 +548,7 @@ void MasterImpl::UpdateJobsOnAgent(AgentInfo* agent,
     std::set<int64_t>::iterator nu_it = need_update_tasks.begin();
     for (; nu_it != need_update_tasks.end(); ++nu_it) {
         int64_t nu_task_id = *nu_it;
+        LOG(DEBUG, "need update task %ld", nu_task_id);
         if (tasks_.find(nu_task_id) == tasks_.end()) {
             continue;
         }
@@ -647,8 +649,16 @@ void MasterImpl::HeartBeat(::google::protobuf::RpcController* /*controller*/,
         JobInfo& job = jobs_[request->task_status(i).job_id()];
         if (request->task_status(i).has_task_meta_version() 
             &&job.version != request->task_status(i).task_meta_version()) {
-            LOG(INFO, "task %ld job %ld need update", task_id, job.id);
             need_update_tasks.insert(task_id);
+        } else {
+            LOG(DEBUG, "heartbeat update instance %ld version to %d", 
+              task_id, request->task_status(i).task_meta_version());
+            instance.mutable_info()->set_version(request->task_status(i).task_meta_version());
+            std::set<int64_t>::iterator rm_it = job.need_update_tasks.find(task_id);
+            if (rm_it != job.need_update_tasks.end()) {
+                job.need_update_tasks.erase(*rm_it);
+            }
+
         }
         instance.set_job_id(request->task_status(i).job_id());
         LOG(DEBUG, "Task %d status: %s",
@@ -692,8 +702,7 @@ void MasterImpl::HeartBeat(::google::protobuf::RpcController* /*controller*/,
         done->Run();
         return;
     }
-    std::set<int64_t> arg_holder;
-    UpdateJobsOnAgent(agent, running_tasks, arg_holder);
+    UpdateJobsOnAgent(agent, running_tasks, need_update_tasks);
     std::set<int64_t>::iterator rt_it = agent->running_tasks.begin();
     agent->mem_used = 0 ;
     agent->cpu_used = 0.0 ;
@@ -781,6 +790,7 @@ void MasterImpl::UpdateJob(::google::protobuf::RpcController* /*controller*/,
         job.version ++;
         job.job_raw = request->job_raw();
         job.is_updating = request->is_updating();
+        job.update_step_size = request->update_step_size();
     }
     
     if (!PersistenceJobInfo(job)) {
@@ -1588,19 +1598,30 @@ void MasterImpl::KeepUpdate() {
     MutexLock lock(&agent_lock_);
     std::map<int64_t, JobInfo>::iterator job_it = jobs_.begin();
     for (; job_it != jobs_.end(); ++job_it) {
+        LOG(DEBUG, "[keepupdate] check job %ld if need update", job_it->second.id);
         if (!job_it->second.is_updating) {
             continue;
         }
         JobInfo& job_info = job_it->second;
         // 更新正在更新的队列
         std::set<int64_t>::iterator u_it = job_info.updating_tasks.begin();
+        std::vector<int64_t> should_rm_task;
         for (;u_it != job_info.updating_tasks.end(); ++u_it) {
             TaskInstance& instance = tasks_[*u_it];
+            LOG(DEBUG, "[keepupdate] instance version %d, job version %d", 
+                instance.info().version(), job_info.version);
             if (instance.info().version() != job_info.version) {
                 continue;
             }
-            job_info.updating_tasks.erase(*u_it);
+            should_rm_task.push_back(*u_it);
         }
+        std::vector<int64_t>::iterator rm_it = should_rm_task.begin();
+        for (; rm_it != should_rm_task.end(); ++rm_it) {
+            job_info.updating_tasks.erase(*rm_it);
+        }
+
+        LOG(INFO, "[keepupdate] job %ld  update meta , need_update_size %d update_step_size %d, updating_size %d",
+            job_info.id,job_info.need_update_tasks.size(),job_info.update_step_size, job_info.updating_tasks.size());
         int32_t updating_size = job_info.updating_tasks.size();
         if (updating_size >= job_info.update_step_size){
             continue;
@@ -1625,19 +1646,19 @@ void MasterImpl::KeepUpdate() {
             req.set_version(job_info.version);
             UpdateTaskResponse response;
             agent_lock_.Unlock();
-            LOG(INFO, "send update cmd to agent %s to update task %ld", 
+            LOG(INFO, "[keepupdate]send update cmd to agent %s to update task %ld", 
                     instance.agent_addr().c_str(),
                     task_id);
             bool ret = rpc_client_->SendRequest(agent.stub, &Agent_Stub::UpdateTask,
                                                 &req, &response, 5, 1);
             agent_lock_.Lock();
             if (!ret || response.status() != 0) {
-                LOG(FATAL, "fail to send update cmd to agent , task id %ld, job id %ld, agent %s",
+                LOG(FATAL, "[keepupdate]fail to send update cmd to agent , task id %ld, job id %ld, agent %s",
                   task_id,
                   job_info.id,
                   instance.agent_addr().c_str());
             }else {
-                LOG(INFO, "send to agent %s update cmd successfully task %ld,job %ld ", 
+                LOG(INFO, "[keepupdate]send to agent %s update cmd successfully task %ld,job %ld ", 
                    instance.agent_addr().c_str(), task_id, job_info.id);
                 job_info.updating_tasks.insert(task_id);
             }
