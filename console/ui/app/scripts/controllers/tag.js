@@ -25,6 +25,7 @@ angular.module('galaxy.ui.ctrl').controller('TagPageCtrl',function($scope,
                 controller:'AddTagModelCtrl',
                 keyboard:false,
                 backdrop:'static',
+                animation:false,
                 size:'bg',
                 resolve:{
                 tagList:function(){

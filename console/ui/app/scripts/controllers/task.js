@@ -118,6 +118,7 @@ $http.get(config.rootPrefixPath + "taskgroup/history?id="+service.job_id+"&maste
                 templateUrl:'views/setPassword.html',
                 controller:'SetPasswordModelCtrl',
                 keyboard:false,
+                animation:false,  
                 backdrop:'static',
                 size:'bg',
                 resolve:{

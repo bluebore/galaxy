@@ -134,6 +134,7 @@ angular.module('galaxy.ui.ctrl',[])
         templateUrl: 'views/createService.html',
         controller: 'NewJobModalCtrl',
         keyboard:false,
+        animation:false,
         backdrop:'static'
       });
     };
@@ -141,6 +142,7 @@ angular.module('galaxy.ui.ctrl',[])
       var modalInstance = $modal.open({
         templateUrl: 'views/updateService.html',
         controller: 'UpdateServiceModalIntanceCtrl',
+        animation:false,
         keyboard:false,
         backdrop:'static',
         resolve:{
@@ -170,6 +172,7 @@ $http.get(config.rootPrefixPath + "service/list?user=9527&master="+config.master
         var modalInstance = $modal.open({
         templateUrl: 'views/task.html',
         controller: 'TaskCtrl',
+        animation:false,
         keyboard:false,
         size:'lg',
         backdrop:'static',
@@ -185,6 +188,7 @@ $http.get(config.rootPrefixPath + "service/list?user=9527&master="+config.master
         var modalInstance = $modal.open({
         templateUrl: 'views/history.html',
         controller: 'TaskHistoryCtrl',
+        animation:false,
         keyboard:false,
         size:'lg',
         backdrop:'static',
@@ -201,6 +205,7 @@ $http.get(config.rootPrefixPath + "service/list?user=9527&master="+config.master
         templateUrl: 'views/task.html',
         controller: 'TaskForAgentCtrl',
         keyboard:false,
+        animation:false,
         backdrop:'static',
         resolve:{
             agent:function(){
@@ -216,6 +221,7 @@ $http.get(config.rootPrefixPath + "service/list?user=9527&master="+config.master
         templateUrl: 'views/promot.html',
         controller: 'PromotCtrl',
         keyboard:false,
+        animation:false,
         backdrop:'static',
         size: 'sm',
         resolve:{

@@ -16,7 +16,6 @@ angular.module('galaxy.ui.ctrl')
                                           notify,
                                           config){
            $scope.config = config;
-           $scope.config.masterAddr = 'yq01-spi-galaxy0.yq01.baidu.com:9876';
            $scope.update = function(){
                $cookies.masterAddr = $scope.config.masterAddr;
                notify({message:"更新成功"});

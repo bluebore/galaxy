@@ -24,8 +24,7 @@ var galaxy = angular.module('galaxy.ui', [
     'galaxy.ui.promot',
     'cgNotify',
     'galaxy.ui.loader',
-    'galaxy.ui.treeview',
-    'ui.select'
+    'galaxy.ui.treeview'
   ])
   .config(function ($routeProvider) {
     $routeProvider
@@ -81,7 +80,7 @@ var galaxy = angular.module('galaxy.ui', [
     if(masterAddr ==null && $cookies.masterAddr != undefined ){
         masterAddr = $cookies.masterAddr;
     }
-    var rootPrefixPath = "/";
+    var rootPrefixPath = "/console/";
     return $http.get(rootPrefixPath+"conf/get").then(function(response) {
             if (response.data.status == -2) {
                    window.location=response.data.msg;

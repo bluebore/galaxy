@@ -21,6 +21,7 @@ angular.module('galaxy.ui.ctrl').controller('SetPasswordCtrl',function($scope,
                 templateUrl:'views/addTag.html',
                 controller:'AddTagModelCtrl',
                 keyboard:false,
+                animation:false,
                 backdrop:'static',
                 size:'bg',
                 resolve:{

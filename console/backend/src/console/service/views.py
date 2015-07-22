@@ -49,55 +49,6 @@ def list_service(request):
         ret.append(job.__dict__)
     return builder.ok(data=ret).build_json()
 
-@csrf_exempt
-def api_create_service(request):
-    builder = http.ResponseBuilder()
-    data_str = request.POST.get("data",None);
-    if not data_str:
-        return builder.error('data is required').build_json()
-    data = json.loads(data_str)
-    group_id = request.POST.get("groupId",None);
-    if not group_id:
-        return builder.error("groupId is required").build_json()
-    try:
-        group_list = models.Group.objects.filter(id=int(group_id))
-        group = None
-        for g in group_list:
-            group  = g
-            break
-        if not group:
-            return builder.error("group with %s does not exit"%group_id).build_json()
-        status,stat = views.get_group_quota_stat(group, {})
-        cpu_total_require = data['replicate'] * data['cpuShare']
-        mem_total_require = data['memoryLimit'] * 1024 * 1024 * 1024 * data['replicate']
-        if cpu_total_require > stat['total_cpu_left']:
-            return builder.error('cpu %s exceeds the left cpu quota %s'%(cpu_total_require, stat['total_cpu_left'])).build_json()
-        if mem_total_require > stat['total_mem_left']:
-            return builder.error('mem %s exceeds the left mem %s'%(mem_total_require, stat['total_mem_left'])).build_json()
-        galaxy = wrapper.Galaxy(group.galaxy_master, 
-                                settings.GALAXY_CLIENT_BIN)
-        tags = []
-        if 'tag' in data and data['tag'].strip():
-            tags.append(data['tag'].strip());
-        status,output = galaxy.create_task(data['name'],data['pkgSrc'],
-                                           data['startCmd'],
-                                           data['replicate'],
-                                           data['memoryLimit']*1024*1024*1024,
-                                           cpu_soft_limit = data['cpuShare'],
-                                           cpu_limit = data['cpuLimit'],
-                                           deploy_step_size = data['deployStepSize'],
-                                           one_task_per_host = data['oneTaskPerHost'],
-                                           restrict_tags =tags)
-        if not status:
-            return builder.error('fail create task').build_json()
-        galaxy_job = models.GalaxyJob(group = group , 
-                                     job_id = int(output),
-                                     meta = json.dumps(data))
-        galaxy_job.save()
-        return builder.ok().build_json()
-    except:
-        LOG.exception("fail to create service")
-        return builder.error("fail to create service").build_json()
 
 @csrf_exempt
 @D.api_auth_required
@@ -209,20 +160,20 @@ def update_service(request):
     replicate = request.GET.get('replicate',None)
     if not replicate:
         return builder.error('replicate is required').build_json()
-    #status,stat = views.get_group_quota_stat(request.job.group, {})
-    #old_job_meta = json.loads(request.job.meta)
-    #replicate_num = int(replicate)
-    #if replicate_num > old_job_meta['replicate_count']:
-    #    new_add = replicate_num - old_job_meta['replicate_count']
-    #    cpu_total_require = new_add * old_job_meta['cpu_share']
-    #    mem_total_require = old_job_meta['memory_limit'] * 1024 * 1024 * 1024 * new_add
-    #    if cpu_total_require > stat['total_cpu_left']:
-    #        return builder.error('cpu %s exceeds the left cpu quota %s'%(cpu_total_require, stat['total_cpu_left'])).build_json()
-    #    if mem_total_require > stat['total_mem_left']:
-    #        return builder.error('mem %s exceeds the left mem %s'%(mem_total_require, stat['total_mem_left'])).build_json()
-    #old_job_meta['replicate_count'] = replicate_num
-    #request.job.meta = json.dumps(old_job_meta)
-    #request.job.save()
+    status,stat = views.get_group_quota_stat(request.job.group, {})
+    old_job_meta = json.loads(request.job.meta)
+    replicate_num = int(replicate)
+    if replicate_num > old_job_meta['replicate_count']:
+        new_add = replicate_num - old_job_meta['replicate_count']
+        cpu_total_require = new_add * old_job_meta['cpu_share']
+        mem_total_require = old_job_meta['memory_limit'] * 1024 * 1024 * 1024 * new_add
+        if cpu_total_require > stat['total_cpu_left']:
+            return builder.error('cpu %s exceeds the left cpu quota %s'%(cpu_total_require, stat['total_cpu_left'])).build_json()
+        if mem_total_require > stat['total_mem_left']:
+            return builder.error('mem %s exceeds the left mem %s'%(mem_total_require, stat['total_mem_left'])).build_json()
+    old_job_meta['replicate_count'] = replicate_num
+    request.job.meta = json.dumps(old_job_meta)
+    request.job.save()
     galaxy = wrapper.Galaxy(master_addr,settings.GALAXY_CLIENT_BIN)
     status = galaxy.update_job(id,replicate)
     if status:
