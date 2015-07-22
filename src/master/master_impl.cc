@@ -23,6 +23,7 @@ DECLARE_int32(master_max_len_sched_task_list);
 DECLARE_int32(master_safe_mode_last);
 DECLARE_int32(master_reschedule_error_delay_time);
 DECLARE_int32(master_keep_update_interval);
+DECLARE_int32(master_pkg_update_delay);
 
 namespace galaxy {
 //agent load id index
@@ -683,6 +684,7 @@ void MasterImpl::HeartBeat(::google::protobuf::RpcController* /*controller*/,
             std::set<int64_t>::iterator rm_it = job.need_update_tasks.find(task_id);
             if (rm_it != job.need_update_tasks.end()) {
                 job.need_update_tasks.erase(*rm_it);
+                job.last_task_updates.erase(*rm_it);
             }
         }
         instance.set_job_id(request->task_status(i).job_id());
@@ -1677,6 +1679,19 @@ void MasterImpl::KeepUpdate() {
             && i < ineed_update_tasks.size();
             updating_size++, i++) {
             int64_t task_id = ineed_update_tasks[i];
+            int64_t last_update_time = 0;
+            if (job_info.last_task_updates.find(task_id) != job_info.last_task_updates.end()) {
+                last_update_time = job_info.last_task_updates[task_id];
+            }
+            int64_t now_time_ms = common::timer::get_micros() / 1000; 
+            if (now_time_ms - last_update_time < FLAGS_master_pkg_update_delay) {
+                LOG(WARNING, "[keepupdate]wait for %d ms to update task %ld, last_update_time %ld , now %ld ",
+                  FLAGS_master_pkg_update_delay + last_update_time - now_time_ms, 
+                  task_id, last_update_time, now_time_ms);
+                continue;
+            } else{
+                job_info.last_task_updates[task_id] = now_time_ms;
+            }
             TaskInstance& instance = tasks_[task_id];
             std::map<std::string, AgentInfo>::iterator agent_it = 
               agents_.find(instance.agent_addr());

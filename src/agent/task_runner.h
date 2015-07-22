@@ -66,8 +66,7 @@ public:
                        m_workspace(workspace),
                        m_has_retry_times(0),
                        m_task_state(DEPLOYING),
-                       downloader_id_(-1),
-                       last_pkg_update_time_(0){}
+                       downloader_id_(-1){}
     virtual int Prepare() = 0;
     virtual int Start() = 0;
     virtual int StartMonitor() = 0;
@@ -110,7 +109,6 @@ protected:
     int m_task_state;
     int downloader_id_;
     std::map<std::string, std::string> envs_;
-    int32_t last_pkg_update_time_;
 };
 
 class CommandTaskRunner:public AbstractTaskRunner{

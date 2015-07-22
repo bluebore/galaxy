@@ -104,15 +104,19 @@ struct JobInfo {
     std::set<std::string> restrict_tags;
     std::map<std::string, int32_t> sched_agent;
     JobInstanceTrace trace;
-    //更新步长
+    // 更新步长
     int32_t update_step_size;
-    //用于更新操作
+    // 用于更新操作
     int32_t version;
-    //更新task队列
+    // 更新task队列
     std::set<int64_t> updating_tasks;
-    //版本号不匹配任务
+    // 版本号不匹配任务
     std::set<int64_t> need_update_tasks;
-    //控制是否更新
+    // 记录上次调用agent update时间
+    // 避免因为下载失败或者更新缓慢频繁调用
+    // agent rpc接口
+    boost::unordered_map<int64_t, int64_t> last_task_updates;
+    // 控制是否更新
     bool is_updating;
 };
 
