@@ -380,6 +380,7 @@ void AbstractTaskRunner::UpdateCallBack(int32_t old_version, int status) {
         LOG(WARNING, "fail to download task %ld package, roll back version to %d",
           m_task_info.task_id(),
           old_version);
+        return;
     }
     std::string tar_cmd = "cd "
             + m_workspace->GetPath()

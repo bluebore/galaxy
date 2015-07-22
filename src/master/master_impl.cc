@@ -345,13 +345,11 @@ void MasterImpl::ListJob(::google::protobuf::RpcController* /*controller*/,
                          const ::galaxy::ListJobRequest* /*request*/,
                          ::galaxy::ListJobResponse* response,
                          ::google::protobuf::Closure* done) {
-    std::map<int64_t, JobInfo>* jobs;
-    {
-        MutexLock lock(&agent_lock_);
-        *jobs = jobs_;
-    }
-    std::map<int64_t, JobInfo>::iterator it = jobs->begin();
-    for (; it !=jobs->end(); ++it) {
+    agent_lock_.Lock();
+    std::map<int64_t, JobInfo> jobs = jobs_;
+    agent_lock_.Unlock();
+    std::map<int64_t, JobInfo>::iterator it = jobs.begin();
+    for (; it !=jobs.end(); ++it) {
         JobInfo& job = it->second;
         JobInstance* job_inst = response->add_jobs();
         job_inst->set_job_id(job.id);
