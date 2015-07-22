@@ -344,16 +344,34 @@ void MasterImpl::ListJob(::google::protobuf::RpcController* /*controller*/,
                          const ::galaxy::ListJobRequest* /*request*/,
                          ::galaxy::ListJobResponse* response,
                          ::google::protobuf::Closure* done) {
-    MutexLock lock(&agent_lock_);
-
-    std::map<int64_t, JobInfo>::iterator it = jobs_.begin();
-    for (; it !=jobs_.end(); ++it) {
+    std::map<int64_t, JobInfo>* jobs;
+    {
+        MutexLock lock(&agent_lock_);
+        *jobs = jobs_;
+    }
+    std::map<int64_t, JobInfo>::iterator it = jobs->begin();
+    for (; it !=jobs->end(); ++it) {
         JobInfo& job = it->second;
         JobInstance* job_inst = response->add_jobs();
         job_inst->set_job_id(job.id);
         job_inst->set_job_name(job.job_name);
         job_inst->set_running_task_num(job.running_num);
         job_inst->set_replica_num(job.replica_num);
+        job_inst->set_version(job.version);
+        job_inst->set_job_raw(job.job_raw);
+        job_inst->set_cmd_line(job.cmd_line);
+        job_inst->set_cpu_share(job.cpu_share);
+        job_inst->set_mem_share(job.mem_share);
+        job_inst->set_deploy_step_size(job.deploy_step_size);
+        job_inst->set_killed(job.killed);
+        job_inst->set_cpu_limit(job.cpu_limit);
+        job_inst->set_one_task_per_host(job.one_task_per_host);
+        job_inst->set_is_updating(job.is_updating);
+        job_inst->set_update_step_size(job.update_step_size);
+        std::set<std::string>::iterator tag_it = job.restrict_tags.begin();
+        for (; tag_it != job.restrict_tags.end(); ++tag_it) {
+            job_inst->add_restrict_tags(*tag_it);
+        }
         JobInstanceTrace* trace = job_inst->mutable_trace();
         trace->CopyFrom(job.trace);
     }
@@ -569,7 +587,7 @@ void MasterImpl::HeartBeat(::google::protobuf::RpcController* /*controller*/,
     common::timer::AutoTimer timer(100, agent_addr.c_str(), "heartbeat");
     LOG(DEBUG, "HeartBeat from %s task_status_size  %d ", agent_addr.c_str(),request->task_status_size());
     int64_t now_time_ms = common::timer::get_micros() / 1000;
-    int32_t now_time = static_cast<int32_t>(now_time_ms / 1000000);
+    int32_t now_time = static_cast<int32_t>(now_time_ms / 1000);
     MutexLock lock(&agent_lock_);
     int64_t time_check_point = common::timer::get_micros() / 1000;
     if (time_check_point - now_time_ms > 100) {
@@ -654,18 +672,18 @@ void MasterImpl::HeartBeat(::google::protobuf::RpcController* /*controller*/,
             //done->Run();
         }
         JobInfo& job = jobs_[request->task_status(i).job_id()];
+        LOG(DEBUG, "heartbeat update instance %ld version to %d", 
+              task_id, request->task_status(i).task_meta_version());
+        instance.mutable_info()->set_version(request->task_status(i).task_meta_version());
         if (request->task_status(i).has_task_meta_version() 
             &&job.version != request->task_status(i).task_meta_version()) {
             need_update_tasks.insert(task_id);
         } else {
-            LOG(DEBUG, "heartbeat update instance %ld version to %d", 
-              task_id, request->task_status(i).task_meta_version());
-            instance.mutable_info()->set_version(request->task_status(i).task_meta_version());
+            // 更新待更新队列
             std::set<int64_t>::iterator rm_it = job.need_update_tasks.find(task_id);
             if (rm_it != job.need_update_tasks.end()) {
                 job.need_update_tasks.erase(*rm_it);
             }
-
         }
         instance.set_job_id(request->task_status(i).job_id());
         LOG(DEBUG, "Task %d status: %s",
@@ -778,7 +796,10 @@ void MasterImpl::UpdateJob(::google::protobuf::RpcController* /*controller*/,
         return;
     }
     MutexLock lock(&agent_lock_);
-    LOG(INFO, "update job %ld request", request->job_id());
+    LOG(INFO, "update job %ld request replica_num %ld, is_updating %d , update step size %d", 
+        request->job_id(),
+        request->is_updating(),
+        request->update_step_size());
     int64_t job_id = request->job_id();
     std::map<int64_t, JobInfo>::iterator it = jobs_.find(job_id);
     if (it == jobs_.end()) {
@@ -786,23 +807,30 @@ void MasterImpl::UpdateJob(::google::protobuf::RpcController* /*controller*/,
         done->Run();
         return;
     }
-
     JobInfo& job = it->second;
     int64_t old_replica_num = job.replica_num;
+    bool old_is_updating = job.is_updating;
+    int32_t old_update_step_size = job.update_step_size;
+    int32_t old_version = job.version;
+    std::string old_job_raw = job.job_raw;
     job.replica_num = request->replica_num();
+    job.is_updating = request->is_updating();
     if (request->has_job_raw() 
         && !request->job_raw().empty()
         && request->job_raw().compare(job.job_raw) != 0 ){
         LOG(INFO, "job %ld updates it's package ", job.id);
         job.version ++;
         job.job_raw = request->job_raw();
-        job.is_updating = request->is_updating();
         job.update_step_size = request->update_step_size();
     }
-    
+
     if (!PersistenceJobInfo(job)) {
         // roll back 
         job.replica_num = old_replica_num;
+        job.version = old_version;
+        job.is_updating = old_is_updating;
+        job.job_raw = old_job_raw;
+        job.update_step_size = old_update_step_size;
         response->set_status(kMasterResponseErrorInternal);
     } else {
         response->set_status(kMasterResponseOK); 
@@ -1610,7 +1638,7 @@ void MasterImpl::KeepUpdate() {
     std::map<int64_t, JobInfo>::iterator job_it = jobs_.begin();
     for (; job_it != jobs_.end(); ++job_it) {
         LOG(DEBUG, "[keepupdate] check job %ld if need update", job_it->second.id);
-        if (!job_it->second.is_updating) {
+        if (job_it->second.killed || !job_it->second.is_updating) {
             continue;
         }
         JobInfo& job_info = job_it->second;
@@ -1650,7 +1678,14 @@ void MasterImpl::KeepUpdate() {
             updating_size++, i++) {
             int64_t task_id = ineed_update_tasks[i];
             TaskInstance& instance = tasks_[task_id];
-            AgentInfo& agent =  agents_[instance.agent_addr()];
+            std::map<std::string, AgentInfo>::iterator agent_it = 
+              agents_.find(instance.agent_addr());
+            if (agent_it == agents_.end()) {
+                LOG(WARNING, "[ASSERT] agent %s includes task %ld does not exist in master",
+                  instance.agent_addr().c_str(), task_id);
+                continue;
+            }
+            AgentInfo& agent =  agent_it->second;
             UpdateTaskRequest req;
             req.set_task_id(task_id);
             req.set_task_raw(job_info.job_raw);

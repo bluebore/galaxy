@@ -185,7 +185,27 @@ int UpdateJob(){
         job.update_step_size =FLAGS_update_step_size;
     }
     if (!FLAGS_new_package.empty()) {
-        job.pkg.source = FLAGS_new_package;
+        std::string task_raw;
+        if (!boost::starts_with(FLAGS_new_package, "ftp://")
+           &&!boost::starts_with(FLAGS_new_package, "http://")){
+            FILE* fp = fopen(FLAGS_new_package.c_str(), "r");
+            if (fp == NULL) {
+                fprintf(stderr, "Open %s for read fail\n", FLAGS_new_package.c_str());
+                return -2;
+            }
+            char buf[1024];
+            int len = 0;
+            while ((len = fread(buf, 1, 1024, fp)) > 0) {
+                task_raw.append(buf, len);
+            }
+            fclose(fp);
+            printf("Task binary len %lu\n", task_raw.size());
+        }
+        else {
+            task_raw = FLAGS_new_package;
+        } 
+        job.pkg.source = task_raw;
+
     }
     galaxy->UpdateJob(job);
     return 0;

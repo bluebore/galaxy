@@ -135,6 +135,7 @@ message JobInstanceTrace {
     optional int32 deploy_end_time = 7;
     optional ScheduleState state = 8;
     optional bool has_been_stable = 9;
+    optional int32 need_update_size = 10;
 }
 
 message JobInstance {
@@ -143,7 +144,20 @@ message JobInstance {
     optional int32 running_task_num = 4;
     optional int32 replica_num = 5;
     optional JobInstanceTrace trace = 6;
+    optional bytes job_raw = 7;
+    optional string cmd_line = 8;
+    optional double cpu_share = 9;
+    optional int64 mem_share = 10;
+    optional int32 deploy_step_size =11;
+    optional bool killed = 12;
+    optional double cpu_limit = 13;
+    optional bool one_task_per_host = 14;
+    repeated string restrict_tags = 15;
+    optional int32 version = 16;
+    optional bool is_updating = 17;
+    optional int32 update_step_size = 18;
 }
+
 message ListJobRequest {
 }
 message ListJobResponse {
