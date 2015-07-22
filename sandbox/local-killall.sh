@@ -17,3 +17,4 @@ func_kill_by_name(){
 
 func_kill_by_name output/bin/master
 func_kill_by_name output/bin/agent
+func_kill_by_name SimpleHTTPServer
