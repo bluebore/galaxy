@@ -203,7 +203,9 @@ class GalaxySDK(object):
             if not response or response.status != 0 :
                 return False
             return True
-        except:
+        except client.TimeoutError:
+            LOG.exception('rpc timeout')
+        except :
             LOG.exception('fail to update job')
         return False
 
