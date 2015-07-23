@@ -21,6 +21,12 @@ enum ScheduleState {
     // 没有适合的agent
     kNoFitAgent = 2;
 }
+
+enum AgentState {
+    kOffline = 0;
+    kHealthy = 1;
+}
+
 message HeartBeatRequest {
     optional int64 seq_id = 1;      // id for communicate
     optional int64 agent_id = 2 [default = -1];
@@ -169,6 +175,7 @@ message NodeInstance {
     optional double cpu_allocated = 9;
     optional int64 mem_allocated = 10;
     repeated string tags = 11;
+    optional AgentState state = 12;
 }
 
 message ListNodeRequest {

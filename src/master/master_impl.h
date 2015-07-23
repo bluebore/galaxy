@@ -42,6 +42,7 @@ struct AgentInfo {
     std::set<int64_t> running_tasks;
     int64_t version;
     std::set<std::string> tags;
+    AgentState state;
 };
 
 struct AgentLoad {

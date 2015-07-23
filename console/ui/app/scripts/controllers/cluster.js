@@ -39,7 +39,9 @@ angular.module('galaxy.ui.ctrl')
           $scope.machineList = [];
           $scope.chartOptions = {
                  animate:1000
-          }; 
+          };
+          $scope.healthyNum = 0;
+          $scope.offlineNum = 0;
           $scope.cpuPercent = 0;
           $scope.memPercent = 0;
           $scope.pageSize = 10;
@@ -49,6 +51,8 @@ angular.module('galaxy.ui.ctrl')
                $http.get(config.rootPrefixPath + "cluster/status?master="+config.masterAddr)
                   .success(function(data){
                       if(data.status == 0){
+                          $scope.healthyNum = data.data.healthy_num;
+                          $scope.offlineNum = data.data.offline_num;
                           $scope.allMachineList = data.data.machinelist;
                           $scope.totalItems = $scope.allMachineList.length;
                           var startIndex = ($scope.currentPage - 1) * $scope.pageSize;

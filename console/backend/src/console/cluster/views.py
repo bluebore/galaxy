@@ -42,7 +42,13 @@ def get_status(req):
     total_mem_allocated = 0
     total_task_num = 0
     total_node_num = len(machine_list)
+    offline_num = 0
+    healthy_num = 0
     for machine in machine_list:
+        if machine.stat == 0:
+            offline_num++
+        else machine.stat == 1:
+            healthy_num++
         total_cpu_num += machine.cpu_share
         total_mem_num += machine.mem_share
         total_task_num += machine.task_num
@@ -71,7 +77,9 @@ def get_status(req):
                                 'total_mem_used':str_pretty(total_mem_used),
                                 'total_cpu_used':"%0.0f"%total_cpu_used,
                                 'mem_usage_p':mem_usage_p,
-                                'cpu_usage_p':cpu_usage_p}).build_json()
+                                'cpu_usage_p':cpu_usage_p,
+                                'offline_num':offline_num,
+                                'healthy_num':healthy_num}).build_json()
 
 @csrf_exempt
 @D.api_auth_required
