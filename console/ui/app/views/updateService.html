@@ -12,20 +12,24 @@
         </div>
        <div class="form-group">
           <label for="deploy_step_size">并发部署数</label>
-          <input type="number" ng-model="updateServiceTpl.deploy_step_size" class="form-control " id="deploy_step_size" >
+          <input type="number" ng-model="updateServiceTpl.deploy_step_size" class="form-control " id="deploy_step_size" > 
+          <p class="help-block">并发部署数当部署应用才会起作用，比如添加应用实例</p>
        </div>
        <div class="form-group">
           <label for="update_step_size">并发更新数</label>
           <input type="number" ng-model="updateServiceTpl.update_step_size" class="form-control " id="update_step_size" >
+          <p class="help-block">并发更新数是更新服务packge时才会起作用</p>
        </div>
       <div class="form-group">
           <label for="pkg_addr">部署包地址</label>
           <input type="text" ng-model="updateServiceTpl.pkg_addr" class="form-control " id="pkg_addr" >
+          <p class="help-block">当部署包地址变化时，galaxy会按照并发数更新所有实例部署包</p>
        </div>
           <div class="checkbox">
             <label>
                <input type="checkbox" ng-model="updateServiceTpl.is_updating">开启更新
             </label>
+            <p class="help-block">目前，如果开启更新，当包变化时，更新，关闭更新可以当做暂停更新服务</p>
         </div>
  
 </form>

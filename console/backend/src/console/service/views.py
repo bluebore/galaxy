@@ -161,9 +161,7 @@ def update_service(request):
     master_addr = request.GET.get('master',None)
     if not master_addr:
         return builder.error('master is required').build_json()
-    replicate_num = data.get('replica_num',None)
-    if not replicate_num:
-        return builder.error('replica_num is required').build_json()
+    replicate_num = data.get('replica_num', 0)
     galaxy = wrapper.Galaxy(master_addr,settings.GALAXY_CLIENT_BIN)
     status = galaxy.update_job(id, replicate_num, data['pkg_addr'],
                               data['deploy_step_size'], data['update_step_size'],
