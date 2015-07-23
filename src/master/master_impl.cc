@@ -1635,6 +1635,11 @@ void MasterImpl::UpdateTag(const PersistenceTagEntity& entity) {
 
 void MasterImpl::KeepUpdate() {
     MutexLock lock(&agent_lock_);
+    if (SafeModeCheck()) {
+        LOG(WARNING, "no schedule in safe mode");
+        thread_pool_.DelayTask(FLAGS_master_keep_update_interval, boost::bind(&MasterImpl::KeepUpdate, this));
+        return;
+    }
     std::map<int64_t, JobInfo>::iterator job_it = jobs_.begin();
     for (; job_it != jobs_.end(); ++job_it) {
         LOG(DEBUG, "[keepupdate] check job %ld if need update", job_it->second.id);
