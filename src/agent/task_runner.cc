@@ -393,7 +393,17 @@ void AbstractTaskRunner::UpdateCallBack(int32_t old_version, int status) {
     }
     SetStatus(RUNNING);
     LOG(INFO, "update task %ld for updating package");
-    ReStart();
+    if (Stop() != 0) {
+        LOG(WARNING, "fail to stop task %ld", m_task_info.task_id());
+        m_task_info.set_version(old_version);
+        return ;
+    }
+    if (Start() != 0) {
+        LOG(WARNING, "fail to start task %ld", m_task_info.task_id());
+        m_task_info.set_version(old_version);
+        return ;
+    }
+    StartMonitor();
 }
 
 void CommandTaskRunner::StopPost() {

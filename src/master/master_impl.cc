@@ -798,10 +798,6 @@ void MasterImpl::UpdateJob(::google::protobuf::RpcController* /*controller*/,
         return;
     }
     MutexLock lock(&agent_lock_);
-    LOG(INFO, "update job %ld request replica_num %ld, is_updating %d , update step size %d", 
-        request->job_id(),
-        request->is_updating(),
-        request->update_step_size());
     int64_t job_id = request->job_id();
     std::map<int64_t, JobInfo>::iterator it = jobs_.find(job_id);
     if (it == jobs_.end()) {
@@ -823,6 +819,11 @@ void MasterImpl::UpdateJob(::google::protobuf::RpcController* /*controller*/,
         LOG(INFO, "job %ld updates it's package ", job.id);
         job.version ++;
         job.job_raw = request->job_raw();
+        job.updating_tasks.clear();
+        job.need_update_tasks.clear();
+        job.last_task_updates.clear();
+    }
+    if (request->has_update_step_size()) {
         job.update_step_size = request->update_step_size();
     }
     if (request->has_replica_num()) {
@@ -851,8 +852,12 @@ void MasterImpl::UpdateJob(::google::protobuf::RpcController* /*controller*/,
         }
         LOG(WARNING, "update job %ld failed");
     } else {
-        LOG(INFO, "update job %ld to replicate_num %ld deploy_step_size %ld",
-                job_id, job.replica_num, job.deploy_step_size);
+        LOG(INFO, "update job %ld replicate_num %ld ,deploy_step_size %ld,is_updating %d, update_step_size %d ",
+                job_id, 
+                job.replica_num, 
+                job.deploy_step_size,
+                job.is_updating,
+                job.update_step_size);
         response->set_status(kMasterResponseOK); 
     }
     done->Run();
@@ -1656,7 +1661,7 @@ void MasterImpl::UpdateTag(const PersistenceTagEntity& entity) {
 void MasterImpl::KeepUpdate() {
     MutexLock lock(&agent_lock_);
     if (SafeModeCheck()) {
-        LOG(WARNING, "no schedule in safe mode");
+        LOG(WARNING, "no keepupdate in safe mode");
         thread_pool_.DelayTask(FLAGS_master_keep_update_interval, boost::bind(&MasterImpl::KeepUpdate, this));
         return;
     }
@@ -1723,6 +1728,10 @@ void MasterImpl::KeepUpdate() {
                 continue;
             }
             AgentInfo& agent =  agent_it->second;
+            if (agent.stub == NULL) {
+                bool ret = rpc_client_->GetStub(instance.agent_addr(), &agent.stub);
+                assert(ret);
+            }
             UpdateTaskRequest req;
             req.set_task_id(task_id);
             req.set_task_raw(job_info.job_raw);
