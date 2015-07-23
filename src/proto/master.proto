@@ -136,6 +136,7 @@ message JobInstanceTrace {
     optional ScheduleState state = 8;
     optional bool has_been_stable = 9;
     optional int32 need_update_size = 10;
+    optional int32 updating_size = 11;
 }
 
 message JobInstance {

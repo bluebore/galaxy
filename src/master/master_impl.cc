@@ -373,6 +373,8 @@ void MasterImpl::ListJob(::google::protobuf::RpcController* /*controller*/,
         }
         JobInstanceTrace* trace = job_inst->mutable_trace();
         trace->CopyFrom(job.trace);
+        trace->set_updating_size(job.updating_tasks.size());
+        trace->set_need_update_size(job.need_update_tasks.size());
     }
     done->Run();
 }
@@ -1681,7 +1683,6 @@ void MasterImpl::KeepUpdate() {
         for (; rm_it != should_rm_task.end(); ++rm_it) {
             job_info.updating_tasks.erase(*rm_it);
         }
-
         LOG(INFO, "[keepupdate] job %ld  update meta , need_update_size %d update_step_size %d, updating_size %d",
             job_info.id,job_info.need_update_tasks.size(),job_info.update_step_size, job_info.updating_tasks.size());
         int32_t updating_size = job_info.updating_tasks.size();
