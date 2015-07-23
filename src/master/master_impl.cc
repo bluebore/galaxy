@@ -360,8 +360,8 @@ void MasterImpl::DeadCheck() {
         std::set<std::string>::iterator node = it->second.begin();
         while (node != it->second.end()) {
             AgentInfo& agent = agents_[*node];
-            LOG(INFO, "[DeadCheck] Agent %s dead, %lu task fail",
-                agent.addr.c_str(), agent.running_tasks.size());
+            LOG(INFO, "[DeadCheck] Agent %s dead, %lu task fail, last alive time %d: %d",
+                agent.addr.c_str(), agent.running_tasks.size(), it->first, now_time);
             std::set<int64_t> running_tasks;
             UpdateJobsOnAgent(&agent, running_tasks, true);
             agent.state = kOffline;
@@ -537,13 +537,13 @@ void MasterImpl::HeartBeat(::google::protobuf::RpcController* /*controller*/,
                            ::galaxy::HeartBeatResponse* response,
                            ::google::protobuf::Closure* done) {
     const std::string& agent_addr = request->agent_addr();
-    common::timer::AutoTimer timer(100, agent_addr.c_str(), "heartbeat");
+    common::timer::AutoTimer timer(10, agent_addr.c_str(), "heartbeat");
     LOG(DEBUG, "HeartBeat from %s task_status_size  %d ", agent_addr.c_str(),request->task_status_size());
     int64_t now_time_ms = common::timer::get_micros() / 1000;
-    int32_t now_time = static_cast<int32_t>(now_time_ms / 1000000);
+    int32_t now_time = static_cast<int32_t>(now_time_ms / 1000);
     MutexLock lock(&agent_lock_);
     int64_t time_check_point = common::timer::get_micros() / 1000;
-    if (time_check_point - now_time_ms > 100) {
+    if (time_check_point - now_time_ms > 5) {
         LOG(WARNING, "heartbeat wait time cost %ld", 
                 time_check_point - now_time_ms);
     }
@@ -614,6 +614,10 @@ void MasterImpl::HeartBeat(::google::protobuf::RpcController* /*controller*/,
         TaskInstance& instance = tasks_[task_id];
         running_tasks.insert(task_id);
         int task_status = request->task_status(i).status();
+        // TODO not good enough, but it might play a role
+        if (next_task_id_ < task_id) {
+            next_task_id_ = task_id + 1; 
+        }
         if (instance.has_job_id() 
                 && instance.job_id() 
                     != request->task_status(i).job_id()) {
@@ -744,13 +748,31 @@ void MasterImpl::UpdateJob(::google::protobuf::RpcController* /*controller*/,
 
     JobInfo& job = it->second;
     int64_t old_replica_num = job.replica_num;
-    job.replica_num = request->replica_num();
+    if (request->has_replica_num()) {
+        job.replica_num = request->replica_num();
+    }
+    int64_t old_deploy_step_size = job.deploy_step_size;
+    if (request->has_deploy_step_size()) {
+        job.deploy_step_size = request->deploy_step_size(); 
+        // NOTE 
+        if (job.deploy_step_size > job.replica_num) {
+            job.deploy_step_size = job.replica_num; 
+        }
+    }
 
     if (!PersistenceJobInfo(job)) {
         // roll back 
-        job.replica_num = old_replica_num;
+        if (request->has_replica_num()) {
+            job.replica_num = old_replica_num;
+        }
         response->set_status(kMasterResponseErrorInternal);
+        if (request->has_deploy_step_size()) {
+            job.deploy_step_size = old_deploy_step_size; 
+        }
+        LOG(WARNING, "update job %ld failed");
     } else {
+        LOG(INFO, "update job %ld to replicate_num %ld deploy_step_size %ld",
+                job_id, job.replica_num, job.deploy_step_size);
         response->set_status(kMasterResponseOK); 
     }
     done->Run();

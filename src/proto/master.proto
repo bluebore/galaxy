@@ -74,6 +74,7 @@ message UpdateJobRequest {
     optional int32 update_step_size = 7;
     // control update and pause 
     optional bool is_updating = 8;
+    optional int32 deploy_step_size = 5;
 };
 
 message UpdateJobResponse {

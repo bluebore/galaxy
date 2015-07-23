@@ -100,6 +100,7 @@ bool GalaxyImpl::UpdateJob(const JobDescription& job) {
     UpdateJobResponse response;
     request.set_job_id(job.job_id);
     request.set_replica_num(job.replicate_count);
+    request.set_deploy_step_size(job.deploy_step_size);
     rpc_client_->SendRequest(master_, &Master_Stub::UpdateJob,
                              &request, &response, 5, 1);
     if (response.status() != kMasterResponseOK) {

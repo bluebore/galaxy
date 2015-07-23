@@ -40,15 +40,15 @@ std::string USAGE = "\n./galaxy_client add --master_addr=localhost:8102 --job_na
 
 int ProcessNewJob(){
     if(FLAGS_job_name.empty()){
-        fprintf(stderr, "--job_name or -job_name option which can not be empty  is required ");
+        fprintf(stderr, "--job_name or -job_name option which can not be empty  is required\n");
         return -1;
     }
     if(FLAGS_task_raw.empty()){
-        fprintf(stderr, "--package  option which can not be empty  is required ");
+        fprintf(stderr, "--package  option which can not be empty  is required\n");
         return -1;
     }
     if(FLAGS_cmd_line.empty()){
-        fprintf(stderr, "--cmd_line  option which can not be empty  is required ");
+        fprintf(stderr, "--cmd_line  option which can not be empty  is required\n");
         return -1;
     }
     std::string task_raw;
@@ -167,6 +167,7 @@ int UpdateJob(){
     galaxy::JobDescription job;
     job.replicate_count = FLAGS_replicate_num;
     job.job_id  =  FLAGS_job_id;
+    job.deploy_step_size = FLAGS_deploy_step_size;
     galaxy->UpdateJob(job);
     return 0;
 }
@@ -174,14 +175,14 @@ int UpdateJob(){
 int TagAgent() {
     galaxy::Galaxy* galaxy = galaxy::Galaxy::ConnectGalaxy(FLAGS_master_addr);
     if (FLAGS_tag.empty()) {
-        fprintf(stderr, "--tag  which can not be empty is required ");
+        fprintf(stderr, "--tag  which can not be empty is required\n");
         return -1;
     }
     std::set<std::string> agents;
     boost::split(agents, FLAGS_agent_list, boost::is_any_of(","));
     bool ret = galaxy->TagAgent(FLAGS_tag, &agents);
     if (!ret) {
-        fprintf(stderr, "fail to tag agent ");
+        fprintf(stderr, "fail to tag agent\n");
     }
     return ret ? 0: -1;
 }
@@ -191,11 +192,11 @@ int main(int argc, char* argv[]) {
     ::google::SetUsageMessage(USAGE);
     ::google::ParseCommandLineFlags(&argc, &argv, true);
     if(argc < 2){
-        fprintf(stderr, "subcommand is required , eg ./galaxy_client list --task_id=9527");
+        fprintf(stderr, "subcommand is required , eg ./galaxy_client list --task_id=9527\n");
         return -1;
     }
     if(FLAGS_master_addr.empty()){
-        fprintf(stderr, "--master_addr which can not be empty  is required ");
+        fprintf(stderr, "--master_addr which can not be empty  is required\n");
         return -1;
     }
     if (strcmp(argv[1], "add") == 0) {
@@ -219,7 +220,7 @@ int main(int argc, char* argv[]) {
         return TagAgent();
     }
     else {
-        fprintf(stderr,"use ./galaxy_client --help for help");
+        fprintf(stderr,"use ./galaxy_client --help for help\n");
         return -1;
     }
 

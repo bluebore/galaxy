@@ -172,10 +172,12 @@ class GalaxySDK(object):
             LOG.exception('fail to list jobs')
         return False,[]
 
-    def update_job(self,id,replicate_num):
+    def update_job(self,id,replicate_num, deploy_step_size = None):
         req = master_pb2.UpdateJobRequest()
         req.job_id = int(id)
         req.replica_num = int(replicate_num)
+        if deploy_step_size != None :
+            req.deploy_step_size = deploy_step_size;          
         master = master_pb2.Master_Stub(self.channel)
         controller = client.Controller()
         controller.SetTimeout(1.5)
@@ -184,9 +186,12 @@ class GalaxySDK(object):
             if not response or response.status != 0 :
                 return False
             return True
-        except:
+        except client.TimeoutError:
+            LOG.exception('rpc timeout')
+        except :
             LOG.exception('fail to update job')
         return False
+
     def list_task_by_host(self,host):
         req = master_pb2.ListTaskRequest()
         req.agent_addr = host
