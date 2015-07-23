@@ -73,6 +73,8 @@ def get_group_quota_stat(group, master_job_cache):
     stat['cpu_used_percent'] = 0
     if stat['total_cpu_allocated']:
         stat['cpu_used_percent'] = "%0.1f"%(100 * stat['total_cpu_real_used'] / stat['total_cpu_allocated'])
+    stat['pretty_total_cpu_allocated'] = "%0.1f"%stat['total_cpu_allocated']
+    stat['pretty_total_cpu_left'] = "%0.1f"%stat['total_cpu_left']
     return True,stat
 
 @D.api_auth_required

@@ -7,7 +7,7 @@
     <alert ng-repeat="alert in alerts" type="{{alert.type}}" close="closeAlert($index)">{{alert.msg}}</alert>
 <div class="ui mini statistics" ng-show="groupStat != null ">
       <div class="red statistic">
-        <div class="value">{{groupStat.total_cpu_left}} </div>
+        <div class="value">{{groupStat.pretty_total_cpu_left}} </div>
         <div class="label">剩余CPU核数 </div>
     </div>
     <div class="red statistic">
