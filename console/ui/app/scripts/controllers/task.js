@@ -44,7 +44,7 @@ angular.module('galaxy.ui.ctrl').controller('TaskCtrl',function($scope,
            });
     }
 
-//   stop = $interval($scope.getTask,1000);
+   stop = $interval($scope.getTask,10000);
    $scope.getTask();
    $scope.close =function(){
       if(stop != null){

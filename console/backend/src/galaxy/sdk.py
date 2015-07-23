@@ -155,6 +155,17 @@ class GalaxySDK(object):
                 base.job_name = job.job_name
                 base.running_task_num = job.running_task_num
                 base.replica_num = job.replica_num
+                base.job_raw = job.job_raw
+                base.cmd_line = job.cmd_line
+                base.cpu_share = job.cpu_share
+                base.mem_share = job.mem_share
+                base.deploy_step_size = job.deploy_step_size
+                base.killed = job.killed
+                base.cpu_limit = job.cpu_limit
+                base.one_task_per_host = job.one_task_per_host
+                base.version = job.version
+                base.is_updating = job.is_updating
+                base.update_step_size = job.update_step_size
                 trace = BaseEntity()
                 trace.killed_count = job.trace.killed_count
                 trace.overflow_killed_count = job.trace.overflow_killed_count
@@ -171,12 +182,19 @@ class GalaxySDK(object):
             LOG.exception('fail to list jobs')
         return False,[]
 
-    def update_job(self, id, replicate_num, package):
+    def update_job(self, id, 
+                        replicate_num, 
+                        package,
+                        deploy_step_size,
+                        update_step_size,
+                        is_updating):
         req = master_pb2.UpdateJobRequest()
-        req.job_id = int(id)
-        req.replica_num = int(replicate_num)
+        req.job_id = id
+        req.replica_num = replicate_num
         req.job_raw = package 
-        req.is_updating = True
+        req.is_updating = is_updating
+        req.deploy_step_size = deploy_step_size
+        req.update_step_size = update_step_size
         master = master_pb2.Master_Stub(self.channel)
         controller = client.Controller()
         controller.SetTimeout(1.5)
@@ -188,6 +206,7 @@ class GalaxySDK(object):
         except:
             LOG.exception('fail to update job')
         return False
+
     def list_task_by_host(self,host):
         req = master_pb2.ListTaskRequest()
         req.agent_addr = host

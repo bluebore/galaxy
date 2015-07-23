@@ -80,7 +80,7 @@ var galaxy = angular.module('galaxy.ui', [
     if(masterAddr ==null && $cookies.masterAddr != undefined ){
         masterAddr = $cookies.masterAddr;
     }
-    var rootPrefixPath = "/console/";
+    var rootPrefixPath = "/";
     return $http.get(rootPrefixPath+"conf/get").then(function(response) {
             if (response.data.status == -2) {
                    window.location=response.data.msg;

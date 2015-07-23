@@ -7,9 +7,27 @@
 <form >
   <alert ng-repeat="alert in alerts" type="{{alert.type}}" close="closeAlert($index)">{{alert.msg}}</alert>
         <div class="form-group">
-            <label for="replicate_num">实例数</label>
-          <input type="number" ng-model="service.replica_num" class="form-control " id="replicate_num" >
+          <label for="replicate_num">实例数</label>
+          <input type="number" ng-model="updateServiceTpl.replica_num" class="form-control " id="replicate_num" >
         </div>
+       <div class="form-group">
+          <label for="deploy_step_size">并发部署数</label>
+          <input type="number" ng-model="updateServiceTpl.deploy_step_size" class="form-control " id="deploy_step_size" >
+       </div>
+       <div class="form-group">
+          <label for="update_step_size">并发更新数</label>
+          <input type="number" ng-model="updateServiceTpl.update_step_size" class="form-control " id="update_step_size" >
+       </div>
+      <div class="form-group">
+          <label for="pkg_addr">部署包地址</label>
+          <input type="text" ng-model="updateServiceTpl.pkg_addr" class="form-control " id="pkg_addr" >
+       </div>
+          <div class="checkbox">
+            <label>
+               <input type="checkbox" ng-model="updateServiceTpl.is_updating">开启更新
+            </label>
+        </div>
+ 
 </form>
 </div>
 <div class="modal-footer">

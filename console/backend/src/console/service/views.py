@@ -61,7 +61,6 @@ def create_service(request):
     if not data_str:
         return builder.error('data is required').build_json()
     data = json.loads(data_str)
-    LOG.info(data)
     group_id = data.get('groupId',None)
     if not group_id:
         return builder.error('groupId is required').build_json()
@@ -147,37 +146,30 @@ def kill_service(request):
         LOG.exception("fail to kill job %s"%id)
         return builder.error('fail to kill job %s'%id).build_json()
 
+@csrf_exempt
 @D.api_auth_required
-@job_permission_required
+#@job_permission_required
 def update_service(request):
     builder = http.ResponseBuilder()
-    id = request.GET.get('id',None)
+    data_str = request.POST.get("data",None);
+    if not data_str:
+        return builder.error('data is required').build_json()
+    data = json.loads(data_str)
+    id = data.get('job_id',None)
     if not id:
-        return builder.error('id is required').build_json()
+        return builder.error('job_id is required').build_json()
     master_addr = request.GET.get('master',None)
     if not master_addr:
         return builder.error('master is required').build_json()
-    replicate = request.GET.get('replicate',None)
-    if not replicate:
-        return builder.error('replicate is required').build_json()
-    status,stat = views.get_group_quota_stat(request.job.group, {})
-    old_job_meta = json.loads(request.job.meta)
-    replicate_num = int(replicate)
-    if replicate_num > old_job_meta['replicate_count']:
-        new_add = replicate_num - old_job_meta['replicate_count']
-        cpu_total_require = new_add * old_job_meta['cpu_share']
-        mem_total_require = old_job_meta['memory_limit'] * 1024 * 1024 * 1024 * new_add
-        if cpu_total_require > stat['total_cpu_left']:
-            return builder.error('cpu %s exceeds the left cpu quota %s'%(cpu_total_require, stat['total_cpu_left'])).build_json()
-        if mem_total_require > stat['total_mem_left']:
-            return builder.error('mem %s exceeds the left mem %s'%(mem_total_require, stat['total_mem_left'])).build_json()
-    old_job_meta['replicate_count'] = replicate_num
-    request.job.meta = json.dumps(old_job_meta)
-    request.job.save()
+    replicate_num = data.get('replica_num',None)
+    if not replicate_num:
+        return builder.error('replica_num is required').build_json()
     galaxy = wrapper.Galaxy(master_addr,settings.GALAXY_CLIENT_BIN)
-    status = galaxy.update_job(id,replicate)
+    status = galaxy.update_job(id, replicate_num, data['pkg_addr'],
+                              data['deploy_step_size'], data['update_step_size'],
+                              data['is_updating'])
     if status:
         return builder.ok().build_json()
     else:
-        return builder.error('fail to kill job').build_json()
+        return builder.error('fail to update job').build_json()
 

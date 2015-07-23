@@ -81,10 +81,18 @@ class Galaxy(object):
         galaxy_sdk = sdk.GalaxySDK(self.master_addr)
         galaxy_sdk.kill_job(job_id)
 
-    def update_job(self,job_id,replicate_num):
+    def update_job(self,job_id, replicate_num,
+                       package,
+                       deploy_step_size,
+                       update_step_size,
+                       is_updating):
 
         galaxy_sdk = sdk.GalaxySDK(self.master_addr)
-        return galaxy_sdk.update_job(job_id,replicate_num)
+        return galaxy_sdk.update_job(job_id,replicate_num,
+                                     str(package),
+                                     deploy_step_size,
+                                     update_step_size,
+                                     is_updating)
 
     def list_jobs(self):
         galaxy_sdk = sdk.GalaxySDK(self.master_addr)
