@@ -100,7 +100,7 @@ bool GalaxyImpl::UpdateJob(const JobDescription& job) {
     UpdateJobResponse response;
     request.set_job_id(job.job_id);
     request.set_replica_num(job.replicate_count);
-    request.set_is_updating(job.is_updating);
+    request.set_is_suspended(job.is_updating);
     request.set_job_raw(job.pkg.source);
     request.set_update_step_size(job.update_step_size);
     request.set_deploy_step_size(job.deploy_step_size);

@@ -20,7 +20,16 @@ enum ScheduleState {
     kNoResource = 1;
     // 没有适合的agent
     kNoFitAgent = 2;
+    // 更新中
+    kUpdating = 3;
 }
+
+// different type uses different scheduler
+enum SchedulerType {
+    kSchedNormal = 0;
+    kSchedUpdate = 1;
+}
+
 message HeartBeatRequest {
     optional int64 seq_id = 1;      // id for communicate
     optional int64 agent_id = 2 [default = -1];
@@ -67,8 +76,9 @@ message UpdateJobRequest {
     optional int32 deploy_step_size = 6;
     optional int32 update_step_size = 7;
     // control update and pause 
-    optional bool is_updating = 8;
-};
+    optional bool is_suspended = 8;
+    optional int32 migrate_delay_time = 9;
+}
 
 message UpdateJobResponse {
     optional int32 status = 2;
@@ -106,6 +116,20 @@ message ListTaskResponse {
     repeated TaskInstance scheduled_tasks = 3;
 }
 
+message LastTaskUpdate {
+    optional int64 task_id = 1;
+    optional int64 last_update_time = 2;
+}
+
+message UpdateJobInfo {
+    optional int32 update_step_size = 1;
+    optional int32 version = 4;
+    optional string cmd_line = 6;
+    optional string job_raw = 7;
+    optional bool is_suspended = 8;
+    optional int32 migrate_delay_time = 9;
+}
+
 message JobCheckPointCell {
     optional int64 job_id = 1;
     optional int32 replica_num = 2;
@@ -123,6 +147,8 @@ message JobCheckPointCell {
     optional int32 version = 14;
     optional bool is_updating = 15;
     optional int32 update_step_size = 16;
+    optional UpdateJobInfo update_job_info = 17;
+    optional SchedulerType sched_type = 18;
 }
 
 message JobInstanceTrace {
@@ -155,7 +181,7 @@ message JobInstance {
     optional bool one_task_per_host = 14;
     repeated string restrict_tags = 15;
     optional int32 version = 16;
-    optional bool is_updating = 17;
+    optional bool is_suspended = 17;
     optional int32 update_step_size = 18;
 }
 

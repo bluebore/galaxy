@@ -79,7 +79,6 @@ typedef boost::multi_index::multi_index_container<
     >
 > AgentLoadIndex;
 
-
 struct JobInfo {
     int64_t id;
     int32_t replica_num;
@@ -104,20 +103,18 @@ struct JobInfo {
     std::set<std::string> restrict_tags;
     std::map<std::string, int32_t> sched_agent;
     JobInstanceTrace trace;
-    // 更新步长
-    int32_t update_step_size;
     // 用于更新操作
     int32_t version;
-    // 更新task队列
+    // job类型，不同类型是使用不同的调度器
+    SchedulerType sched_type;
+    // 用于更新job的配置信息
+    UpdateJobInfo update_job_info;
+    // 记录正在更新任务
     std::set<int64_t> updating_tasks;
-    // 版本号不匹配任务
+    // 记录需要更新的任务
     std::set<int64_t> need_update_tasks;
-    // 记录上次调用agent update时间
-    // 避免因为下载失败或者更新缓慢频繁调用
-    // agent rpc接口
+    // last update
     boost::unordered_map<int64_t, int64_t> last_task_updates;
-    // 控制是否更新
-    bool is_updating;
 };
 
 class RpcClient;
@@ -206,6 +203,9 @@ private:
             std::string agent_addr,
             const KillTaskRequest*, 
             KillTaskResponse*, bool, int);
+    int SendUpdateCmd(const UpdateJobInfo& update_job_info, 
+                      const AgentInfo& agent,
+                      int64_t task_id);
 private:
     /// Global threadpool
     common::ThreadPool thread_pool_;
