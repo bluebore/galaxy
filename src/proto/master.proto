@@ -70,11 +70,10 @@ message UpdateJobRequest {
     optional int32 replica_num = 4;
     // new source package
     optional bytes job_raw = 5;
-    optional int32 deploy_step_size = 6;
     optional int32 update_step_size = 7;
     // control update and pause 
     optional bool is_updating = 8;
-    optional int32 deploy_step_size = 5;
+    optional int32 deploy_step_size = 9;
 };
 
 message UpdateJobResponse {
