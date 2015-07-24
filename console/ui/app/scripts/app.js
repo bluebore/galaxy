@@ -77,8 +77,8 @@ var galaxy = angular.module('galaxy.ui', [
     var $http = initInjector.get("$http");
     var $cookies = initInjector.get('$cookies');
     var masterAddr = getParameterByName('master');
-    if(masterAddr ==null && $cookies.masterAddr != undefined ){
-        masterAddr = $cookies.masterAddr;
+    if(masterAddr ==null && $cookies.get("masterAddr") != undefined ){
+        masterAddr = $cookies.get("masterAddr");
     }
     var rootPrefixPath = "/";
     return $http.get(rootPrefixPath+"conf/get").then(function(response) {

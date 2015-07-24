@@ -44,7 +44,7 @@ angular.module('galaxy.ui.ctrl').controller('TaskCtrl',function($scope,
            });
     }
 
-   stop = $interval($scope.getTask,10000);
+   stop = $interval($scope.getTask,5000);
    $scope.getTask();
    $scope.close =function(){
       if(stop != null){
@@ -108,7 +108,7 @@ $http.get(config.rootPrefixPath + "taskgroup/history?id="+service.job_id+"&maste
                }
 
     })
-    .error();
+    .error(function(){});
     $scope.close =function(){
       $modalInstance.dismiss('cancel'); 
    }

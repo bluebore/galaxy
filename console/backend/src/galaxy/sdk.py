@@ -175,6 +175,8 @@ class GalaxySDK(object):
                 trace.deploy_start_time = job.trace.deploy_start_time
                 trace.deploy_end_time = job.trace.deploy_end_time
                 trace.state = SCHEDULE_STATE_MAP[job.trace.state]
+                trace.need_update_size = job.trace.need_update_size
+                trace.updating_size = job.trace.updating_size
                 base.trace = trace
                 ret.append(base)
             return True,ret
@@ -188,6 +190,9 @@ class GalaxySDK(object):
                         deploy_step_size,
                         update_step_size,
                         is_updating):
+        LOG.info("update job pkg %s , replicate_num %d, deploy_step_size %d, update_step_size %d"%(
+            package, replicate_num, deploy_step_size, update_step_size
+            ))
         req = master_pb2.UpdateJobRequest()
         req.job_id = id
         req.replica_num = replicate_num
@@ -234,6 +239,7 @@ class GalaxySDK(object):
                 base.mem_used = task.memory_usage
                 base.cpu_used = task.cpu_usage
                 base.start_time = task.start_time
+                base.version = task.info.version
                 ret.append(base)
             return True,ret
         except:
@@ -265,6 +271,7 @@ class GalaxySDK(object):
                 base.mem_used = task.memory_usage
                 base.cpu_used = task.cpu_usage
                 base.start_time = task.start_time
+                base.version = task.info.version
                 ret.append(base)
             return True,ret
         except:
