@@ -46,6 +46,7 @@ def list_service(request):
         if job.job_id not in jobs_dict and not request.user.is_superuser:
             continue
         job.trace = job.trace.__dict__
+        job.update_job_info = job.update_job_info.__dict__
         ret.append(job.__dict__)
     return builder.ok(data=ret).build_json()
 
@@ -163,9 +164,12 @@ def update_service(request):
         return builder.error('master is required').build_json()
     replicate_num = data.get('replica_num', 0)
     galaxy = wrapper.Galaxy(master_addr,settings.GALAXY_CLIENT_BIN)
-    status = galaxy.update_job(id, replicate_num, data['pkg_addr'],
-                              data['deploy_step_size'], data['update_step_size'],
-                              data['is_updating'])
+    status = galaxy.update_job(id, replicate_num, 
+                              data['pkg_addr'],
+                              data['deploy_step_size'], 
+                              data['update_step_size'],
+                              data['is_suspended'],
+                              data['switch_sched_type_num'])
     if status:
         return builder.ok().build_json()
     else:

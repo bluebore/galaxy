@@ -25,12 +25,29 @@
           <input type="text" ng-model="updateServiceTpl.pkg_addr" class="form-control " id="pkg_addr" >
           <p class="help-block">当部署包地址变化时，galaxy会按照并发数更新所有实例部署包</p>
        </div>
-          <div class="checkbox">
+      
+      <div class="form-group">
+          <label for="migrate_delay_time">重试更新间隔</label>
+          <div class="input-group">
+                <input type="number" ng-model="updateServiceTpl.migrate_delay_time" class="form-control" id="migrate_delay_time">
+                <span class="input-group-addon">ms</span>
+         </div>
+
+          <p class="help-block">单个实例更新失败重试间隔</p>
+       </div>
+
+
+       <div class="form-group">
+          <label for="switch_sched_type_num">切换调度类型实例数</label>
+          <input type="number" ng-model="updateServiceTpl.switch_sched_type_num" class="form-control " id="switch_sched_type_num" >
+          <p class="help-block">当成功更新实例数到达特定值时,切换调度类型, 默认值和副本数一样</p>
+       </div>
+      <div class="checkbox">
             <label>
-               <input type="checkbox" ng-model="updateServiceTpl.is_updating">开启更新
+               <input type="checkbox" ng-model="updateServiceTpl.is_suspended">暂停更新
             </label>
-            <p class="help-block">目前，如果开启更新，当包变化时，更新，关闭更新可以当做暂停更新服务</p>
-        </div>
+            <p class="help-block">当选择后 将会暂停更新</p>
+       </div>
  
 </form>
 </div>

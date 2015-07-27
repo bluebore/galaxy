@@ -85,14 +85,16 @@ class Galaxy(object):
                        package,
                        deploy_step_size,
                        update_step_size,
-                       is_updating):
+                       is_suspended,
+                       switch_sched_type_num):
 
         galaxy_sdk = sdk.GalaxySDK(self.master_addr)
         return galaxy_sdk.update_job(job_id,replicate_num,
                                      str(package),
                                      deploy_step_size,
                                      update_step_size,
-                                     is_updating)
+                                     is_suspended,
+                                     switch_sched_type_num)
 
     def list_jobs(self):
         galaxy_sdk = sdk.GalaxySDK(self.master_addr)

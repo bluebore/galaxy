@@ -164,8 +164,15 @@ class GalaxySDK(object):
                 base.cpu_limit = job.cpu_limit
                 base.one_task_per_host = job.one_task_per_host
                 base.version = job.version
-                base.is_updating = job.is_updating
-                base.update_step_size = job.update_step_size
+                update_info = BaseEntity()
+                update_info.update_step_size = job.update_job_info.update_step_size
+                update_info.version = job.update_job_info.version
+                update_info.cmd_line = job.update_job_info.cmd_line
+                update_info.job_raw = job.update_job_info.job_raw
+                update_info.migrate_delay_time = job.update_job_info.migrate_delay_time
+                update_info.switch_sched_type_num = job.update_job_info.switch_sched_type_num
+                update_info.is_suspended = job.update_job_info.is_suspended
+                base.update_job_info = update_info
                 trace = BaseEntity()
                 trace.killed_count = job.trace.killed_count
                 trace.overflow_killed_count = job.trace.overflow_killed_count
@@ -189,15 +196,17 @@ class GalaxySDK(object):
                         package,
                         deploy_step_size,
                         update_step_size,
-                        is_updating):
-        LOG.info("update job pkg %s , replicate_num %d, deploy_step_size %d, update_step_size %d"%(
-            package, replicate_num, deploy_step_size, update_step_size
+                        is_suspended,
+                        switch_sched_type_num):
+        LOG.info("update job pkg %s , replicate_num %d, deploy_step_size %d, update_step_size %d, switch_sched_type_num %s"%(
+            package, replicate_num, deploy_step_size, update_step_size, switch_sched_type_num
             ))
         req = master_pb2.UpdateJobRequest()
         req.job_id = id
         req.replica_num = replicate_num
         req.job_raw = package 
-        req.is_updating = is_updating
+        req.is_suspended = is_suspended
+        req.switch_sched_type_num = switch_sched_type_num 
         req.deploy_step_size = deploy_step_size
         req.update_step_size = update_step_size
         master = master_pb2.Master_Stub(self.channel)

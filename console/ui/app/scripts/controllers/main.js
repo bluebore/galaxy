@@ -259,9 +259,11 @@ angular.module('galaxy.ui.ctrl').controller('UpdateServiceModalIntanceCtrl',func
               job_id:$scope.service.job_id,
               replica_num:$scope.service.replica_num,
               deploy_step_size:$scope.service.deploy_step_size,
-              update_step_size:$scope.service.update_step_size,
+              update_step_size:$scope.service.update_job_info.update_step_size,
               pkg_addr:$scope.service.job_raw,
-              is_updating:$scope.service.is_updating
+              is_suspended:$scope.service.update_job_info.is_suspended,
+              migrate_delay_time:$scope.service.update_job_info.migrate_delay_time,
+              switch_sched_type_num:$scope.service.update_job_info.switch_sched_type_num
         };
 
         $scope.update = function(){
