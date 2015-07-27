@@ -376,8 +376,6 @@ void MasterImpl::ListJob(::google::protobuf::RpcController* /*controller*/,
         job_inst->set_killed(job.killed);
         job_inst->set_cpu_limit(job.cpu_limit);
         job_inst->set_one_task_per_host(job.one_task_per_host);
-        job_inst->set_is_suspended(job.update_job_info.is_suspended());
-        job_inst->set_update_step_size(job.update_job_info.update_step_size());
         std::set<std::string>::iterator tag_it = job.restrict_tags.begin();
         for (; tag_it != job.restrict_tags.end(); ++tag_it) {
             job_inst->add_restrict_tags(*tag_it);
@@ -386,6 +384,8 @@ void MasterImpl::ListJob(::google::protobuf::RpcController* /*controller*/,
         trace->CopyFrom(job.trace);
         trace->set_updating_size(job.updating_tasks.size());
         trace->set_need_update_size(job.need_update_tasks.size());
+        UpdateJobInfo* update_job_info = job_inst->mutable_update_job_info();
+        update_job_info->CopyFrom(job.update_job_info);
     }
     done->Run();
 }

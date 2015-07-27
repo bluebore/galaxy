@@ -185,6 +185,7 @@ message JobInstance {
     optional int32 version = 16;
     optional bool is_suspended = 17;
     optional int32 update_step_size = 18;
+    optional UpdateJobInfo update_job_info = 19;
 }
 
 message ListJobRequest {
