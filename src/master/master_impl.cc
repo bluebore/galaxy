@@ -834,6 +834,7 @@ void MasterImpl::UpdateJob(::google::protobuf::RpcController* /*controller*/,
         job.updating_tasks.clear();
         job.need_update_tasks.clear();
         job.last_task_updates.clear();
+        job.updated_tasks.clear();
         job.sched_type = kSchedUpdate;
     }
     if (request->has_update_step_size()) {
@@ -879,13 +880,14 @@ void MasterImpl::UpdateJob(::google::protobuf::RpcController* /*controller*/,
         }
         LOG(WARNING, "update job %ld failed");
     } else {
-        LOG(INFO, "update job %ld replicate_num %ld ,deploy_step_size %ld,is_suspended  %d, update_step_size %d , switch_sched_type_num %d ",
+        LOG(INFO, "update job %ld replicate_num %ld ,deploy_step_size %ld,is_suspended  %d, update_step_size %d , switch_sched_type_num %d , rw %d",
                 job_id, 
                 job.replica_num, 
                 job.deploy_step_size,
                 job.update_job_info.is_suspended(),
                 job.update_job_info.update_step_size(),
-                job.update_job_info.switch_sched_type_num());
+                job.update_job_info.switch_sched_type_num(),
+                request->switch_sched_type_num());
         response->set_status(kMasterResponseOK); 
     }
     done->Run();
@@ -1721,6 +1723,10 @@ void MasterImpl::KeepUpdate() {
             job_info.version = job_info.update_job_info.version();
             job_info.cmd_line = job_info.update_job_info.cmd_line();
             job_info.job_raw = job_info.update_job_info.job_raw();
+            if (!PersistenceJobInfo(job_info)) {
+                // retry persistence job info
+                job_info.sched_type = kSchedUpdate;
+            }
             continue;
         
         }
