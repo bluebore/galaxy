@@ -78,6 +78,7 @@ message UpdateJobRequest {
     // control update and pause 
     optional bool is_suspended = 8;
     optional int32 migrate_delay_time = 9;
+    optional int32 switch_sched_type_num = 10;
 }
 
 message UpdateJobResponse {
@@ -128,6 +129,7 @@ message UpdateJobInfo {
     optional string job_raw = 7;
     optional bool is_suspended = 8;
     optional int32 migrate_delay_time = 9;
+    optional int32 switch_sched_type_num = 10;
 }
 
 message JobCheckPointCell {

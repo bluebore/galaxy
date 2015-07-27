@@ -681,8 +681,8 @@ void MasterImpl::HeartBeat(::google::protobuf::RpcController* /*controller*/,
             //done->Run();
         }
         JobInfo& job = jobs_[request->task_status(i).job_id()];
-        LOG(DEBUG, "heartbeat update instance %ld version to %d", 
-              task_id, request->task_status(i).task_meta_version());
+        LOG(INFO, "heartbeat update instance %ld version to %d job version %d", 
+              task_id, request->task_status(i).task_meta_version(), job.update_job_info.version());
         instance.mutable_info()->set_version(request->task_status(i).task_meta_version());
         if (job.sched_type == kSchedUpdate) {
             if (request->task_status(i).has_task_meta_version() 
@@ -821,19 +821,20 @@ void MasterImpl::UpdateJob(::google::protobuf::RpcController* /*controller*/,
     int32_t old_update_step_size = job.update_job_info.update_step_size();
     int32_t old_migrate_delay_time = job.update_job_info.migrate_delay_time();
     bool old_is_suspended = job.update_job_info.is_suspended();
+    int32_t old_switch_sched_type_num = job.update_job_info.switch_sched_type_num();
     SchedulerType old_sched_type = job.sched_type;
     std::string old_job_raw = job.job_raw;
     job.replica_num = request->replica_num();
-    job.sched_type = kSchedUpdate;
     if (request->has_job_raw() 
         && !request->job_raw().empty()
         && request->job_raw().compare(job.job_raw) != 0 ){
         LOG(INFO, "job %ld updates it's package ", job.id);
-        job.update_job_info.set_version(job.update_job_info.version());
+        job.update_job_info.set_version(job.update_job_info.version() + 1);
         job.update_job_info.set_job_raw(request->job_raw());
         job.updating_tasks.clear();
         job.need_update_tasks.clear();
         job.last_task_updates.clear();
+        job.sched_type = kSchedUpdate;
     }
     if (request->has_update_step_size()) {
         job.update_job_info.set_update_step_size(request->update_step_size());
@@ -846,6 +847,13 @@ void MasterImpl::UpdateJob(::google::protobuf::RpcController* /*controller*/,
     }
     if (request->has_is_suspended()) {
         job.update_job_info.set_is_suspended(request->is_suspended());
+        // 如果是暂停 保持原理的调度类型
+        if (request->is_suspended()) {
+            job.sched_type = old_sched_type;
+        }
+    }
+    if (request->has_switch_sched_type_num()) {
+        job.update_job_info.set_switch_sched_type_num(request->switch_sched_type_num());
     }
     int64_t old_deploy_step_size = job.deploy_step_size;
     if (request->has_deploy_step_size()) {
@@ -863,6 +871,7 @@ void MasterImpl::UpdateJob(::google::protobuf::RpcController* /*controller*/,
         job.update_job_info.set_job_raw(old_job_raw);
         job.update_job_info.set_update_step_size(old_update_step_size);
         job.update_job_info.set_migrate_delay_time(old_migrate_delay_time);
+        job.update_job_info.set_switch_sched_type_num(old_switch_sched_type_num);
         job.sched_type = old_sched_type;
         response->set_status(kMasterResponseErrorInternal);
         if (request->has_deploy_step_size()) {
@@ -870,12 +879,13 @@ void MasterImpl::UpdateJob(::google::protobuf::RpcController* /*controller*/,
         }
         LOG(WARNING, "update job %ld failed");
     } else {
-        LOG(INFO, "update job %ld replicate_num %ld ,deploy_step_size %ld,is_suspended  %d, update_step_size %d ",
+        LOG(INFO, "update job %ld replicate_num %ld ,deploy_step_size %ld,is_suspended  %d, update_step_size %d , switch_sched_type_num %d ",
                 job_id, 
                 job.replica_num, 
                 job.deploy_step_size,
                 job.update_job_info.is_suspended(),
-                job.update_job_info.update_step_size());
+                job.update_job_info.update_step_size(),
+                job.update_job_info.switch_sched_type_num());
         response->set_status(kMasterResponseOK); 
     }
     done->Run();
@@ -978,6 +988,7 @@ void MasterImpl::NewJob(::google::protobuf::RpcController* /*controller*/,
         // 5s
         job.update_job_info.set_migrate_delay_time(5000);
         job.update_job_info.set_version(job.version);
+        job.update_job_info.set_switch_sched_type_num(job.replica_num);
     }
     //trace init
     job.trace.set_killed_count(0);
@@ -1703,10 +1714,21 @@ void MasterImpl::KeepUpdate() {
             continue;
         }
         JobInfo& job_info = job_it->second;
+        uint32_t switch_sched_type_num = job_info.update_job_info.switch_sched_type_num();
+        if (job_info.updated_tasks.size() >= switch_sched_type_num) {
+            LOG(INFO, "[keepupdate]job switchs sched type to kSchedNormal");
+            job_info.sched_type = kSchedNormal;
+            job_info.version = job_info.update_job_info.version();
+            job_info.cmd_line = job_info.update_job_info.cmd_line();
+            job_info.job_raw = job_info.update_job_info.job_raw();
+            continue;
+        
+        }
         job_info.trace.set_state(kUpdating);
         // 更新正在更新的队列
         std::set<int64_t>::iterator u_it = job_info.updating_tasks.begin();
         std::vector<int64_t> should_rm_task;
+        // 清除已经更新成功的任务
         for (;u_it != job_info.updating_tasks.end(); ++u_it) {
             // 当更新到达agent时，重启失败出现error状态
             // 调度器可能会把task迁移走，任务会出现不存在情况
@@ -1729,6 +1751,7 @@ void MasterImpl::KeepUpdate() {
                 continue;
             }
             should_rm_task.push_back(*u_it);
+            job_info.updated_tasks.insert(*u_it);
         }
         std::vector<int64_t>::iterator rm_it = should_rm_task.begin();
         for (; rm_it != should_rm_task.end(); ++rm_it) {
@@ -1786,9 +1809,7 @@ void MasterImpl::KeepUpdate() {
                 bool ret = rpc_client_->GetStub(instance.agent_addr(), &agent.stub);
                 assert(ret);
             }
-            agent_lock_.Unlock();
             int ret = SendUpdateCmd(job_info.update_job_info, agent, task_id);
-            agent_lock_.Lock();
             if (ret != 0) {
                 LOG(FATAL, "[keepupdate]fail to send update cmd to agent , task id %ld, job id %ld, agent %s",
                   task_id,

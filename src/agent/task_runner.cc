@@ -13,6 +13,7 @@
 #include <signal.h>
 #include <errno.h>
 #include <sstream>
+#include <fstream>
 #include <sys/types.h>
 #include <gflags/gflags.h>
 #include <boost/bind.hpp>
@@ -382,9 +383,10 @@ void AbstractTaskRunner::UpdateCallBack(int32_t old_version, int status) {
           old_version);
         return;
     }
+
     std::string tar_cmd = "cd "
             + m_workspace->GetPath()
-            + " && tar -xzf tmp.tar.gz";
+            + " && tar -xzf " + "tmp.tar.gz";
     status = system(tar_cmd.c_str());
     if (status != 0) {
         LOG(WARNING, "task with id %ld extract failed",  m_task_info.task_id());
@@ -403,6 +405,10 @@ void AbstractTaskRunner::UpdateCallBack(int32_t old_version, int status) {
         m_task_info.set_version(old_version);
         return ;
     }
+    std::fstream fs;
+    fs.open("version", std::fstream::out | std::fstream::trunc);
+    fs << m_task_info.version();
+    fs.close();
     StartMonitor();
 }
 

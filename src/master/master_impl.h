@@ -115,6 +115,8 @@ struct JobInfo {
     std::set<int64_t> need_update_tasks;
     // last update
     boost::unordered_map<int64_t, int64_t> last_task_updates;
+    // 记录已经更新的tasks,用于调度类型切换
+    std::set<int64_t> updated_tasks;
 };
 
 class RpcClient;
