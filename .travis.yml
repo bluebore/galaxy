@@ -20,4 +20,3 @@ install:
     - ( cd gflags-2.1.2 && cmake -DGFLAGS_NAMESPACE=google && make -j4 && sudo make install )
 script: 
     - make -j4 && make install
-    - cd test/integeration && sudo sh inte-test-on-local.sh
