@@ -4,16 +4,16 @@
 //
 // Author: yanshiguang02@baidu.com
 
-#ifndef  BFS_RPC_CLIENT_H_
-#define  BFS_RPC_CLIENT_H_
+#ifndef  BAIDU_GALAXY_RPC_CLIENT_H_
+#define  BAIDU_GALAXY_RPC_CLIENT_H_
 
 #include <assert.h>
 #include <boost/function.hpp>
 #include <boost/bind.hpp>
 #include <sofa/pbrpc/pbrpc.h>
-#include "mutex.h"
-#include "thread_pool.h"
-#include "logging.h"
+#include <mutex.h>
+#include <thread_pool.h>
+#include <logging.h>
 
 namespace baidu {
 namespace galaxy {
@@ -21,8 +21,6 @@ namespace galaxy {
 class RpcClient {
 public:
     RpcClient() {
-        // 定义 client 对象，一个 client 程序只需要一个 client 对象
-        // 可以通过 client_options 指定一些配置参数，譬如线程数、流控等
         sofa::pbrpc::RpcClientOptions options;
         options.max_pending_buffer_size = 128;
         _rpc_client = new sofa::pbrpc::RpcClient(options);
@@ -38,8 +36,6 @@ public:
         if (it != _host_map.end()) {
             channel = it->second;
         } else {
-            // 定义 channel，代表通讯通道，每个服务器地址对应一个 channel
-            // 可以通过 channel_options 指定一些配置参数
             sofa::pbrpc::RpcChannelOptions channel_options;
             channel = new sofa::pbrpc::RpcChannel(_rpc_client, server, channel_options);
             _host_map[server] = channel;
@@ -53,7 +49,6 @@ public:
                     const Request*, Response*, Callback*),
                     const Request* request, Response* response,
                     int32_t rpc_timeout, int retry_times) {
-        // 定义 controller 用于控制本次调用，并设定超时时间（也可以不设置，缺省为10s）
         sofa::pbrpc::RpcController controller;
         controller.SetTimeout(rpc_timeout * 1000L);
         for (int32_t retry = 0; retry < retry_times; ++retry) {
@@ -115,6 +110,6 @@ private:
 } // namespace galaxy
 } // namespace baidu
 
-#endif  // BFS_RPC_CLIENT_H_
+#endif  // BAIDU_GALAXY_RPC_CLIENT_H_
 
 /* vim: set expandtab ts=4 sw=4 sts=4 tw=100: */

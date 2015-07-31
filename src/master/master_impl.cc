@@ -7,10 +7,10 @@ namespace baidu {
 namespace galaxy {
 
 void MasterImpl::SubmitJob(::google::protobuf::RpcController* controller,
-                           const ::baidu::galaxy::SubmitJobRequest*,
-                           ::baidu::galaxy::SubmitJobResponse*,
+                           const ::baidu::galaxy::SubmitJobRequest* request,
+                           ::baidu::galaxy::SubmitJobResponse* response,
                            ::google::protobuf::Closure* done) {
-    controller->SetFailed("Method SubmitJob() not implemented.");
+    job_manager_.Add(request->job());
     done->Run();
 }
 
@@ -72,9 +72,10 @@ void MasterImpl::HeartBeat(::google::protobuf::RpcController* controller,
 
 void MasterImpl::GetPendingJobs(::google::protobuf::RpcController* controller,
                                 const ::baidu::galaxy::GetPendingJobsRequest*,
-                                ::baidu::galaxy::GetPendingJobsResponse*,
+                                ::baidu::galaxy::GetPendingJobsResponse* response,
                                 ::google::protobuf::Closure* done) {
-    controller->SetFailed("Method GetPendingJobs() not implemented.");
+    job_manager_.GetPendingPods(response->mutable_jobs());
+    response->set_status(kOk);
     done->Run();
 }
 

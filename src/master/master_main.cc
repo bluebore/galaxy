@@ -25,6 +25,7 @@ static void SignalIntHandler(int /*sig*/){
 }
 
 int main(int argc, char* argv[]) {
+    ::google::ParseCommandLineFlags(&argc, &argv, true);
     sofa::pbrpc::RpcServerOptions options;
     sofa::pbrpc::RpcServer rpc_server(options);
     baidu::galaxy::Master* master_server = new baidu::galaxy::MasterImpl();

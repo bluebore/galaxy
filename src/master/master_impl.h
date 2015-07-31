@@ -5,6 +5,7 @@
 #define BAIDU_GALAXY_MASTER_IMPL_H
 
 #include "proto/master.pb.h"
+#include "job_manager.h"
 
 namespace baidu {
 namespace galaxy {
@@ -58,6 +59,8 @@ public:
                               const ::baidu::galaxy::ListAgentsRequest* request,
                               ::baidu::galaxy::ListAgentsResponse* response,
                               ::google::protobuf::Closure* done);
+private:
+      JobManager job_manager_;
 };
 
 }
