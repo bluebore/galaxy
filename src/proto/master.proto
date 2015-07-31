@@ -41,7 +41,7 @@ message JobDescriptor {
 
 message JobInfo {
     optional string jobid = 1;
-    optional JobDescriptor descriptor = 2;
+    optional JobDescriptor job = 2;
     repeated PodStatus tasks = 3;
 }
 
