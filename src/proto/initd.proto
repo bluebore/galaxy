@@ -1,0 +1,42 @@
+import "galaxy.proto";
+
+package baidu.galaxy;
+
+option cc_generic_services = true;
+
+enum ProcessStatus {
+    kProcessRunning = 0;
+    kProcessTerminate = 1;
+}
+
+message ProcessInfo {
+    optional int32 pid = 1; 
+    optional ProcessStatus status = 2;
+}
+
+message GetProcessStatusRequest {
+    optional string key = 1;
+}
+
+message GetProcessStatusResponse {
+    optional ProcessInfo process = 1;
+}
+
+message ExecuteRequest {
+    optional string key = 1; 
+    optional string commands = 2;
+    repeated string envs = 3;
+    optional string path = 4;
+    optional string cgroup_path = 5;
+}
+
+message ExecuteResponse {
+    optional string key  = 1;
+    optional int32 pid = 2;
+    optional Status status = 3;
+}
+
+service Initd {
+    rpc GetProcessStatus(GetProcessStatusRequest) returns (GetProcessStatusResponse);
+    rpc Execute(ExecuteRequest) returns (ExecuteResponse);
+}

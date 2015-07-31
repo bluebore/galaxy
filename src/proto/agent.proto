@@ -1,20 +1,34 @@
-
-package galaxy;
+import "galaxy.proto";
+package baidu.galaxy;
 
 option cc_generic_services = true;
 
-message RunTaskRequest {
-    optional int64 task_id = 1;
-    optional string task_name = 2;
-    optional bytes task_raw = 3;
-    optional string cmd_line = 4;
+message QueryRequest {
 }
 
-message RunTaskResponse {
-    optional int32 status = 1;
+message QueryResponse {
+    optional AgentInfo agent = 1;
+}
+
+message RunPodRequest {
+    optional string podid = 1;
+    optional PodDescriptor pod = 2;
+}
+
+message RunPodResponse {
+    optional Status status = 1;
+}
+
+message KillPodRequest {
+    optional string podid = 1;
+}
+
+message KillPodResponse {
+    optional Status status = 1;
 }
 
 service Agent {
-    rpc RunTask(RunTaskRequest) returns(RunTaskResponse);
+    rpc Query(QueryRequest) returns (QueryResponse);
+    rpc RunPod(RunPodRequest) returns (RunPodResponse);
+    rpc KillPod(KillPodRequest) returns (KillPodResponse);
 }
-

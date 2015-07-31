@@ -1,139 +1,63 @@
-package galaxy;
+package baidu.galaxy;
 
-message AgentId {
-    optional int64 id = 1;
+option cc_generic_services = true;
+
+enum Status {
+    kOk = 0;
+    kUnknown = 1;
+    kQuota = 2;
+    kNotFound = 3;
 }
 
-message JobId {
-    optional int64 id = 1;
+enum PodState {
+    kPodRunning = 0;
+    kPodTerminate = 1;
 }
 
-message TaskId {
-    optional int64 id = 1;
+message Volume {
+    optional int64 quota = 1;
+    optional string path  = 2;
 }
 
-message ContainerId {
-    optional int64 id = 1;
+message Resource {
+    optional int32 millicores = 1; 
+    optional int32 memory = 2;
+    repeated int32 ports = 3;
+    repeated Volume disks = 4;
+    repeated Volume ssds = 5; 
 }
 
-message ResourceStatistics {
-    required int64 timestamp = 1;
-
-    // cpu 
-    optional double cpu_user_times = 2;
-    optional double cpu_system_times = 3;
-    // In MachineResourceUsage, cpu_limits act as all of cpu cores.
-    // In ContainerResourceUsage, cpu_limits act as the limit of cpu cores. 
-    optional double cpu_limits = 4;      
-    // mem
-    optional int64 mem_rss_bytes = 5;
-    optional int64 mem_limit_bytes = 6;
-    // others just like disk type
+message TaskDescriptor {
+    optional bytes binary = 1; 
+    optional string start_command = 2;
+    optional string stop_command = 3;
+    optional Resource requirement = 4;
+    repeated string labels = 5;
 }
 
-message AgentInfo {
-    optional string ip = 1;
-    optional int32 monitor_port = 2;
-}
-
-enum AgentState {
-    RUNNING = 0;
-    FROZEN = 1;       // just like safe mode, not allow launch task
-    REGISTERING = 2;  // reload persistence data, and deal with Lost Task
-}
-
-message AgentStatus {
-    optional AgentId agent_id = 1;
-    optional double timestamp = 2;
-    optional AgentState agent_state = 3;
-}
-
-enum ResourceType {
-    CPU = 0;
-    MEMORY = 1;
-    NETWORK_BIND = 2;
-    DISK_QUOTA = 3;
-}
-
-enum TaskState {
-    TASK_STARTING = 1;  
-    TASK_DEPLOYING = 2;
-    TASK_RUNNING = 3;
-    TASK_FINISHED = 4;   // Terminate successfully
-    TASK_FAILED = 5;     // Terminate failed, may be core or others
-    TASK_KILLED = 6;     // Terminate killed proactive
-    TASK_LOST = 7;       // Not terminate, may be Agent restart, can reschduler
-    TASK_ERROR = 8;      // Failed before Running, may be deploy failed, or other descript error
-}
-
-message JobStatistics {
-    optional JobId job_id = 1;
-    optional string job_name = 2;
-    optional int32 replicate_count = 3;
-    repeated ResourceUsage resource_usages = 4;
-    repeated TaskStatus task_status = 5;
-}
-
-message TaskInfo {
-    optional string task_name = 2;
-    optional string cmd = 3;
-    optional string download_source = 4;
+message PodDescriptor {
+    repeated TaskDescriptor tasks = 1;
 }
 
 message TaskStatus {
-    enum TaskErrorCode {
-        NO_ERROR = 0;
-        ERROR_COMMAND_EXECUTE_FAILED = 1;
-    }
-    required TaskId task_id = 1;
-    optional TaskState state = 2;
-    optional double timestamp = 3;
-    optional TaskErrorCode err_code = 4;
+    optional string taskid = 1;
+    optional int32 exit_code = 2;
+    optional Resource usage = 3;
+    optional string version = 4;
 }
 
-message Value {
-    enum Type {
-        SCALAR = 0;
-        RANGES = 1;
-        SET = 2;
-        TEXT = 3;
-    }
-
-    message Scalar {
-        optional double value = 1; 
-    }
-
-    message Range {
-        optional uint64 begin = 1; 
-        optional uint64 end = 2;
-    }
-
-    message Set {
-        repeated string item = 1; 
-    }
-
-    message Text {
-        required string value = 1; 
-    }
-
-    required Type type = 1;
-    optional Scalar scalar = 2;
-    optional Range range = 3;
-    optional Set set = 4;
-    optional Text text = 5;
+message PodStatus {
+    optional string podid = 1;
+    repeated TaskStatus status = 2; 
+    optional Resource usage = 3;
+    optional string hostname = 4;
+    optional string version = 5;
+    optional PodState state = 6;
 }
 
-message ResourceItem {
-    optional string name = 1;
-    optional ResourceType resource_type = 2;
-    optional Value value = 3;
+
+message AgentInfo {
+    optional string endpoint = 1;
+    repeated PodStatus pods = 2;
 }
 
-message ResourceUsage {
-    optional AgentId agent_id = 1;
-    // if ContainerId setted, ResourceStatistics is the use in container.
-    optional ContainerId container_id = 2;
-    optional TaskId task_id = 3;
-
-    optional ResourceStatistics resouce_statics = 4;
-}

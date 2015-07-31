@@ -1,61 +1,173 @@
+import "galaxy.proto";
 
-package galaxy;
-
-import "task.proto";
+package baidu.galaxy;
 
 option cc_generic_services = true;
 
-enum MasterCommandType {
-    HEART_BEAT = 0;
-    // Task control
-    LAUNCH_TASK = 1;
-    KILL_TASK = 2;
-    CLEAN_TAKS = 3;     // before GC time, agent should be clean without command ?
-    // Container Control
-    CREATE_CONTAINER = 4;   
-    DESTORY_CONTAINER = 5;
-    UPDATE_CONTAINER = 6;
+
+enum JobType {
+    kLongRun = 0;
+    kBatch = 1; 
+    kSystem = 2;
 }
 
-message LaunchTaskRequest {
-    optional int64 task_id = 1;
-    optional TaskInfo task_info = 2;
+enum JobPriority {
+    kMonitor = 75;
+    kOnline = 50; 
+    kOffline = 25;
+    kBestEffort = 0;
 }
 
-message KillTaskRequest {
-    optional int64 task_id = 1;
+
+enum TaskState {
+    kRunning = 0;
+    kPending = 1;
+    kDeploying = 2;
+    kTerminated = 3;
+}
+
+message JobDescriptor {
+    optional string name = 1;
+    optional string user = 2;
+    optional JobType type = 3;
+    optional int32 priority = 4;
+    // repeated TaskDescriptor tasks = 5;
+    optional PodDescriptor pod = 5;
+    repeated string labels = 6;
+    optional int32 replica = 7;
+    optional int32 deploy_step = 8;
+    optional string version = 9;
+}
+
+message JobInfo {
+    optional string jobid = 1;
+    optional JobDescriptor descriptor = 2;
+    repeated PodStatus tasks = 3;
+}
+
+message ScheduleInfo {
+    optional string endpoint = 1;
+    optional string podid = 2;
+}
+
+message UserDescriptor {
+    optional string username = 1;
+}
+
+message SubmitJobRequest {
+    optional JobDescriptor job = 1;
+}
+
+message SubmitJobResponse {
+    optional Status status = 1;
+    optional string jobid = 2;
+}
+
+message UpdateJobRequest {
+    optional JobDescriptor job = 1;
+    optional string jobid = 2;
+}
+
+message UpdateJobResponse {
+    optional Status status = 1;
+}
+
+message SuspendJobRequest {
+    optional string jobid = 1;
+}
+
+message SuspendJobResponse {
+    optional Status status = 1;
+}
+
+message ResumeJobRequest {
+    optional string jobid = 1;
+}
+
+message ResumeJobResponse {
+    optional Status status = 1;
+}
+
+message TerminateJobRequest {
+    optional string jobid = 1;
+}
+
+message TerminateJobResponse {
+    optional Status status = 1;
+}
+
+message ListJobsRequest {
+}
+
+message ListJobsResponse {
+    optional Status status = 1;
+    repeated string jobsid = 2;
+}
+
+message ShowJobRequest {
+    repeated string jobsid = 1;
+}
+
+message ShowJobResponse {
+    optional Status status = 1;
+    repeated JobInfo jobs = 2;
 }
 
 message HeartBeatRequest {
-    optional int64 seq_id = 1;      // id for communicate
-    optional int64 agent_id = 2 [default = -1];
-    optional string agent_addr = 3;
-    repeated ResourceItem total_resource_list = 4;
-    repeated ResourceItem used_resource_list = 5;
-    repeated TaskStatus task_status = 6;
+    optional string endpoint = 1;
 }
 
 message HeartBeatResponse {
-    optional int64 seq_id = 1;
-    optional int32 status = 2;
-    optional MasterCommandType type = 3[default = HEART_BEAT];
-    optional LaunchTaskRequest launch_task_request = 4;
-    optional KillTaskRequest kill_task_request = 5;
 }
 
-message NewTaskRequest {
-    optional string task_name = 2;
-    optional bytes task_raw = 3;
-    optional string cmd_line = 4;
-    optional int32 replic_count = 5;
+message GetPendingJobsRequest {
 }
 
-message NewTaskResponse {
-    optional int32 status = 2;
+message GetPendingJobsResponse {
+    repeated JobInfo jobs = 1;
+}
+
+message GetResourceSnapshotRequest {
+}
+
+message GetResourceSnapshotResponse {
+    repeated AgentInfo agents = 1;
+}
+
+message ProposeRequest {
+    repeated ScheduleInfo schedule = 1;
+}
+
+message ProposeResponse {
+    optional Status status = 1;
+}
+
+message ListAgentsRequest {
+}
+
+message ListAgentsResponse {
+    repeated AgentInfo agents = 1;
 }
 
 service Master {
-    rpc HeartBeat(HeartBeatRequest) returns(HeartBeatResponse);
-    rpc NewTask(NewTaskRequest) returns(NewTaskResponse);
-}
+    rpc SubmitJob(SubmitJobRequest) returns (SubmitJobResponse);
+    rpc UpdateJob(UpdateJobRequest) returns (UpdateJobResponse);
+    rpc SuspendJob(SuspendJobRequest) returns (SuspendJobResponse);
+    rpc ResumeJob(ResumeJobRequest) returns (ResumeJobResponse); 
+    rpc TerminateJob(TerminateJobRequest) returns (TerminateJobResponse);
+    rpc ShowJob(ShowJobRequest) returns (ShowJobResponse);
+    rpc ListJobs(ListJobsRequest) returns (ListJobsResponse);
 
+    rpc HeartBeat(HeartBeatRequest) returns (HeartBeatResponse);
+
+    // rpc AddUser() returns ();
+    // rpc DeleteUser() returns ();
+    // rpc UpdateUser() returns ();
+    // rpc ListUsers() returns ();
+
+    rpc GetPendingJobs(GetPendingJobsRequest) returns (GetPendingJobsResponse);
+    rpc GetResourceSnapshot(GetResourceSnapshotRequest) returns (GetResourceSnapshotResponse);
+    rpc Propose(ProposeRequest) returns (ProposeResponse);
+
+    rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse);
+}

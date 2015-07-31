@@ -2,7 +2,7 @@
 *.o
 *.a
 *.so
-
+*.pyc
 # Folders
 _obj
 _test
@@ -23,4 +23,11 @@ _testmain.go
 *.test
 *.prof
 
+*.pb.h
+*.pb.cc
+
 Makefile
+output/*
+master
+agent
+galaxy_client
