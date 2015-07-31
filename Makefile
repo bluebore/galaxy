@@ -41,9 +41,13 @@ AGENT_SRC = $(wildcard src/agent/*.cc)
 AGENT_OBJ = $(patsubst %.cc, %.o, $(AGENT_SRC))
 AGENT_HEADER = $(wildcard src/agent/*.h)
 
-INITD_SRC = $(wildcard src/gce/initd*.cc) src/gce/utils.cc
+INITD_SRC = $(wildcard src/gce/initd*.cc) src/gce/utils.cc src/flags.cc
 INITD_OBJ = $(patsubst %.cc, %.o, $(INITD_SRC))
 INITD_HEADER = $(wildcard src/gce/*.h) src/gce/utils.h
+
+TEST_INITD_SRC = src/gce/test_initd.cc
+TEST_INITD_OBJ = $(patsubst %.cc, %.o, $(TEST_INITD_SRC))
+#TEST_INITD_HEADER = $(wildcard src/gce/*.h) src/gce/utils.h
 
 SDK_SRC = $(wildcard src/sdk/*.cc)
 SDK_OBJ = $(patsubst %.cc, %.o, $(SDK_SRC))
@@ -83,6 +87,9 @@ galaxy_client: $(CLIENT_OBJ) $(LIBS)
 
 initd: $(INITD_OBJ) $(LIBS) $(OBJS)
 	$(CXX) $(INITD_OBJ) $(LIBS) -o $@ $(LDFLAGS)
+
+test_initd: $(TEST_INITD_OBJ) $(LIBS) $(OBJS)
+	$(CXX) $(TEST_INITD_OBJ) $(LIBS) -o $@ $(LDFLAGS)
 
 %.o: %.cc
 	$(CXX) $(CXXFLAGS) $(INCLUDE_PATH) -c $< -o $@

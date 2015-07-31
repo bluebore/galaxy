@@ -4,6 +4,9 @@
 
 #include "gce/utils.h"
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <dirent.h>
 #include <errno.h>
 #include <string.h>
@@ -56,6 +59,16 @@ bool ListFiles(const std::string& dir_path,
     closedir(dir);
     return true;
 }
+
+bool IsExists(const std::string& path) {
+    struct stat stat_buf;
+    int ret = ::lstat(path.c_str(), &stat_buf);
+    if (ret < 0) {
+        return false; 
+    }
+    return true;
+}
+
 
 }   // ending namespace file
 }   // ending namespace galaxy

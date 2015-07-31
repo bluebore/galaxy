@@ -11,11 +11,12 @@
 #include <boost/function.hpp>
 #include <boost/bind.hpp>
 #include <sofa/pbrpc/pbrpc.h>
-#include "common/mutex.h"
-#include "common/thread_pool.h"
-#include "common/logging.h"
+#include "mutex.h"
+#include "thread_pool.h"
+#include "logging.h"
 
-namespace bfs {
+namespace baidu {
+namespace galaxy {
     
 class RpcClient {
 public:
@@ -111,7 +112,8 @@ private:
     Mutex _host_map_lock;
 };
 
-} // namespace bfs
+} // namespace galaxy
+} // namespace baidu
 
 #endif  // BFS_RPC_CLIENT_H_
 

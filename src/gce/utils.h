@@ -22,6 +22,8 @@ bool ListFiles(const std::string& dir,
 
 bool Traverse(const std::string& path, const OptFunc& func);
 
+bool IsExists(const std::string& file);
+
 }   // ending namespace file
 }   // ending namespace galaxy
 }   // ending namespace baidu

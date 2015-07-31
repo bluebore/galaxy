@@ -5,14 +5,24 @@
 #include "gce/initd_impl.h"
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
 
 #include <boost/lexical_cast.hpp>
+#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/split.hpp>
+#include <boost/bind.hpp>
+#include "gflags/gflags.h"
 #include "gce/utils.h"
 #include "logging.h"
+
+DECLARE_string(gce_cgroup_root);
+DECLARE_string(gce_support_subsystems);
+DECLARE_int64(gce_initd_zombie_check_interval);
 
 namespace baidu {
 namespace galaxy {
@@ -20,7 +30,43 @@ namespace galaxy {
 InitdImpl::InitdImpl() :
     process_infos_(),
     lock_(),
-    background_thread_(1) {
+    background_thread_(1),
+    cgroup_subsystems_(),
+    cgroup_root_() {
+    background_thread_.DelayTask(
+            FLAGS_gce_initd_zombie_check_interval,
+            boost::bind(&InitdImpl::ZombieCheck, this));
+}
+
+void InitdImpl::ZombieCheck() {
+    int status = 0;
+    pid_t pid = ::waitpid(-1, &status, WNOHANG);    
+    if (pid > 0 && WIFEXITED(status)) {
+        LOG(WARNING, "process %d exit ret %d",
+                pid, WEXITSTATUS(status));
+        MutexLock scope_lock(&lock_);
+        std::map<std::string, ProcessInfo>::iterator it
+            = process_infos_.begin();
+        for (; it != process_infos_.end(); ++it) {
+            if (it->second.pid() == pid) {
+                it->second.set_exit_code(WEXITSTATUS(status)); 
+                it->second.set_status(kProcessTerminate);
+                break;
+            } 
+        }
+    }
+    background_thread_.DelayTask(
+            FLAGS_gce_initd_zombie_check_interval,
+            boost::bind(&InitdImpl::ZombieCheck, this));
+}
+
+bool InitdImpl::Init() {
+    boost::split(cgroup_subsystems_,
+            FLAGS_gce_support_subsystems,
+            boost::is_any_of(","),
+            boost::token_compress_on);      
+    cgroup_root_ = FLAGS_gce_cgroup_root;
+    return true;
 }
 
 void InitdImpl::GetProcessStatus(::google::protobuf::RpcController* /*controller*/,
@@ -142,8 +188,10 @@ void InitdImpl::Execute(::google::protobuf::RpcController* controller,
     ::close(stderr_fd);
 
     ProcessInfo info;      
+    info.set_key(request->key());
     info.set_pid(child_pid);
     info.set_status(kProcessRunning);
+    info.set_exit_code(0);
     {
         MutexLock scope_lock(&lock_); 
         process_infos_[request->key()] = info;
@@ -206,6 +254,60 @@ void InitdImpl::CollectFds(std::vector<int>* fd_vector) {
     return;
 }
 
+bool InitdImpl::AttachCgroup(const std::string& cgroup_path, 
+                             pid_t child_pid) {
+    if (cgroup_path.empty()) {
+        return true; 
+    }
+
+    if (cgroup_subsystems_.size() == 0) {
+        return true; 
+    }
+    
+    std::string task_file_prefix = cgroup_root_ + "/";
+    std::string task_file_suffix = cgroup_path + "/tasks";
+    for (size_t i = 0; i < cgroup_subsystems_.size(); i++) {
+        std::string task_file_path = task_file_prefix + 
+            cgroup_subsystems_[i] + "/" + task_file_suffix;
+        // write to tasks   
+        int fd = ::open(task_file_path.c_str(),
+                O_WRONLY);
+        if (fd == -1) {
+            return false; 
+        }
+        int write_len = ::write(fd, 
+                (void*)(&child_pid), sizeof(child_pid));
+        ::close(fd);
+        if (write_len == -1 || write_len != sizeof(child_pid)) {
+            return false; 
+        }
+    }
+    return true;
+}
+
+bool InitdImpl::LoadProcessInfoCheckPoint(const ProcessInfoCheckpoint& checkpoint) {
+    MutexLock scope_lock(&lock_);
+    for (int i = 0; i < checkpoint.process_infos_size(); i++) {
+        ProcessInfo info = checkpoint.process_infos(i); 
+        process_infos_[info.key()] = info;         
+    }
+    return true;
+}
+
+bool InitdImpl::DumpProcessInfoCheckPoint(ProcessInfoCheckpoint* checkpoint) {
+    if (checkpoint == NULL) {
+        return false; 
+    }
+
+    MutexLock scope_lock(&lock_);
+    std::map<std::string, ProcessInfo>::iterator it = 
+        process_infos_.begin();
+    for (; it != process_infos_.end(); ++it) {
+        ProcessInfo* info = checkpoint->add_process_infos();
+        info->CopyFrom(it->second);
+    }
+    return true;
+}
 
 }   // ending namespace galaxy
 }   // ending namespace baidu
