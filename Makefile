@@ -47,8 +47,7 @@ SDK_HEADER = $(wildcard src/sdk/*.h)
 CLIENT_OBJ = $(patsubst %.cc, %.o, $(wildcard src/client/*.cc))
 
 FLAGS_OBJ = $(patsubst %.cc, %.o, $(wildcard src/*.cc))
-COMMON_OBJ = $(patsubst %.cc, %.o, $(wildcard common/*.cc))
-OBJS = $(FLAGS_OBJ) $(COMMON_OBJ) $(PROTO_OBJ)
+OBJS = $(FLAGS_OBJ) $(PROTO_OBJ)
 
 LIBS = libgalaxy.a
 BIN = master agent scheduler
@@ -88,7 +87,7 @@ clean:
 	rm -rf $(MASTER_OBJ) $(SCHEDULER_OBJ) $(AGENT_OBJ) $(SDK_OBJ) $(CLIENT_OBJ) $(OBJS)
 	rm -rf $(PROTO_SRC) $(PROTO_HEADER)
 	rm -rf $(PREFIX)
-	rm $(LIBS) 
+	rm -rf $(LIBS) 
 
 install: $(BIN) $(LIBS)
 	mkdir -p $(PREFIX)/bin
