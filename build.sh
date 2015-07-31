@@ -7,8 +7,8 @@ tar xf protobuf-2.6.0.tar.gz
 cd protobuf-2.6.0 && ./configure && make -j4 && sudo make install && sudo ldconfig
 cd -
 
-git clone https://github.com/google/snappy
-cd snappy && sh ./autogen.sh && ./configure && make -j2 && sudo make install
+git clone https://github.com/google/snappy thirdparty/snappy
+cd thirdparty/snappy && sh ./autogen.sh && ./configure && make -j2 && sudo make install
 cd -
 
 sudo apt-get install zlib1g-dev
