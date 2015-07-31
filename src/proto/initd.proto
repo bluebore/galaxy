@@ -20,6 +20,7 @@ message GetProcessStatusRequest {
 
 message GetProcessStatusResponse {
     optional ProcessInfo process = 1;
+    optional Status status = 2;
 }
 
 message ExecuteRequest {
