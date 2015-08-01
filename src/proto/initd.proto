@@ -9,9 +9,15 @@ enum ProcessStatus {
     kProcessTerminate = 1;
 }
 
+message ProcessInfoCheckpoint {
+    repeated ProcessInfo process_infos = 1;
+}
+
 message ProcessInfo {
-    optional int32 pid = 1; 
-    optional ProcessStatus status = 2;
+    optional string key = 1;
+    optional int32 pid = 2; 
+    optional ProcessStatus status = 3;
+    optional int32 exit_code = 4;
 }
 
 message GetProcessStatusRequest {
@@ -20,6 +26,7 @@ message GetProcessStatusRequest {
 
 message GetProcessStatusResponse {
     optional ProcessInfo process = 1;
+    optional Status status = 2;
 }
 
 message ExecuteRequest {

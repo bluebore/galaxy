@@ -14,7 +14,7 @@ INCLUDE_PATH = -I./ -I./src -I$(PROTOBUF_PATH)/include \
                -I$(PBRPC_PATH)/include \
                -I$(SNAPPY_PATH)/include \
                -I$(BOOST_PATH)/include \
-               -Icommon/include
+			   -Icommon/include 
 
 LDFLAGS = -L$(PROTOBUF_PATH)/lib -lprotobuf \
           -L$(PBRPC_PATH)/lib -lsofa-pbrpc \
@@ -41,6 +41,14 @@ AGENT_SRC = $(wildcard src/agent/*.cc)
 AGENT_OBJ = $(patsubst %.cc, %.o, $(AGENT_SRC))
 AGENT_HEADER = $(wildcard src/agent/*.h)
 
+INITD_SRC = $(wildcard src/gce/initd*.cc) src/gce/utils.cc src/flags.cc
+INITD_OBJ = $(patsubst %.cc, %.o, $(INITD_SRC))
+INITD_HEADER = $(wildcard src/gce/*.h) src/gce/utils.h
+
+TEST_INITD_SRC = src/gce/test_initd.cc
+TEST_INITD_OBJ = $(patsubst %.cc, %.o, $(TEST_INITD_SRC))
+#TEST_INITD_HEADER = $(wildcard src/gce/*.h) src/gce/utils.h
+
 SDK_SRC = $(wildcard src/sdk/*.cc)
 SDK_OBJ = $(patsubst %.cc, %.o, $(SDK_SRC))
 SDK_HEADER = $(wildcard src/sdk/*.h)
@@ -51,7 +59,7 @@ FLAGS_OBJ = $(patsubst %.cc, %.o, $(wildcard src/*.cc))
 OBJS = $(FLAGS_OBJ) $(PROTO_OBJ)
 
 LIBS = libgalaxy.a
-BIN = master agent scheduler
+BIN = master agent scheduler initd
 
 all: $(BIN)
 
@@ -76,6 +84,12 @@ libgalaxy.a: $(SDK_OBJ) $(OBJS) $(PROTO_HEADER)
 
 galaxy_client: $(CLIENT_OBJ) $(LIBS)
 	$(CXX) $(CLIENT_OBJ) $(LIBS) -o $@ $(LDFLAGS)
+
+initd: $(INITD_OBJ) $(LIBS) $(OBJS)
+	$(CXX) $(INITD_OBJ) $(LIBS) -o $@ $(LDFLAGS)
+
+test_initd: $(TEST_INITD_OBJ) $(LIBS) $(OBJS)
+	$(CXX) $(TEST_INITD_OBJ) $(LIBS) -o $@ $(LDFLAGS)
 
 %.o: %.cc
 	$(CXX) $(CXXFLAGS) $(INCLUDE_PATH) -c $< -o $@
