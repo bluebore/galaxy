@@ -55,57 +55,11 @@ bool TaskManager::Init() {
         return true;
     }
 
-    LOG(INFO, "recove meta data %s", m_task_meta_dir.c_str());
-    // if meta_path exists do clear for process
-    // clear by Runner Static Function 
-    std::vector<std::string> meta_files;
-    if (!file::GetDirFilesByPrefix(
-                m_task_meta_dir, 
-                META_FILE_PREFIX, 
-                &meta_files)) {
-        LOG(WARNING, "list directory files failed"); 
-        return false;
-    }
-    for (size_t i = 0; i < meta_files.size(); i++) {
-        LOG(DEBUG, "recove meta dir %s", meta_files[i].c_str());
-        std::string meta_dir_name =  meta_files[i];
-        bool ret = false;
-        if (FLAGS_container.compare("cgroup") == 0) {
-            ret = ContainerTaskRunner::RecoverMonitor(meta_dir_name);
-            ret &= ContainerTaskRunner::RecoverRunner(meta_dir_name);     
-        }
-        else {
-            ret = ContainerTaskRunner::RecoverMonitor(meta_dir_name);
-            ret &= CommandTaskRunner::RecoverRunner(meta_dir_name);            
-        }
-        if (!ret) {
-            return false;
-        }
-        if (!file::Remove(meta_dir_name)) {
-            LOG(WARNING, "rm meta failed rm %s",
-                    meta_dir_name.c_str());
-            return false;
-        }
-    }
-    if (!file::Remove(m_task_meta_dir)) {
-        LOG(WARNING, "rm %s failed",
-                m_task_meta_dir.c_str()); 
-        return false;
-    }
-    if (mkdir(m_task_meta_dir.c_str(), MKDIR_MODE) != 0) {
-        LOG(WARNING, "mkdir data failed %s err[%d: %s]",
-                m_task_meta_dir.c_str(),
-                errno,
-                strerror(errno)); 
-        return false;
-    }         
-
     return true;
 }
 
-
 int TaskManager::Add(const ::galaxy::TaskInfo& task_info,
-                     DefaultWorkspace *  workspace) {
+                     DefaultWorkspace *  workspace, bool download) {
     MutexLock lock(m_mutex);
     LOG(INFO, "add task with id %d", task_info.task_id());
     if (m_task_runner_map.find(task_info.task_id()) != m_task_runner_map.end()) {
@@ -120,7 +74,8 @@ int TaskManager::Add(const ::galaxy::TaskInfo& task_info,
         + "/" + META_FILE_PREFIX + boost::lexical_cast<std::string>(task_info.task_id());
 
     const int MKDIR_MODE = S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH;
-    if (mkdir(persistence_path.c_str(), MKDIR_MODE) != 0) {
+    if (mkdir(persistence_path.c_str(), MKDIR_MODE) != 0
+            && errno != EEXIST) {
         LOG(WARNING, "mkdir data failed %s err[%d: %s]",
                 persistence_path.c_str(),
                 errno,
@@ -129,15 +84,23 @@ int TaskManager::Add(const ::galaxy::TaskInfo& task_info,
     }  
     if(FLAGS_container.compare("cgroup") == 0){
         LOG(INFO,"use cgroup task runner for task %d",task_info.task_id());
-        runner = new ContainerTaskRunner(my_task_info,FLAGS_cgroup_root, workspace);
-    }else{
+        runner = new ContainerTaskRunner(my_task_info,FLAGS_cgroup_root, workspace, rpc_client_);
+    } else {
         LOG(INFO,"use command task runner for task %d",task_info.task_id());
         runner = new CommandTaskRunner(my_task_info,workspace);
     }
+    // NOTE persistence path should be set before init 
     runner->PersistenceAble(persistence_path);
+    if (runner->Init() != 0) {
+        LOG(WARNING, "runner init failed");
+        return -1;
+    }
     // not run directly dead lock
-    runner->AsyncDownload(
-            boost::bind(&TaskManager::Start, this, task_info.task_id()));
+    if (download) {
+        runner->AsyncDownload(
+                boost::bind(&TaskManager::Start, 
+                    this, task_info.task_id()));
+    }
     m_task_runner_map[task_info.task_id()] = runner;
     return 0;
 }

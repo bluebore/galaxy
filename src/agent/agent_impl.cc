@@ -7,6 +7,7 @@
 #include "agent_impl.h"
 
 #include <boost/bind.hpp>
+#include <boost/lexical_cast.hpp>
 #include <errno.h>
 #include <string.h>
 #include "common/util.h"
@@ -15,6 +16,7 @@
 #include "common/httpserver.h"
 #include <gflags/gflags.h>
 #include "agent/dynamic_resource_scheduler.h"
+#include "agent/persistence_handler.h"
 
 DECLARE_string(master_addr);
 DECLARE_string(agent_port);
@@ -24,24 +26,96 @@ DECLARE_string(agent_work_dir);
 DECLARE_double(cpu_num);
 DECLARE_int64(mem_bytes);
 DECLARE_string(pam_pwd_dir);
+DECLARE_string(agent_checkpoint_path);
 DECLARE_int32(agent_heartbeat_timeout);
 DECLARE_int32(agent_heartbeat_interval);
 
 namespace galaxy {
 
+bool AgentImpl::Init() {
+    if (persistence_handler_ == NULL
+            || rpc_client_ == NULL
+            || ws_mgr_ == NULL 
+            || task_mgr_ == NULL) {
+        return false;
+    }
+
+    if (persistence_handler_->Init() != 0) {
+        LOG(WARNING, "persistence handler init failed"); 
+        return false;
+    }
+
+    if (!ws_mgr_->Init()) {
+        LOG(FATAL, "workspace manager init failed");
+        return false;
+    }
+
+    if (!task_mgr_->Init()) {
+        LOG(FATAL, "task manager init failed");
+        return false;
+    }
+
+    std::vector<PersistenceCell> cells;
+    if (persistence_handler_->Scan(&cells) != 0) {
+        LOG(FATAL, "scan tasks info failed"); 
+        return false;
+    }
+
+    for (size_t i = 0; i < cells.size(); i++) {
+        TaskInfo task_info; 
+        if (!task_info.ParseFromString(cells[i].value)) {
+            LOG(FATAL, "task info parse from failed");         
+            return false;
+        }
+        TaskResourceRequirement requirement;
+        requirement.cpu_limit = task_info.required_cpu();
+        requirement.mem_limit = task_info.required_mem();
+        if (resource_mgr_->Allocate(requirement, 
+                    task_info.task_id()) != 0) {
+            LOG(FATAL, "fail to allocate resource"
+                    " for task %ld job %ld", 
+                    task_info.task_id(),
+                    task_info.job_id());
+            return false;
+        }
+        if (ws_mgr_->Add(task_info) != 0) {
+            LOG(FATAL, "recover workspace for "
+                    "task %ld job %ld failed",
+                    task_info.task_id(),
+                    task_info.job_id()); 
+            return false;
+        }
+
+        if (task_mgr_->Add(
+                    task_info, 
+                    ws_mgr_->GetWorkspace(task_info), 
+                    false) != 0) {
+            LOG(FATAL, "recover task runner for "
+                    "task %ld job %ld failed",
+                    task_info.task_id(),
+                    task_info.job_id()); 
+            return false;
+        }
+        std::vector<TaskStatus> task_status;
+        // if status not run, clear it.
+        task_mgr_->Status(task_status, task_info.task_id());
+        LOG(INFO, "recover task %ld job %ld status %s",
+                task_info.task_id(),
+                task_info.job_id(),
+                TaskState_Name((TaskState)(task_status[0].status())).c_str());
+    }
+
+    // start to report
+    thread_pool_.AddTask(boost::bind(&AgentImpl::Report, this));
+    return true;
+}
+
 AgentImpl::AgentImpl() {
+    persistence_handler_ = new PersistenceHandler(FLAGS_agent_checkpoint_path);
     rpc_client_ = new RpcClient();
     ws_mgr_ = new WorkspaceManager(FLAGS_agent_work_dir);
     task_mgr_ = new TaskManager();
-    if (!task_mgr_->Init()) {
-        LOG(FATAL, "task manager init failed");
-        assert(0);
-    }
-    // should kill task first
-    if (!ws_mgr_->Init()) {
-        LOG(FATAL, "workspace manager init failed");
-        assert(0);
-    }
+    
     AgentResource resource;
     resource.total_cpu = FLAGS_cpu_num;
     resource.total_mem = FLAGS_mem_bytes;
@@ -60,7 +134,6 @@ AgentImpl::AgentImpl() {
         assert(0);
     }
     version_ = 0;
-    thread_pool_.AddTask(boost::bind(&AgentImpl::Report, this));
     http_server_ = new common::HttpFileServer(FLAGS_agent_work_dir,
                                               FLAGS_agent_http_port);
     http_server_->Start(FLAGS_agent_http_server_threads);
@@ -71,6 +144,7 @@ AgentImpl::~AgentImpl() {
     delete task_mgr_;
     delete resource_mgr_;
     delete http_server_;
+    delete persistence_handler_;
 }
 
 void AgentImpl::Report() {
@@ -113,6 +187,12 @@ void AgentImpl::Report() {
     thread_pool_.DelayTask(delaytime, boost::bind(&AgentImpl::Report, this));
 }
 
+std::string AgentImpl::GetPersistenceKey(const TaskInfo& task_info) {
+    std::string persistence_key = 
+        boost::lexical_cast<std::string>(task_info.task_id());
+    return persistence_key;
+}
+
 void AgentImpl::RunTask(::google::protobuf::RpcController* /*controller*/,
                         const ::galaxy::RunTaskRequest* request,
                         ::galaxy::RunTaskResponse* response,
@@ -132,6 +212,15 @@ void AgentImpl::RunTask(::google::protobuf::RpcController* /*controller*/,
         task_info.set_limited_cpu(request->cpu_limit());
     } else {
         task_info.set_limited_cpu(request->cpu_share()); 
+    }
+    std::string persistence_data;
+    if (!task_info.SerializeToString(&persistence_data)
+            || persistence_handler_->Write(
+                GetPersistenceKey(task_info), 
+                persistence_data) != 0) {
+        LOG(FATAL, "serialize task info failed"); 
+        done->Run();
+        return;
     }
 
     LOG(INFO, "Run Task %s %s [cpu_quota: %lf, cpu_limit: %lf, mem_limit: %ld, monitor_conf:%s]", 
@@ -181,15 +270,7 @@ void AgentImpl::KillTask(::google::protobuf::RpcController* /*controller*/,
                          const ::galaxy::KillTaskRequest* request,
                          ::galaxy::KillTaskResponse* response,
                          ::google::protobuf::Closure* done){
-    int last_status = COMPLETE;
     std::string gc_path;
-    std::vector<TaskStatus > status_vector;
-    task_mgr_->Status(status_vector, request->task_id());
-    if (status_vector.size() != 1) {
-        LOG(WARNING, "what happend not status task id: %ld", request->task_id()); 
-    } else {
-        last_status = status_vector[0].status();    
-    }
     LOG(INFO,"kill task %d",request->task_id());
     int status = task_mgr_->Remove(request->task_id());
     LOG(INFO,"kill task %d status %d",request->task_id(),status);
@@ -198,16 +279,22 @@ void AgentImpl::KillTask(::google::protobuf::RpcController* /*controller*/,
         done->Run();
         return;
     }
-    if (last_status == ERROR) {
-        status = ws_mgr_->Remove(request->task_id(), &gc_path, true); 
-    } else {
-        status = ws_mgr_->Remove(request->task_id());
-    }
+    status = ws_mgr_->Remove(request->task_id(), &gc_path, true); 
     if (status != 0) {
         LOG(FATAL, "clean workspace failed %d status %d", 
                 request->task_id(), status); 
     }
     resource_mgr_->Free(request->task_id());
+
+    TaskInfo task;
+    task.set_task_id(request->task_id());
+    if (persistence_handler_->Delete(
+                GetPersistenceKey(task)) != 0) {
+        LOG(FATAL, "delete persistence task %ld data failed",
+                request->task_id()); 
+        status = -1;
+    }
+
     response->set_status(status);
     response->set_gc_path(gc_path);
     done->Run();

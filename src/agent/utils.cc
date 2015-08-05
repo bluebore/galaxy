@@ -277,6 +277,18 @@ bool IsDir(const std::string& path, bool& is_dir) {
     return true;
 }
 
+void IsExists(const std::string& path, bool& is_exists) {
+    struct stat stat_buf;
+    int ret = ::lstat(path.c_str(), &stat_buf);
+    if (ret < 0) {
+        is_exists = false; 
+    } else {
+        is_exists = true; 
+    }
+    return;
+}
+
+
 }   // ending namespace file
 }   // ending namespace galaxy
 /* vim: set ts=4 sw=4 sts=4 tw=100 */

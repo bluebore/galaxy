@@ -1,0 +1,91 @@
+package galaxy;
+
+option cc_generic_services = true;
+
+enum GuarderExecuteState {
+    kGuarderExecuteStateOK = 0;
+    kGuarderExecuteStateInputError = -1;
+    kGuarderExecuteStateInternalError = -3;
+}
+
+message RunProcessRequest {
+    optional string process_id = 1;        
+    optional string start_cmd = 2;
+    optional string pwd = 4;
+    repeated string envs = 5;
+    optional string user = 6;
+    optional string cgroup_path = 7;
+}
+
+message RunProcessResponse {
+    optional string process_id = 1;
+    optional int32 status = 2;
+    optional int32 pid = 3;
+    optional int32 gpid = 4;
+}
+
+enum ProcessState {
+    kProcessStateRunning = 0;
+    kProcessStateError = 1;
+}
+
+message ProcessStatus {
+    optional string process_id = 1;
+    optional int32 pid = 2;
+    optional int32 gpid = 3;
+    optional int32 state = 4;
+    optional int32 ret_code = 5;
+}
+
+message StatusProcessRequest {
+    optional string process_id = 1;
+}
+
+message StatusProcessResponse {
+    optional string process_id = 1;
+    repeated ProcessStatus status = 2;
+}
+
+message KillProcessRequest {
+    optional string process_id = 1;
+    optional int32 signal = 2;
+    optional bool is_kill_group = 3;
+}
+
+message KillProcessResponse {
+    optional string process_id = 1;
+    optional int32 status = 2;
+    optional int32 kill_errno = 3;
+}
+
+message CheckProcessRequest {
+    optional string process_id = 1;
+}
+
+message CheckProcessResponse {
+    optional int32 status = 2;
+    optional int32 process_state = 3;
+    optional int32 process_exit_code = 4;
+}
+
+message RemoveProcessStateRequest {
+    optional string process_id = 1;
+}
+
+message RemoveProcessStateResponse {
+    optional int32 status = 2;
+}
+
+message ProcessStatusPersistence {
+    optional int32 persistence_time = 1;
+    repeated ProcessStatus status = 2;
+}
+
+// guarder just for keep relationship with tasks
+service Guarder {
+    rpc RunProcess(RunProcessRequest) returns(RunProcessResponse);
+    rpc StatusProcess(StatusProcessRequest) returns(StatusProcessResponse);
+    rpc CheckProcess(CheckProcessRequest) returns(CheckProcessResponse);
+    rpc KillProcess(KillProcessRequest) returns(KillProcessResponse);
+    rpc RemoveProcessState(RemoveProcessStateRequest) returns(RemoveProcessStateResponse);
+}

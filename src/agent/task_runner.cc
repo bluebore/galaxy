@@ -72,7 +72,6 @@ int AbstractTaskRunner::IsProcessRunning(pid_t process){
 }
 
 int AbstractTaskRunner::IsRunning() {
-    
     int ret = IsProcessRunning(m_child_pid);
     if (ret != 0) {
         LOG(WARNING, "task with id %ld not running with pid %ld",
@@ -342,7 +341,6 @@ int AbstractTaskRunner::ReStart(){
     }
 
     Start();
-    StartMonitor();
     return 0;
 }
 
@@ -717,5 +715,53 @@ bool CommandTaskRunner::RecoverMonitor(const std::string& persistence_path) {
     }
     return true;
 }
+
+int CommandTaskRunner::Init() {
+    bool persistence_dir_exists = false;
+    // recover child pid from meta file
+    std::string meta_file = persistence_path_dir_ + "/" + RUNNER_META_PREFIX 
+        + boost::lexical_cast<std::string>(sequence_id_);
+    file::IsExists(meta_file, persistence_dir_exists);
+    if (persistence_dir_exists) {
+        m_child_pid = -1;        
+        int meta_fd = ::open(meta_file.c_str(), O_RDONLY); 
+        if (meta_fd == -1) {
+            // meta file exists but open failed,
+            LOG(WARNING, "%s open meta file failed err[%d: %s]",
+                    meta_file.c_str(), 
+                    errno, strerror(errno));
+            return -1; 
+        }
+        
+        size_t value;
+        int len = ::read(meta_fd, (void*)&value, sizeof(value));
+        if (len == -1) {
+            LOG(WARNING, "%s read meta file failed err[%d: %s]",
+                    meta_file.c_str(),
+                    errno, strerror(errno)); 
+            ::close(meta_fd);
+            return -1;
+        }
+        ::close(meta_fd);
+        if (len != sizeof(value)) {
+            LOG(WARNING, "%s read meta file failed len %d need %d",
+                    meta_file.c_str(),
+                    len, sizeof(value));
+            return -1;
+        }
+
+        m_child_pid = value;
+        m_group_pid = value;
+        LOG(WARNING, "init old task %ld job %ld pid %d", 
+                m_task_info.task_id(),
+                m_task_info.job_id(),
+                m_child_pid);
+    }
+    // need restart 
+    SetStatus(ERROR);
+    return 0;
+}
+
+
 
 }

@@ -22,6 +22,7 @@ DEFINE_string(agent_work_dir, "/tmp", "agent work directory");
 DEFINE_string(container, "cmd", "container type : cmd or cgroup");
 
 DEFINE_string(cgroup_root, "/cgroups", "cgroup mount point");
+DEFINE_string(cgroup_subsystem, "cpu,memory,cpuacct", "support subsystems spilit by ','");
 DEFINE_int32(agent_curl_recv_buffer_size, 1024 * 10, "agent downloader recv buffer size");
 
 DEFINE_double(cpu_num, 4, "cpu number");
@@ -48,7 +49,14 @@ DEFINE_int32(agent_app_stop_wait_retry_times, 10, "how many times for stop wait"
 DEFINE_string(monitor_conf_path, "", "path of monitor conf");
 
 DEFINE_string(pam_pwd_dir, "/tmp/", "directory that stores galaxy-ssh passwords on agent node");
-DEFINE_int32(master_reschedule_error_delay_time, 5000, "master for error job on the same agent reschedule delay time");
+DEFINE_int32(agent_stop_timeout, 3, "agent stop user command delay timeout, unit s");
+
+DEFINE_string(guarder_port, "7869", "guarder listen port");
+DEFINE_string(guarder_persistence_file, "./dump_file", "guarder dump persistence file");
+DEFINE_string(agent_checkpoint_path, "./checkpoint/", "directory of agent checkpoint data");
+DEFINE_string(agent_guarder_addr, "localhost:9876", "guarder addr");
+
+DEFINE_int32(master_reschedule_error_delay_time, 5, "master for error job on the same agent reschedule delay time unit seconds");
 DEFINE_int32(agent_heartbeat_timeout, 5000, "agent heartbeat rpc timeout");
 DEFINE_int32(agent_heartbeat_interval, 5000, "agent heartbeat interval");
 

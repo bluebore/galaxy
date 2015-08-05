@@ -10,12 +10,26 @@ enum TaskState {
     COMPLETE = 6;
 }
 
+message CommandInfo {
+    optional int64 command_id = 1;
+    optional int64 task_id = 2;
+    optional string command_raw = 3;
+    optional string cmd_line = 4;
+    optional int32 status = 5;
+    optional int32 ret_code = 6;
+    optional int32 run_timeout = 7;
+    optional int32 start_time = 8;
+    optional int32 end_time = 9;
+}
+
+
 message TaskStatus{
     optional int64 task_id = 1;
     optional int32 status = 2;  //deploying,starting,running,error
     optional double cpu_usage = 3;
     optional int64 memory_usage = 4;
     optional int64 job_id = 5; // use to rebuild master 
+    repeated CommandInfo commands = 6;
 }
 
 message TaskInfo{
@@ -37,6 +51,8 @@ message TaskInfo{
     optional int32 frozen_time = 13;
     optional int32 dynamic_schedule_high_threshold = 14;
     optional int32 dynamic_schedule_low_threshold = 15;
+    optional string stop_cmd_line = 16;
+
 }
 
 

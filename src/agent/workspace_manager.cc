@@ -72,15 +72,16 @@ bool WorkspaceManager::Init() {
     }
 
     
-    if (access(m_data_path.c_str(), F_OK) == 0) {
-        if (!file::Remove(m_data_path)) {
-            LOG(WARNING, "clera dirty data %s failed", m_data_path.c_str());
-            return false;
-        }
-        LOG(INFO, "clear dirty data %s", m_data_path.c_str());
-    }
+    //if (access(m_data_path.c_str(), F_OK) == 0) {
+    //    if (!file::Remove(m_data_path)) {
+    //        LOG(WARNING, "clera dirty data %s failed", m_data_path.c_str());
+    //        return false;
+    //    }
+    //    LOG(INFO, "clear dirty data %s", m_data_path.c_str());
+    //}
 
-    if (mkdir(m_data_path.c_str(), MKDIR_MODE) != 0) {
+    if (access(m_data_path.c_str(), F_OK) != 0 
+            && mkdir(m_data_path.c_str(), MKDIR_MODE) != 0) {
         LOG(WARNING, "mkdir data failed %s err[%d: %s]",
                 m_data_path.c_str(), errno, strerror(errno));
         return false;

@@ -32,7 +32,7 @@ public:
         std::map<int64_t, DefaultWorkspace*>::iterator map_it = m_workspace_map.begin();
         for(;map_it != m_workspace_map.end();++map_it){
             tmp = map_it->second;
-            tmp->Clean();
+            //tmp->Clean();
             m_workspace_map.erase(map_it);
             if(tmp != NULL){
                 delete tmp;

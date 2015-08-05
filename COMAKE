@@ -46,7 +46,8 @@ CONFIGS('third-64/gflags@gflags_2-0-0-100_PD_BL')
 
 agent_sources='src/flags.cc\
                common/logging.cc common/util.cc\
-               src/proto/task.proto src/proto/agent.proto src/proto/master.proto \
+               src/proto/task.proto src/proto/agent.proto src/proto/master.proto  \
+               src/proto/guarder.proto \
                src/agent/task_runner.cc src/agent/task_manager.cc\
                src/agent/cgroup.cc\
                src/agent/workspace.cc src/agent/workspace_manager.cc \
@@ -57,8 +58,19 @@ agent_sources='src/flags.cc\
                src/agent/resource_manager.cc \
                src/agent/resource_collector_engine.cc \
                src/agent/utils.cc \
-               src/agent/dynamic_resource_scheduler.cc'
+               src/agent/dynamic_resource_scheduler.cc \
+               src/agent/persistence_handler.cc'
 
+guarder_sources='src/guarder/guarder_impl.cc \
+                common/logging.cc common/util.cc \
+                src/proto/guarder.proto \
+                src/flags.cc \
+                src/agent/utils.cc \
+                src/guarder/guarder_main.cc'
+
+guarder_client_sources='common/logging.cc common/util.cc \
+                       src/proto/guarder.proto \
+                       test/guarder_client_test.cc'
 
 master_sources='src/flags.cc src/proto/task.proto src/proto/agent.proto src/proto/master.proto\
                 common/logging.cc src/master/master_impl.cc src/master/master_main.cc '
@@ -87,6 +99,7 @@ gssh_sources='src/gssh/pam_galaxy.c'
 agent_service_sources='src/flags.cc\
                common/logging.cc common/util.cc\
                src/proto/task.proto src/proto/agent.proto src/proto/master.proto \
+               src/proto/guarder.proto \
                src/agent/task_runner.cc src/agent/task_manager.cc\
                src/agent/cgroup.cc\
                src/agent/workspace.cc src/agent/workspace_manager.cc \
@@ -97,7 +110,8 @@ agent_service_sources='src/flags.cc\
                src/agent/resource_manager.cc \
                src/agent/resource_collector_engine.cc \
                src/agent/utils.cc \
-               src/agent/dynamic_resource_scheduler.cc'
+               src/agent/dynamic_resource_scheduler.cc \
+               src/agent/persistence_handler.cc '
 agent_password_test_sources=agent_service_sources+' src/gssh/agent_password_test.cc'
 gssh_password_sources='src/proto/agent.proto common/logging.cc src/gssh/gssh_password.cc'
 
@@ -119,6 +133,8 @@ Application('master_mock', Sources(master_mock_sources));
 Application('monitor_agent', Sources(monitor_sources));
 Application('agent_password_test', Sources(agent_password_test_sources));
 Application('gssh_password', Sources(gssh_password_sources));
+Application('guarder', Sources(guarder_sources));
+Application('guarder_client_test', Sources(guarder_client_sources));
 #共享库
 SharedLibrary('pam_galaxy',Sources(gssh_sources),LinkDeps(False))
 #子目录

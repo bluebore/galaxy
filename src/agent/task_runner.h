@@ -20,6 +20,7 @@ public:
 
    virtual void AsyncDownload(boost::function<void()>) = 0;
 
+   virtual int Init() = 0;
    virtual int Prepare() = 0 ;
    /**
     * start task
@@ -117,6 +118,7 @@ public:
                        persistence_path_dir_(),
                        sequence_id_(0) {
     }
+    virtual int Init();
 
     virtual ~CommandTaskRunner();
     void PersistenceAble(const std::string& persistence_path) {

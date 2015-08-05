@@ -31,6 +31,7 @@ DECLARE_string(task_acct);
 DECLARE_string(cgroup_root); 
 DECLARE_int32(agent_cgroup_clear_retry_times);
 DECLARE_bool(agent_dynamic_scheduler_switch);
+DECLARE_string(agent_guarder_addr);
 
 namespace galaxy {
 
@@ -251,6 +252,26 @@ int CpuCtrl::SetCpuQuota(int64_t cpu_quota) {
     return 0;
 }
 
+ContainerTaskRunner::ContainerTaskRunner(TaskInfo task_info,
+        std::string cg_root,
+        DefaultWorkspace* workspace,
+        RpcClient* rpc_client) : AbstractTaskRunner(task_info, workspace),
+                                 _cg_root(cg_root),
+                                 _cg_ctrl(NULL),
+                                 _mem_ctrl(NULL),
+                                 _cpu_ctrl(NULL),
+                                 _cpu_acct_ctrl(NULL),
+                                 collector_(NULL),
+                                 collector_id_(-1),
+                                 persistence_path_dir_(),
+                                 sequence_id_(0),
+                                 rpc_client_(rpc_client) {
+    SetStatus(ERROR);
+    support_cg_.push_back("memory");
+    support_cg_.push_back("cpu");
+    support_cg_.push_back("cpuacct");
+}
+
 int CpuCtrl::GetCpuQuota(int64_t * cpu_quota) {
     if (NULL == cpu_quota) {
         return -2;
@@ -299,17 +320,18 @@ ContainerTaskRunner::~ContainerTaskRunner() {
     delete _cpu_acct_ctrl;
 }
 
-int ContainerTaskRunner::Prepare() {
-    LOG(INFO, "prepare container for task %ld", m_task_info.task_id());
-    //TODO
-    std::vector<std::string> support_cg;
-    support_cg.push_back("memory");
-    support_cg.push_back("cpu");
-    support_cg.push_back("cpuacct");
-    _cg_ctrl = new CGroupCtrl(_cg_root, support_cg);
+int ContainerTaskRunner::Init() {
+    _cg_ctrl = new CGroupCtrl(_cg_root, support_cg_);
+
     std::map<std::string, std::string> sub_sys_map;
-    int status = _cg_ctrl->Create(m_task_info.task_id(), sub_sys_map);
-    // NOTE multi thread safe
+    if (_cg_ctrl->Create(m_task_info.task_id(), sub_sys_map) != 0) {
+        LOG(WARNING, "init cgroup for task %ld job %ld failed",
+                m_task_info.task_id(), m_task_info.job_id()); 
+        return -1;
+    }
+    _mem_ctrl = new MemoryCtrl(sub_sys_map["memory"]);
+    _cpu_ctrl = new CpuCtrl(sub_sys_map["cpu"]);
+    _cpu_acct_ctrl = new CpuAcctCtrl(sub_sys_map["cpuacct"]);
     if (collector_ == NULL) {
         std::string group_path = boost::lexical_cast<std::string>(m_task_info.task_id());
         collector_ = new CGroupResourceCollector(group_path);
@@ -322,15 +344,13 @@ int ContainerTaskRunner::Prepare() {
                 boost::lexical_cast<std::string>(m_task_info.task_id()));
     }
 
-    if (status != 0) {
-        LOG(FATAL, "fail to create subsystem for task %ld,status %d", m_task_info.task_id(), status);
-        return status;
-    }
+    return 0;
+}
 
-    _mem_ctrl = new MemoryCtrl(sub_sys_map["memory"]);
-    _cpu_ctrl = new CpuCtrl(sub_sys_map["cpu"]);
-    _cpu_acct_ctrl = new CpuAcctCtrl(sub_sys_map["cpuacct"]);
-
+int ContainerTaskRunner::Prepare() {
+    LOG(INFO, "prepare container for task %ld", m_task_info.task_id());
+    // NOTE multi thread safe
+    
     // setup cgroup 
     int64_t mem_size = m_task_info.required_mem(); 
     double cpu_core = m_task_info.required_cpu();
@@ -394,7 +414,12 @@ int ContainerTaskRunner::Prepare() {
     if (0 != ret) {
         return ret;
     }
-    StartMonitor();
+    if (m_task_info.has_monitor_conf() && 
+            !m_task_info.monitor_conf().empty()) {
+        LOG(INFO, "task %ld job %ld with monitor conf %s", 
+                m_task_info.monitor_conf().c_str());
+        StartMonitor();
+    }
     return ret;
 }
 
@@ -405,6 +430,82 @@ void ContainerTaskRunner::PutToCGroup(){
     assert(_cpu_acct_ctrl->AttachTask(my_pid) == 0);
 }
 
+std::string ContainerTaskRunner::GetProcessId() {
+    std::string process_id;
+    process_id = boost::lexical_cast<std::string>(m_task_info.task_id());
+    process_id.append("-");
+    process_id.append(boost::lexical_cast<std::string>(m_task_info.job_id()));
+    return process_id;
+}
+
+std::string ContainerTaskRunner::GetMonitorProcessId() {
+    std::string process_id;
+    process_id = boost::lexical_cast<std::string>(m_task_info.task_id());
+    process_id.append("-");
+    process_id.append(boost::lexical_cast<std::string>(m_task_info.job_id()));
+    process_id.append("-MONITOR");
+    return process_id;
+}
+
+int ContainerTaskRunner::IsRunning() {
+    return CheckProcess(GetProcessId());
+}
+
+int ContainerTaskRunner::CheckProcess(const std::string& process_id) {
+    if (rpc_client_ == NULL) {
+        return -1;     
+    }    
+    Guarder_Stub* guarder; 
+    rpc_client_->GetStub(FLAGS_agent_guarder_addr, &guarder);
+    CheckProcessRequest request;
+    CheckProcessResponse response;
+    request.set_process_id(process_id);
+    bool ret = rpc_client_->SendRequest(guarder,
+                    &galaxy::Guarder_Stub::CheckProcess,
+                    &request, &response, 5, 1);
+    if (!ret
+            || (response.has_status()
+                && response.status() != 0)) {
+        LOG(WARNING, "check task %ld job %ld failed status %d", 
+                m_task_info.task_id(),
+                m_task_info.job_id(),
+                response.status());
+        return -1;    
+    } 
+    if (response.process_state() == kProcessStateRunning) {
+        return 0; 
+    }
+    LOG(WARNING, "check task %ld job "
+            "%ld not run exit_code %d",
+            m_task_info.task_id(),
+            m_task_info.job_id(),
+            response.process_exit_code()); 
+    if (response.has_process_exit_code() 
+            && response.process_exit_code() == 0) {
+        return 1; 
+    }
+    return -1;
+}
+
+
+void ContainerTaskRunner::InitExecEnvs(std::vector<std::string>* envs) {
+    if (envs == NULL) {
+        return; 
+    }
+
+    std::string TASK_ID = "TASK_ID=";
+    TASK_ID.append(
+            boost::lexical_cast<std::string>(
+                m_task_info.task_offset()));
+    envs->push_back(TASK_ID);
+    std::string TASK_NUM = "TASK_NUM=";
+    TASK_NUM.append(
+            boost::lexical_cast<std::string>(
+                m_task_info.job_replicate_num()));
+    envs->push_back(TASK_NUM);
+    return;
+}
+
 int ContainerTaskRunner::Start() {
     LOG(INFO, "start a task with id %ld", m_task_info.task_id());
 
@@ -412,87 +513,61 @@ int ContainerTaskRunner::Start() {
         LOG(WARNING, "task with id %ld has been runing", m_task_info.task_id());
         return -1;
     }
+    SetStatus(RUNNING);
+    if (rpc_client_ == NULL) {
+        return -1; 
+    }
 
-    int stdout_fd, stderr_fd;
-    std::vector<int> fds;
-    PrepareStart(fds, &stdout_fd, &stderr_fd);
-    //sequence_id_ ++;
-    passwd *pw = getpwnam(FLAGS_task_acct.c_str());
-    if (NULL == pw) {
-        LOG(WARNING, "getpwnam %s failed", FLAGS_task_acct.c_str());
+    Guarder_Stub* guarder;  
+    rpc_client_->GetStub(FLAGS_agent_guarder_addr, &guarder);
+    RunProcessRequest request;
+    RunProcessResponse response;
+
+    request.set_process_id(GetProcessId());
+    request.set_start_cmd(m_task_info.cmd_line());
+    request.set_user(FLAGS_task_acct);
+    request.set_cgroup_path(boost::lexical_cast<std::string>(m_task_info.task_id()));
+    request.set_pwd(m_workspace->GetPath());
+    std::vector<std::string> envs;
+    InitExecEnvs(&envs);
+    for (size_t i = 0; i < envs.size(); i++) {
+        request.add_envs(envs[i]);     
+    }
+    bool ret = rpc_client_->SendRequest(guarder,
+                                        &Guarder_Stub::RunProcess, 
+                                        &request, 
+                                        &response, 5, 1);
+    if (!ret 
+            || (response.has_status()
+                && response.status() != 0)) {
+        LOG(WARNING, "task %ld job %ld run process failed",
+                m_task_info.task_id(),
+                m_task_info.job_id()); 
         return -1;
     }
-    uid_t userid = getuid();
-    if (pw->pw_uid != userid && 0 == userid) {
-        if (!file::Chown(m_workspace->GetPath(), pw->pw_uid, pw->pw_gid)) {
-            LOG(WARNING, "chown %s failed", m_workspace->GetPath().c_str());
-            return -1;
-        }   
-    }
-
-    m_child_pid = fork();
-    if (m_child_pid == 0) {
-        pid_t my_pid = getpid();
-        int ret = setpgid(my_pid, my_pid);
-        if (ret != 0) {
-            assert(0);
-        }
-        std::string meta_file = persistence_path_dir_ 
-            + "/" + RUNNER_META_PREFIX 
-            + boost::lexical_cast<std::string>(sequence_id_);
-        int meta_fd = open(meta_file.c_str(), O_WRONLY | O_CREAT, S_IRWXU);
-        if (meta_fd == -1) {
-            assert(0);
-        }
-        int64_t value = my_pid;
-        int len = write(meta_fd, (void*)&value, sizeof(value));
-        if (len == -1) {
-            close(meta_fd);
-            assert(0);
-        }
-        value = m_task_info.task_id();
-        len = write(meta_fd, (void*)&value, sizeof(value));
-        if (len == -1) {
-            close(meta_fd); 
-            assert(0);
-        }
-        if (0 != fsync(meta_fd)) {
-            close(meta_fd); 
-            assert(0);
-        }
-        close(meta_fd);
-
-        PutToCGroup();
-        StartTaskAfterFork(fds, stdout_fd, stderr_fd);
-    } else {
-        close(stdout_fd);
-        close(stderr_fd);
-        if (m_child_pid == -1) {
-            LOG(WARNING, "task with id %ld fork failed err[%d: %s]",
-                    m_task_info.task_id(), 
-                    errno,
-                    strerror(errno));
-            return -1; 
-        }
-        m_group_pid = m_child_pid;
-        SetStatus(RUNNING);
+    LOG(INFO, "task %ld job %ld run process pid %d",
+            m_task_info.task_id(),
+            m_task_info.job_id(),
+            response.pid());
+    // TODO for monitor fail should fail?
+    if (m_task_info.has_monitor_conf() && 
+            !m_task_info.monitor_conf().empty()) {
+        LOG(INFO, "task %ld job %ld with monitor conf %s", 
+                m_task_info.monitor_conf().c_str());
+        StartMonitor();
     }
     return 0;
 }
 
 int ContainerTaskRunner::StartMonitor() {
     LOG(INFO, "start a monitor with id %ld", m_task_info.task_id());
-    if (0 == m_task_info.monitor_conf().size()) {
-        return -1;
+
+    if (CheckProcess(GetMonitorProcessId()) == 0) {
+        LOG(WARNING, "task [%ld] job [%ld] has been monitoring", 
+                m_task_info.task_id(), 
+                m_task_info.job_id());
+        return 0;
     }
-    if (IsProcessRunning(m_monitor_pid) == 0) {
-        LOG(WARNING, "task [%ld] has been monitoring pid [%ld], ", 
-                m_task_info.task_id(), m_monitor_pid);
-        return -1;
-    }
-    int stdout_fd, stderr_fd;
-    std::vector<int> fds;
-    PrepareStartMonitor(fds, &stdout_fd, &stderr_fd);
     std::string monitor_conf = m_workspace->GetPath() + "/galaxy_monitor/monitor.conf";
     int conf_fd = open(monitor_conf.c_str(), O_WRONLY | O_CREAT, S_IRWXU);
     if (conf_fd == -1) {
@@ -511,47 +586,41 @@ int ContainerTaskRunner::StartMonitor() {
         }
         close(conf_fd);
     }
-    m_monitor_pid = fork();
-    if (m_monitor_pid == 0) {
-        pid_t my_pid = getpid();
-        int ret = setpgid(my_pid, my_pid);
-        if (ret != 0) {
-            assert(0);
-        }
+    Guarder_Stub* guarder;
+    rpc_client_->GetStub(
+            FLAGS_agent_guarder_addr, &guarder);
+    RunProcessRequest request; 
+    RunProcessResponse response;
+    request.set_process_id(GetMonitorProcessId());
+    request.set_start_cmd("/home/galaxy/monitor/monitor_agent "
+            "--monitor_conf_path=" + monitor_conf);
+    request.set_user(FLAGS_task_acct);
+    request.set_cgroup_path(boost::lexical_cast<std::string>(m_task_info.task_id()));
+    std::string env_task_id = "TASK_ID=";
+    env_task_id.append(
+            boost::lexical_cast<std::string>(
+                m_task_info.task_id()));
 
-        std::string meta_file = persistence_path_dir_
-            + "/" + MONITOR_META_PREFIX
-            + boost::lexical_cast<std::string>(sequence_id_);
-        int meta_fd = open(meta_file.c_str(), O_WRONLY | O_CREAT, S_IRWXU);
-        if (meta_fd == -1) {
-            assert(0);
-        }
-        int64_t value = my_pid;
-        int len = write(meta_fd, (void*)&value, sizeof(value));
-        if (len == -1) {
-            close(meta_fd);
-            assert(0);
-        }
-
-        if (0 != fsync(meta_fd)) {
-            close(meta_fd);
-            assert(0);
-        }
-        close(meta_fd);
-        PutToCGroup();
-        StartMonitorAfterFork(fds, stdout_fd, stderr_fd);
-    } else {
-        close(stdout_fd);
-        close(stderr_fd);
-        if (m_monitor_pid == -1) {
-            LOG(WARNING, "monitor with id %ld fork failed err[%d: %s]",
-                    m_task_info.task_id(),
-                    errno,
-                    strerror(errno));
-            return -1;
-        }
-        m_monitor_gid = m_monitor_pid;
-    }
+    request.add_envs(env_task_id);
+    std::string monitor_pwd = m_workspace->GetPath();
+    monitor_pwd.append("/galaxy_monitor/");
+    request.set_pwd(monitor_pwd);
+    bool ret = rpc_client_->SendRequest(guarder,
+            &Guarder_Stub::RunProcess,
+            &request,
+            &response, 5, 1);
+    if (!ret 
+            || (response.has_status()
+                && response.status() != 0)) {
+        LOG(WARNING, "start task %ld job %ld monitor failed",
+                m_task_info.task_id(),
+                m_task_info.job_id());
+        return -1;
+    } 
+    LOG(INFO, "monitor task %ld job %ld run process pid %d",
+            m_task_info.task_id(),
+            m_task_info.job_id(),
+            response.pid());
     return 0;
 }
 
@@ -604,20 +673,6 @@ void ContainerTaskRunner::Status(TaskStatus* status) {
     return;
 }
 
-
-int ContainerTaskRunner::Stop() {
-    int ret = AbstractTaskRunner::Stop();
-    if (ret == 0) {
-        return ret;
-    }else {
-        ret = _cpu_ctrl->AdjustCpuQuota();
-        if (ret == 0) { 
-            return AbstractTaskRunner::Stop();
-        }
-        return ret;
-    }
-}
-
 void ContainerTaskRunner::StopPost() {
     if (collector_ != NULL) {
         collector_->Clear();
@@ -635,7 +690,108 @@ void ContainerTaskRunner::StopPost() {
         LOG(WARNING, "rm monitor meta failed rm %s",
                 monitor_meta.c_str());
     }
+    if (!file::Remove(persistence_path_dir_)) {
+        LOG(WARNING, "rm persisten dir failed rm %s",
+                persistence_path_dir_.c_str()); 
+    }
     return;
+}
+
+int ContainerTaskRunner::Stop() {
+    int ret = StopInternal();
+    if (ret != 0) {
+        if (_cpu_ctrl->AdjustCpuQuota() == 0) {
+            ret = StopInternal();         
+        }
+    }
+
+    if (ret == 0) {
+        StopPost(); 
+    }
+    return ret;
+}
+
+int ContainerTaskRunner::StopInternal() {
+    if (m_task_state == DEPLOYING) {
+        // do download stop
+        DownloaderManager* downloader_handler = DownloaderManager::GetInstance();
+        downloader_handler->KillDownload(downloader_id_);
+        LOG(DEBUG, "task id %ld stop failed with deploying", m_task_info.task_id());
+        return -1;
+    }
+    
+    LOG(INFO, "start to kill process task %ld job %ld", 
+            m_task_info.task_id(),
+            m_task_info.job_id());
+    Guarder_Stub* guarder; 
+    rpc_client_->GetStub(
+                FLAGS_agent_guarder_addr, &guarder);
+    KillProcessRequest request;
+    KillProcessResponse response;
+    request.set_process_id(GetProcessId());
+    request.set_signal(9);
+    request.set_is_kill_group(true);
+    
+    bool ret = rpc_client_->SendRequest(guarder,
+                                &Guarder_Stub::KillProcess,
+                                &request, &response,
+                                5, 1);
+    if (!ret ||
+            (response.has_status()
+             && response.status() != 0)) {
+        LOG(WARNING, "task %ld job %ld kill process failed status %d",
+                m_task_info.task_id(),
+                m_task_info.job_id(),
+                response.status()); 
+
+        if (response.has_kill_errno() 
+                && response.kill_errno() != ESRCH) {
+            return -1; 
+        }
+    }
+
+    if (IsRunning() == 0) {
+        LOG(WARNING, "task %ld job %ld is still run after kill",
+                m_task_info.task_id(),
+                m_task_info.job_id()); 
+        return -1;
+    }
+
+    LOG(INFO, "start to kill monitor task %ld job %ld",
+            m_task_info.task_id(), 
+            m_task_info.job_id());
+
+    if (m_task_info.has_monitor_conf() 
+            && !m_task_info.monitor_conf().empty()) {
+        KillProcessRequest monitor_request;
+        KillProcessResponse monitor_response;
+        monitor_request.set_process_id(GetMonitorProcessId());
+        monitor_request.set_signal(9);
+        monitor_request.set_is_kill_group(true);
+        ret = rpc_client_->SendRequest(guarder,
+                &Guarder_Stub::KillProcess,
+                &monitor_request, &monitor_response, 5, 1);
+        if (!ret ||
+                (monitor_response.has_status()
+                 && monitor_response.status() != 0)) {
+            LOG(WARNING, "task %ld job %ld kill process failed status %d",
+                    m_task_info.task_id(),
+                    m_task_info.job_id(),
+                    response.status()); 
+            if (monitor_response.has_kill_errno() 
+                    && monitor_response.kill_errno() != ESRCH) {
+                return -1;
+            } 
+        }
+        if (CheckProcess(GetMonitorProcessId()) == 0) {
+            LOG(WARNING, "task %ld job %ld is still run after kill",
+                    m_task_info.task_id(),
+                    m_task_info.job_id()); 
+            return -1;
+        }
+    }
+
+    return 0;
 }
 
 bool ContainerTaskRunner::RecoverRunner(const std::string& persistence_path) {
@@ -821,7 +977,6 @@ int ContainerTaskRunner::Clean() {
             boost::lexical_cast<std::string>(m_task_info.task_id());
         scheduler->UnRegistCgroupPath(cgroup_name);
     }
-
     if (_cg_ctrl != NULL) {
         int status = _cg_ctrl->Destroy(m_task_info.task_id());
         LOG(INFO,"destroy cgroup for task %ld with status %d",m_task_info.task_id(),status);
@@ -831,9 +986,50 @@ int ContainerTaskRunner::Clean() {
                 status = _cg_ctrl->Destroy(m_task_info.task_id());
             }
         }
-        return status;
+        if (status != 0) {
+            return status;
+        }
     }
     LOG(WARNING, "cgroup not inited for task %ld", m_task_info.task_id());
+    
+    // clean guarder status 
+    Guarder_Stub* guarder = NULL; 
+    rpc_client_->GetStub(FLAGS_agent_guarder_addr, &guarder);
+    RemoveProcessStateRequest request;
+    RemoveProcessStateResponse response;
+
+    request.set_process_id(GetProcessId());
+    bool ret = rpc_client_->SendRequest(guarder,
+            &Guarder_Stub::RemoveProcessState,
+            &request, &response, 5, 1);
+    if (!ret
+            || (response.has_status()
+                && response.status() != 0)) {
+        LOG(WARNING, "remove process status failed task %ld job %ld",
+                m_task_info.task_id(),
+                m_task_info.job_id());    
+        return -1;
+    }
+    
+    if (m_task_info.has_monitor_conf()
+            && !m_task_info.monitor_conf().empty()) {
+        RemoveProcessStateRequest monitor_request;
+        RemoveProcessStateResponse monitor_response;
+        monitor_request.set_process_id(GetMonitorProcessId());
+        ret = rpc_client_->SendRequest(guarder,
+                &Guarder_Stub::RemoveProcessState,
+                &request, &response, 5, 1);
+        if (!ret 
+                || (response.has_status() 
+                    && response.status() != 0)) {
+            LOG(WARNING, "remove monitor process status failed task %ld job %ld",
+                    m_task_info.task_id(),
+                    m_task_info.job_id()); 
+            return -1;
+        }
+    }
+
+    
     return 0;
 }
 

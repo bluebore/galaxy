@@ -14,6 +14,7 @@
 #include "agent/resource_manager.h"
 #include "common/thread_pool.h"
 #include "agent/workspace.h"
+#include "agent/persistence_handler.h"
 
 namespace common {
     class HttpFileServer;
@@ -28,6 +29,7 @@ public:
     AgentImpl();
     virtual ~AgentImpl();
 public:
+    bool Init();
     void Report();
 
     /// Services
@@ -43,6 +45,8 @@ public:
                             const ::galaxy::SetPasswordRequest* request,
                             ::galaxy::SetPasswordResponse* response,
                             ::google::protobuf::Closure* done);
+protected:
+   std::string GetPersistenceKey(const TaskInfo& task_info);
 private:
     common::ThreadPool thread_pool_;
     RpcClient* rpc_client_;
@@ -54,6 +58,7 @@ private:
     std::string workspace_root_path_;
     int64_t version_;
     common::HttpFileServer* http_server_;
+    PersistenceHandler* persistence_handler_;
 };
 
 } // namespace galaxy

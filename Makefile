@@ -35,6 +35,10 @@ AGENT_SRC = $(wildcard src/agent/*.cc)
 AGENT_OBJ = $(patsubst %.cc, %.o, $(AGENT_SRC))
 AGENT_HEADER = $(wildcard src/agent/*.h)
 
+GUARDER_SRC = $(wildcard src/guarder/*.cc) src/agent/utils.cc
+GUARDER_OBJ = $(patsubst %.cc, %.o, $(GUARDER_SRC))
+GUARDER_HEADER = $(wildcard src/guarder/*.h) src/agent/utils.h
+
 SDK_SRC = $(wildcard src/sdk/*.cc)
 SDK_OBJ = $(patsubst %.cc, %.o, $(SDK_SRC))
 SDK_HEADER = $(wildcard src/sdk/*.h)
@@ -46,15 +50,16 @@ COMMON_OBJ = $(patsubst %.cc, %.o, $(wildcard common/*.cc))
 OBJS = $(FLAGS_OBJ) $(COMMON_OBJ) $(PROTO_OBJ)
 
 LIBS = libgalaxy.a
-BIN = master agent galaxy_client
+BIN = master agent galaxy_client guarder
 
 all: $(BIN)
 
 # Depends
-$(MASTER_OBJ) $(AGENT_OBJ) $(PROTO_OBJ) $(SDK_OBJ): $(PROTO_HEADER)
+$(MASTER_OBJ) $(AGENT_OBJ) $(GUARDER_OBJ) $(PROTO_OBJ) $(SDK_OBJ) : $(PROTO_HEADER)
 $(MASTER_OBJ): $(MASTER_HEADER)
 $(AGENT_OBJ): $(AGENT_HEADER)
 $(SDK_OBJ): $(SDK_HEADER)
+$(GUARDER_OBJ): $(GUARDER_HEADER)
 
 # Targets
 master: $(MASTER_OBJ) $(OBJS)
@@ -69,6 +74,9 @@ libgalaxy.a: $(SDK_OBJ) $(OBJS) $(PROTO_HEADER)
 galaxy_client: $(CLIENT_OBJ) $(LIBS)
 	$(CXX) $(CLIENT_OBJ) $(LIBS) -o $@ $(LDFLAGS)
 
+guarder : $(GUARDER_OBJ) $(OBJS) 
+	$(CXX) $(GUARDER_OBJ) $(OBJS) -o $@ $(LDFLAGS)
+
 %.o: %.cc
 	$(CXX) $(CXXFLAGS) $(INCLUDE_PATH) -c $< -o $@
 
@@ -77,7 +85,7 @@ galaxy_client: $(CLIENT_OBJ) $(LIBS)
 
 clean:
 	rm -rf $(BIN)
-	rm -rf $(MASTER_OBJ) $(AGENT_OBJ) $(SDK_OBJ) $(CLIENT_OBJ) $(OBJS)
+	rm -rf $(MASTER_OBJ) $(AGENT_OBJ) $(SDK_OBJ) $(CLIENT_OBJ) $(GUARDER_OBJ) $(OBJS)
 	rm -rf $(PROTO_SRC) $(PROTO_HEADER)
 	rm -rf $(PREFIX)
 	rm $(LIBS) 

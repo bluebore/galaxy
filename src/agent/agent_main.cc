@@ -40,6 +40,9 @@ int main(int argc, char* argv[]) {
 
     galaxy::AgentImpl* agent_service = new galaxy::AgentImpl();
 
+    if (!agent_service->Init()) {
+        return -1;
+    }
     // use for atexit regist
     galaxy::ResourceCollectorEngine* engine = 
         galaxy::GetResourceCollectorEngine();

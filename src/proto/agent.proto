@@ -47,9 +47,22 @@ message SetPasswordResponse {
     optional int32 status = 1;    
 }
 
+message RunCommandInsideTaskRequest {
+    optional int64 command_id = 2; 
+    optional int64 task_id = 3;
+    optional string command_raw = 4;
+    optional string cmd_line = 5;
+    optional int32 run_timeout = 6;
+}
+
+message RunCommandInsideTaskResponse {
+    optional int32 status = 2;
+}
+
 service Agent {
     rpc RunTask(RunTaskRequest) returns(RunTaskResponse);
     rpc KillTask(KillTaskRequest) returns(KillTaskResponse);
     rpc SetPassword(SetPasswordRequest) returns (SetPasswordResponse);
+    rpc RunCommandInsideTask(RunCommandInsideTaskRequest) returns(RunCommandInsideTaskResponse);
 }
 
