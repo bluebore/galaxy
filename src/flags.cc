@@ -42,3 +42,5 @@ DEFINE_string(gce_initd_dump_file, "initd_checkpoint_file", "Initd Checkpoint Fi
 DEFINE_string(gce_initd_port, "8765", "gce initd listen port");
 DEFINE_string(gce_gced_port, "8766", "gce initd listen port");
 DEFINE_string(gce_initd_bin, "./initd", "initd bin path");
+DEFINE_string(gce_work_dir, "./workdir", "gce workdir path");
+DEFINE_string(gce_user, "galaxy", "gce run task user");

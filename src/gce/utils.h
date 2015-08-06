@@ -43,7 +43,15 @@ bool Traverse(const std::string& path, const OptFunc& func);
 
 bool IsExists(const std::string& file);
 
+bool IsDir(const std::string& path, bool& is_dir);
+
+bool IsFile(const std::string& path, bool& is_file);
+
+bool IsSpecialDir(const char* path);
+
 bool Mkdir(const std::string& dir_path);
+
+bool Remove(const std::string& path);
 
 }   // ending namespace file
 }   // ending namespace galaxy

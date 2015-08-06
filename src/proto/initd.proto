@@ -43,26 +43,28 @@ message ExecuteResponse {
     optional Status status = 3;
 }
 
-message GetPodStatusRequest {
-    optional string key = 1;
+message MountPathRequest {
+    optional string volume_src = 1;
+    optional string volume_dest = 2;
 }
 
-message GetPodStatusResponse {
-    optional Status status = 1;
-    optional PodStatus pod_status = 2;
+message MountPathResponse {
+    optional Status status = 2;
 }
 
-message CreatePodRequest {
-    optional PodDescriptor pod = 1;
+message UMountPathRequest {
+    optional string volume_dest = 1;
 }
 
-message CreatePodResponse {
-    optional Status status = 1;
+message UMountPathResponse {
+    optional Status status = 2;
 }
 
 service Initd {
+    // deprecated
     rpc GetProcessStatus(GetProcessStatusRequest) returns (GetProcessStatusResponse);
+    // deprecated
     rpc Execute(ExecuteRequest) returns (ExecuteResponse);
-    rpc GetPodStatus(GetPodStatusRequest) returns (GetPodStatusResponse);
-    rpc CreatePod(CreatePodRequest) returns (CreatePodResponse);
+    rpc MountPath(MountPathRequest) returns (MountPathResponse);    
+    rpc UMountPath(UMountPathRequest) returns (UMountPathResponse);
 }

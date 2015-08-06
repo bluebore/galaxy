@@ -37,9 +37,9 @@ SCHEDULER_SRC = $(wildcard src/scheduler/scheduler*.cc)
 SCHEDULER_OBJ = $(patsubst %.cc, %.o, $(SCHEDULER_SRC))
 SCHEDULER_HEADER = $(wildcard src/scheduler/*.h)
 
-AGENT_SRC = $(wildcard src/agent/agent*.cc) src/agent/pod_manager.cc src/agent/initd_handler.cc src/agent/utils.cc
+AGENT_SRC = $(wildcard src/agent/agent*.cc) src/agent/pod_manager.cc src/agent/initd_handler.cc src/agent/utils.cc src/agent/task_manager.cc
 AGENT_OBJ = $(patsubst %.cc, %.o, $(AGENT_SRC))
-AGENT_HEADER = $(wildcard src/agent/*.h) src/agent/pod_manager.h src/agent/initd_handler.h src/agent/utils.h
+AGENT_HEADER = $(wildcard src/agent/*.h) src/agent/pod_manager.h src/agent/initd_handler.h src/agent/utils.h src/agent/task_manager.h
 
 TEST_AGENT_SRC = src/agent/test_agent.cc
 TEST_AGENT_OBJ = $(patsubst %.cc, %.o, $(TEST_AGENT_SRC))
@@ -48,7 +48,7 @@ GCED_SRC = $(wildcard src/gce/gced*.cc) src/gce/utils.cc
 GCED_OBJ = $(patsubst %.cc, %.o, $(GCED_SRC))
 GCED_HEADER = $(wildcard src/agent/*.h) src/gce/utils.h
 
-INITD_SRC = $(wildcard src/gce/initd*.cc) src/gce/utils.cc src/flags.cc src/gce/task_manager.cc
+INITD_SRC = $(wildcard src/gce/initd*.cc) src/gce/utils.cc src/flags.cc src/gce/task_manager.cc src/gce/cgroups.cc
 INITD_OBJ = $(patsubst %.cc, %.o, $(INITD_SRC))
 INITD_HEADER = $(wildcard src/gce/*.h) src/gce/utils.h src/gce/task_manager.h
 

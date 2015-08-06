@@ -12,6 +12,8 @@
 #include <errno.h>
 #include <string.h>
 
+#include <set>
+#include <boost/bind.hpp>
 #include <boost/lexical_cast.hpp>
 
 #include "logging.h"
@@ -132,6 +134,94 @@ void PrepareChildProcessEnvStep2(const int stdout_fd,
 
 namespace file {
 
+bool Traverse(const std::string& path, const OptFunc& opt) {
+    bool rs = false;
+    if (!IsDir(path, rs)) {
+        return false; 
+    }
+    if (!rs) {
+        if (0 != opt(path.c_str())) {
+            LOG(WARNING, "opt %s failed err[%d: %s]",
+                    path.c_str(),
+                    errno,
+                    strerror(errno));
+            return false;
+        }
+        return true;
+    }
+
+    std::vector<std::string> stack;
+    stack.push_back(path);
+    std::set<std::string> visited;
+    std::string cur_path;
+    while (stack.size() != 0) {
+        cur_path = stack.back();
+        
+        bool is_dir;
+        if (!IsDir(cur_path, is_dir)) {
+            LOG(WARNING, "IsDir %s failed err", path.c_str());
+            return false; 
+        }
+
+        if (is_dir) {
+            if (visited.find(cur_path) != visited.end()) {
+                stack.pop_back();
+                if (0 != opt(cur_path.c_str())) {
+                    LOG(WARNING, "opt %s failed err[%d: %s]",
+                            cur_path.c_str(),
+                            errno,
+                            strerror(errno)); 
+                    return false;
+                } 
+                continue;
+            }
+            visited.insert(cur_path);
+            DIR* dir_desc = ::opendir(cur_path.c_str());
+            if (dir_desc == NULL) {
+                LOG(WARNING, "open dir %s failed err[%d: %s]",
+                        cur_path.c_str(),
+                        errno,
+                        strerror(errno)); 
+                return false;
+            }
+            bool ret = true;
+            struct dirent* dir_entity;
+            while ((dir_entity = ::readdir(dir_desc)) != NULL) {
+                if (IsSpecialDir(dir_entity->d_name)) {
+                    continue; 
+                } 
+                std::string tmp_path = cur_path + "/";
+                tmp_path.append(dir_entity->d_name);
+                is_dir = false;
+                if (!IsDir(tmp_path, is_dir)) {
+                    ret = false;
+                    break;
+                }
+                if (is_dir) {
+                    stack.push_back(tmp_path);
+                } else {
+                    if (opt(tmp_path.c_str()) != 0) { 
+                        LOG(WARNING, "opt %s failed err[%d: %s]",
+                                tmp_path.c_str(),
+                                errno,
+                                strerror(errno));
+                        ret = false; 
+                        break;
+                    }
+                }
+            }
+            ::closedir(dir_desc);
+            if (!ret) {
+                LOG(WARNING, "opt %s failed err", path.c_str());
+                return ret;
+            } 
+        } 
+    }
+
+    return true;
+
+}
+
 bool ListFiles(const std::string& dir_path,
         std::vector<std::string>* files) {
     if (files == NULL) {
@@ -170,7 +260,63 @@ bool IsExists(const std::string& path) {
 bool Mkdir(const std::string& dir_path) {
     const int dir_mode = 0777;
     int ret = ::mkdir(dir_path.c_str(), dir_mode); 
-    return ret == 0;
+    if (ret == 0 || errno == EEXIST) {
+        return true; 
+    }
+    LOG(WARNING, "mkdir %s failed err[%d: %s]", 
+            dir_path.c_str(), errno, strerror(errno));
+    return false;
+}
+
+bool IsFile(const std::string& path, bool& is_file) {
+    struct stat stat_buf;
+    int ret = lstat(path.c_str(), &stat_buf);
+    if (ret == -1) {
+        LOG(WARNING, "stat path %s failed err[%d: %s]",
+                path.c_str(),
+                errno,
+                strerror(errno)); 
+        return false;
+    }
+
+    if (S_ISREG(stat_buf.st_mode)) {
+        is_file = true; 
+    } else {
+        is_file = false; 
+    }
+    return true;
+}
+
+bool IsDir(const std::string& path, bool& is_dir) {
+    struct stat stat_buf;        
+    int ret = ::lstat(path.c_str(), &stat_buf);
+    if (ret == -1) {
+        LOG(WARNING, "stat path %s failed err[%d: %s]",
+                path.c_str(),
+                errno,
+                strerror(errno));    
+        return false;
+    }
+
+    if (S_ISDIR(stat_buf.st_mode)) {
+        is_dir = true; 
+    } else {
+        is_dir = false; 
+    }
+    return true;
+}
+
+bool IsSpecialDir(const char* path) {
+    return strcmp(path, ".") == 0 || strcmp(path, "..") == 0;
+}
+
+
+
+bool Remove(const std::string& path) {
+    if (path.empty()) {
+        return false; 
+    }
+    return Traverse(path, boost::bind(remove, _1));
 }
 
 }   // ending namespace file

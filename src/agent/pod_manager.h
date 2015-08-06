@@ -40,7 +40,7 @@ private:
 
     typedef std::map<std::string, boost::shared_ptr<PodInfo> > PodInfosType; 
 
-    typedef std::map<std::string, boost::shared_ptr<InitdHandler> > PodHandlersType; 
+    // typedef std::map<std::string, boost::shared_ptr<InitdHandler> > PodHandlersType; 
 
 private:
     int Load();
@@ -53,16 +53,18 @@ private:
 
     void LoopCheckPodInfos();
 
+    int FesibilityCheck(const Resource& resource);
+
     int DoPodOperation(const PodDesc& pod, const Operation op);
 
 private:
     Mutex infos_mutex_;
     PodInfosType pod_infos_;
 
-    Mutex handlers_mutex_;
-    PodHandlersType pod_handlers_;
+    // Mutex handlers_mutex_;
+    // PodHandlersType pod_handlers_;
 
-    boost::scoped_ptr<common::Thread> monitor_thread_;
+    // boost::scoped_ptr<common::Thread> monitor_thread_;
 };
 
 }

@@ -31,10 +31,33 @@ int PodManager::Kill(const PodDesc& pod) {
 
 int PodManager::Query(const std::string& podid, 
                       boost::shared_ptr<PodInfo>& info)  {
+
+    {
+    MutexLock lock(&infos_mutex_);
+    PodInfosType::iterator it = pod_infos_.find(podid);
+    if (it == pod_infos_.end()) {
+        // not found
+        LOG(INFO, "not found pod[%s]", podid.c_str());
+        return -1;
+    } else {
+        *info = *(it->second);
+    }
+    } // end lock
     return 0;
 }
 
 int PodManager::List(std::vector<std::string>* pod_ids) {
+    if (pod_ids == NULL) {
+        return -1;
+    }
+
+    {
+    MutexLock lock(&infos_mutex_);
+    for (PodInfosType::iterator it = pod_infos_.begin(); 
+         it != pod_infos_.end(); ++it) {
+        pod_ids->push_back(it->first);
+    }
+    }
     return 0;
 }
 
@@ -84,13 +107,17 @@ int PodManager::DoPodOperation(const PodDesc& pod,
         ret = handler->Create(pod);
         break;
     case kDelete:
-        ret = handler->Delete(pod);
+        ret = handler->Delete();
         break;
     default:
         ret = kUnknown;
         break;
     }
     return ret;
+}
+
+int PodManager::FesibilityCheck(const Resource& resource) {
+    return 0; 
 }
 
 }
