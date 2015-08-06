@@ -226,6 +226,20 @@ int TaskManager::Status(std::vector< TaskStatus >& task_status_vector, int64_t i
     return 0;
 }
 
+int TaskManager::Update(const ::galaxy::TaskInfo& task_info) {
+    MutexLock lock(m_mutex);
+    std::map<int64_t, TaskRunner*>::iterator it = 
+                               m_task_runner_map.find(task_info.task_id());
+    if (it == m_task_runner_map.end()) {
+        LOG(WARNING, "fail to update task %ld for it does not exist in task mgr",
+           task_info.task_id());
+        return -1;
+    }
+    it->second->UpdateTaskInfo(task_info);
+    return 0;
+
+}
+
 }
 
 

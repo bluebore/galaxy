@@ -16,8 +16,10 @@ angular.module('galaxy.ui.ctrl')
                                           notify,
                                           config){
            $scope.config = config;
+           $scope.masterAddr = "";
            $scope.update = function(){
-               $cookies.masterAddr = $scope.config.masterAddr;
+               $scope.config.masterAddr = $scope.masterAddr;
+               $cookies.put('masterAddr',$scope.masterAddr);
                notify({message:"更新成功"});
            }
 }

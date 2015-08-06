@@ -25,6 +25,7 @@ angular.module('galaxy.ui.ctrl')
                  templateUrl: 'views/task.html',
                  controller: 'TaskForAgentCtrl',
                  keyboard:false,
+                 animation:false,
                  size:'lg',
                  backdrop:'static',
                  resolve:{

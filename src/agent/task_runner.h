@@ -48,6 +48,9 @@ public:
    virtual void Killed() = 0;
    virtual ~TaskRunner(){}
    virtual int Clean() { return 0;}
+   virtual void UpdateTaskInfo(const TaskInfo& task_info) = 0;
+   //download 回调接口
+   virtual void UpdateCallBack(int32_t old_version, int status) = 0;
 };
 
 class AbstractTaskRunner:public TaskRunner{
@@ -63,7 +66,7 @@ public:
                        m_workspace(workspace),
                        m_has_retry_times(0),
                        m_task_state(DEPLOYING),
-                       downloader_id_(-1) {}
+                       downloader_id_(-1){}
     virtual int Prepare() = 0;
     virtual int Start() = 0;
     virtual int StartMonitor() = 0;
@@ -71,6 +74,8 @@ public:
     int IsProcessRunning(pid_t pid);
     virtual int Stop();
     int ReStart();
+    void UpdateTaskInfo(const TaskInfo& task_info);
+    void UpdateCallBack(int32_t old_version, int status);
     void AsyncDownload(boost::function<void()> callback);
     // do something after stop
     virtual void StopPost() = 0;

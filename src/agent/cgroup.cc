@@ -31,7 +31,7 @@ DECLARE_string(task_acct);
 DECLARE_string(cgroup_root); 
 DECLARE_int32(agent_cgroup_clear_retry_times);
 DECLARE_bool(agent_dynamic_scheduler_switch);
-
+DECLARE_int32(cgroup_cpu_adjust_max);
 namespace galaxy {
 
 static const std::string RUNNER_META_PREFIX = "task_runner_";
@@ -275,8 +275,15 @@ int CpuCtrl::AdjustCpuQuota() {
         LOG(FATAL,"fail to get %s quota", _my_cg_root.c_str());
         return ret;
     }
+    int64_t new_cpu_quota = 0;
+    if (old_cpu_quota > CPU_CFS_PERIOD * FLAGS_cgroup_cpu_adjust_max) {
+        new_cpu_quota = boost::lexical_cast<int64_t>(old_cpu_quota - CPU_CFS_PERIOD * 0.5);
+    } else{
+    
+        new_cpu_quota = boost::lexical_cast<int64_t>(old_cpu_quota + CPU_CFS_PERIOD * 0.5);
+    }
+
     // add 0.5 cpu core
-    int64_t new_cpu_quota = boost::lexical_cast<int64_t>(old_cpu_quota +  CPU_CFS_PERIOD * 0.5);
     ret = SetCpuQuota(new_cpu_quota);
     if (ret != 0) {
         LOG(FATAL, "fail to set %s quota %ld", _my_cg_root.c_str(), new_cpu_quota);
@@ -563,7 +570,7 @@ void ContainerTaskRunner::Status(TaskStatus* status) {
                 status->cpu_usage(), status->memory_usage());
     }
     status->set_job_id(m_task_info.job_id());
-    
+    status->set_task_meta_version(m_task_info.version());
     if (m_task_state == KILLED) {
         // be kill by master no need check running
         status->set_status(KILLED);

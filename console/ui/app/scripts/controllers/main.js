@@ -134,6 +134,7 @@ angular.module('galaxy.ui.ctrl',[])
         templateUrl: 'views/createService.html',
         controller: 'NewJobModalCtrl',
         keyboard:false,
+        animation:false,
         backdrop:'static'
       });
     };
@@ -141,6 +142,7 @@ angular.module('galaxy.ui.ctrl',[])
       var modalInstance = $modal.open({
         templateUrl: 'views/updateService.html',
         controller: 'UpdateServiceModalIntanceCtrl',
+        animation:false,
         keyboard:false,
         backdrop:'static',
         resolve:{
@@ -151,7 +153,7 @@ angular.module('galaxy.ui.ctrl',[])
       });
     };
 
-$http.get(config.rootPrefixPath + "service/list?user=9527&master="+config.masterAddr)
+   $http.get(config.rootPrefixPath + "service/list?user=9527&master="+config.masterAddr)
          .success(function(data){
           if(data.status == 0 ){
                for (var i in data.data) {
@@ -170,6 +172,7 @@ $http.get(config.rootPrefixPath + "service/list?user=9527&master="+config.master
         var modalInstance = $modal.open({
         templateUrl: 'views/task.html',
         controller: 'TaskCtrl',
+        animation:false,
         keyboard:false,
         size:'lg',
         backdrop:'static',
@@ -185,6 +188,7 @@ $http.get(config.rootPrefixPath + "service/list?user=9527&master="+config.master
         var modalInstance = $modal.open({
         templateUrl: 'views/history.html',
         controller: 'TaskHistoryCtrl',
+        animation:false,
         keyboard:false,
         size:'lg',
         backdrop:'static',
@@ -201,6 +205,7 @@ $http.get(config.rootPrefixPath + "service/list?user=9527&master="+config.master
         templateUrl: 'views/task.html',
         controller: 'TaskForAgentCtrl',
         keyboard:false,
+        animation:false,
         backdrop:'static',
         resolve:{
             agent:function(){
@@ -216,6 +221,7 @@ $http.get(config.rootPrefixPath + "service/list?user=9527&master="+config.master
         templateUrl: 'views/promot.html',
         controller: 'PromotCtrl',
         keyboard:false,
+        animation:false,
         backdrop:'static',
         size: 'sm',
         resolve:{
@@ -249,18 +255,43 @@ $http.get(config.rootPrefixPath + "service/list?user=9527&master="+config.master
   });
 angular.module('galaxy.ui.ctrl').controller('UpdateServiceModalIntanceCtrl',function($scope,$modalInstance,$http,$route,config,service,notify){
         $scope.service = service;
+        $scope.updateServiceTpl = {
+              job_id:$scope.service.job_id,
+              replica_num:$scope.service.replica_num,
+              deploy_step_size:$scope.service.deploy_step_size,
+              update_step_size:$scope.service.update_job_info.update_step_size,
+              pkg_addr:$scope.service.job_raw,
+              is_suspended:$scope.service.update_job_info.is_suspended,
+              migrate_delay_time:$scope.service.update_job_info.migrate_delay_time,
+              switch_sched_type_num:$scope.service.update_job_info.switch_sched_type_num
+        };
+
         $scope.update = function(){
-             $http.get(config.rootPrefixPath + 'service/update?id='+$scope.service.job_id+"&replicate="+$scope.service.replica_num+"&master="+config.masterAddr)
-                  .success(function(data){
-                        if(data.status == 0){ 
-                          notify({ message:'更新服务成功'} );
-                         $modalInstance.dismiss('cancel');
-                        }else{ 
-                          notify({ message:'更新服务失败',classes:"alert-danger"} );
-                        }
-                      })
-                  .error(function(data){});
-        }
+            var updateJson = JSON.stringify($scope.updateServiceTpl);
+             $http({
+                  method:"POST",
+                  url:config.rootPrefixPath + 'service/update?master='+config.masterAddr+"&id="+$scope.service.job_id, 
+                  data:{data:updateJson},
+                  headers:{'Content-Type': 'application/x-www-form-urlencoded'},
+                  transformRequest: function(obj) {
+                     var str = [];
+                     for(var p in obj){
+                         str.push(encodeURIComponent(p) + "=" + encodeURIComponent(obj[p]));
+                     }
+                     return str.join("&");
+                   }
+            }).success(function(data, status, headers, config) {
+
+            if(data.status==0){
+                notify({ message:'更新服务成功'} );
+                $route.reload();
+                $modalInstance.close();
+            }else{
+                $scope.alerts.push({ type: 'danger', msg: '错误：'+data.msg });
+            }   
+            });
+        
+         }
         $scope.cancel = function () {
             $modalInstance.dismiss('cancel');
         };
@@ -483,95 +514,4 @@ angular.module('galaxy.ui.ctrl').controller('NewJobModalCtrl',function($scope,
 
 
 });
-/*angular.module('galaxy.ui.ctrl').controller('CreateServiceModalInstanceCtrl',
-                                            function ($scope, $modalInstance,$http,$route,notify,config ,$cookies) {
-
-  $scope.disableBtn=false;
-  $scope.alerts = [];
-  $scope.defaultPkgType = [{name:'FTP',id:0},{name:'HTTP',id:1},{name:'P2P',id:2},{name:'BINARY',id:3}];
-  $scope.deployTpl = {groupId:"",name:"",startCmd:"",tag:"",pkgType:0,pkgSrc:"",deployStepSize:5,replicate:0,memoryLimit:3,cpuShare:0.5,oneTaskPerHost:false};
-  if ($cookies.lastServiceForm != undefined && 
-      $cookies.lastServiceForm != null){
-      try{
-         $scope.deployTpl = JSON.parse($cookies.lastServiceForm);
-      }finally{
-      }
-  }
-  $http.get(config.rootPrefixPath + "tag/list?master="+config.masterAddr)
-         .success(function(data){
-             $scope.tagList = data.data;
-  });
-  $http.get(config.rootPrefixPath + "quota/mygroups")
-         .success(function(data){
-             $scope.groupList = data.data;
-  });
-  $scope.selectGroup = null;
-  $scope.groupUpdate = function(){
-      if ($scope.selectGroup != null){
-          $http.get(config.rootPrefixPath + "quota/groupstat?id="+ $scope.selectGroup.id)
-               .success(function(data){
-                $scope.groupStat = data.data.stat;
-                $scope.deployTpl.groupId = $scope.selectGroup.id;
-            });
-      }
-  }
-  $scope.showAdvanceOption = false;
-  $scope.ok = function () {
-    $scope.alerts = [];
-    $cookies.lastServiceForm = JSON.stringify($scope.deployTpl);
-    if ($scope.groupStat == null ){
-        $scope.alerts.push({msg: '请选择quota组'});
-        return ;
-    }
-    var totalCpuRequire = $scope.deployTpl.replicate * $scope.deployTpl.cpuShare;
-    var totalMemRequire = $scope.deployTpl.replicate * $scope.deployTpl.memoryLimit * 1024 * 1024 * 1024;
-
-    if(totalCpuRequire > $scope.groupStat.total_cpu_left){
-        $scope.alerts.push({msg: 'cpu超出总配额'});
-        return;
-    }
-    if(totalMemRequire > $scope.groupStat.total_mem_left){ 
-        $scope.alerts.push({msg: '内存超出总配额'});
-        return;
-    }
-
-    $scope.disableBtn=true;
-    $http(
-      {
-        method:"POST",
-        url:config.rootPrefixPath + 'service/create?master='+config.masterAddr, 
-        data:$scope.deployTpl,
-        headers:{'Content-Type': 'application/x-www-form-urlencoded'},
-        transformRequest: function(obj) {
-          var str = [];
-          for(var p in obj){
-             str.push(encodeURIComponent(p) + "=" + encodeURIComponent(obj[p]));
-          }
-          return str.join("&");
-        }
-      }).success(function(data, status, headers, config) {
-        $scope.disableBtn=false;
-       if(data.status==0){
-         notify({ message:'创建服务成功'} );
-         $route.reload();
-         $modalInstance.close();
-       }else{
-           $scope.alerts.push({ type: 'danger', msg: '错误：'+data.msg });
-       }
-     }).error(function(data, status, headers, config) {
-        $scope.disableBtn=false;
-
-     });
-    //$modalInstance.close($scope.selected.item);
-  };
-  $scope.cancel = function () {
-    $modalInstance.dismiss('cancel');
-  };
-  $scope.closeAlert = function(index) {
-    $scope.alerts.splice(index, 1);
-  };
-  
-  
-});*/
-
 }(angular));

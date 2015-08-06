@@ -7,9 +7,48 @@
 <form >
   <alert ng-repeat="alert in alerts" type="{{alert.type}}" close="closeAlert($index)">{{alert.msg}}</alert>
         <div class="form-group">
-            <label for="replicate_num">实例数</label>
-          <input type="number" ng-model="service.replica_num" class="form-control " id="replicate_num" >
+          <label for="replicate_num">实例数</label>
+          <input type="number" ng-model="updateServiceTpl.replica_num" class="form-control " id="replicate_num" >
         </div>
+       <div class="form-group">
+          <label for="deploy_step_size">并发部署数</label>
+          <input type="number" ng-model="updateServiceTpl.deploy_step_size" class="form-control " id="deploy_step_size" > 
+          <p class="help-block">并发部署数当部署应用才会起作用，比如添加应用实例</p>
+       </div>
+       <div class="form-group">
+          <label for="update_step_size">并发更新数</label>
+          <input type="number" ng-model="updateServiceTpl.update_step_size" class="form-control " id="update_step_size" >
+          <p class="help-block">并发更新数是更新服务packge时才会起作用</p>
+       </div>
+      <div class="form-group">
+          <label for="pkg_addr">部署包地址</label>
+          <input type="text" ng-model="updateServiceTpl.pkg_addr" class="form-control " id="pkg_addr" >
+          <p class="help-block">当部署包地址变化时，galaxy会按照并发数更新所有实例部署包</p>
+       </div>
+      
+      <div class="form-group">
+          <label for="migrate_delay_time">重试更新间隔</label>
+          <div class="input-group">
+                <input type="number" ng-model="updateServiceTpl.migrate_delay_time" class="form-control" id="migrate_delay_time">
+                <span class="input-group-addon">ms</span>
+         </div>
+
+          <p class="help-block">单个实例更新失败重试间隔</p>
+       </div>
+
+
+       <div class="form-group">
+          <label for="switch_sched_type_num">切换调度类型实例数</label>
+          <input type="number" ng-model="updateServiceTpl.switch_sched_type_num" class="form-control " id="switch_sched_type_num" >
+          <p class="help-block">当成功更新实例数到达特定值时,切换调度类型, 默认值和副本数一样</p>
+       </div>
+      <div class="checkbox">
+            <label>
+               <input type="checkbox" ng-model="updateServiceTpl.is_suspended">暂停更新
+            </label>
+            <p class="help-block">当选择后 将会暂停更新</p>
+       </div>
+ 
 </form>
 </div>
 <div class="modal-footer">

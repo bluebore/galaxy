@@ -5,7 +5,6 @@
 // Author: yanshiguang02@baidu.com
 
 #include "sdk/galaxy.h"
-
 #include <cstdio>
 #include <cstdlib>
 #include <errno.h>
@@ -24,6 +23,10 @@ DEFINE_double(cpu_soft_limit, 0.0, "cpu soft limit which is lower than cpu limit
 DEFINE_double(cpu_limit, 0.0, "cpu limit which a task can reach but not overtop");
 DEFINE_int32(deploy_step_size ,0, "how many tasks can be deployed in concurrent");
 DEFINE_bool(one_task_per_host , false, "every node just run one task of job");
+DEFINE_bool(is_suspended , false, "if true galaxy will suspend job ");
+DEFINE_string(new_package, "", "the address of package");
+DEFINE_int32(update_step_size, 0, "conncurrent size when updating job");
+DEFINE_int32(switch_sched_type_num, 0, "switch sched_type to normal when the num  of updated tasks");
 DEFINE_int64(task_id, -1, "the identify of task");
 DEFINE_int64(job_id, -1, "the identify of job");
 DEFINE_string(agent_addr, "", "the address of a agent shown by listnode");
@@ -52,7 +55,9 @@ int ProcessNewJob(){
         return -1;
     }
     std::string task_raw;
-    if (!boost::starts_with(FLAGS_task_raw, "ftp://")) {
+    if (!boost::starts_with(FLAGS_task_raw, "ftp://")
+        &&!boost::starts_with(FLAGS_task_raw, "http://"))
+ {
         FILE* fp = fopen(FLAGS_task_raw.c_str(), "r");
         if (fp == NULL) {
             fprintf(stderr, "Open %s for read fail\n", FLAGS_task_raw.c_str());
@@ -165,8 +170,40 @@ int KillJob(){
 int UpdateJob(){
     galaxy::Galaxy* galaxy = galaxy::Galaxy::ConnectGalaxy(FLAGS_master_addr);
     galaxy::JobDescription job;
+    galaxy::PackageDescription package;
+    package.source = "";
+    job.pkg = package;
+    job.is_suspended = FLAGS_is_suspended;
+    job.switch_sched_type_num = FLAGS_switch_sched_type_num;
+    job.update_step_size = 0;
     job.replicate_count = FLAGS_replicate_num;
     job.job_id  =  FLAGS_job_id;
+    if (FLAGS_update_step_size > 0) {
+        job.update_step_size =FLAGS_update_step_size;
+    }
+    if (!FLAGS_new_package.empty()) {
+        std::string task_raw;
+        if (!boost::starts_with(FLAGS_new_package, "ftp://")
+           &&!boost::starts_with(FLAGS_new_package, "http://")){
+            FILE* fp = fopen(FLAGS_new_package.c_str(), "r");
+            if (fp == NULL) {
+                fprintf(stderr, "Open %s for read fail\n", FLAGS_new_package.c_str());
+                return -2;
+            }
+            char buf[1024];
+            int len = 0;
+            while ((len = fread(buf, 1, 1024, fp)) > 0) {
+                task_raw.append(buf, len);
+            }
+            fclose(fp);
+            printf("Task binary len %lu\n", task_raw.size());
+        }
+        else {
+            task_raw = FLAGS_new_package;
+        } 
+        job.pkg.source = task_raw;
+
+    }
     job.deploy_step_size = FLAGS_deploy_step_size;
     galaxy->UpdateJob(job);
     return 0;

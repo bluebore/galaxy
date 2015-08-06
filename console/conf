@@ -1,1 +1,7 @@
-/console http://127.0.0.1:8812
+/admin http://127.0.0.1:8989
+/conf http://127.0.0.1:8989
+/service http://127.0.0.1:8989
+/taskgroup http://127.0.0.1:8989
+/cluster http://127.0.0.1:8989
+/tag http://127.0.0.1:8989
+/quota http://127.0.0.1:8989

@@ -13,6 +13,7 @@
 #include <signal.h>
 #include <errno.h>
 #include <sstream>
+#include <fstream>
 #include <sys/types.h>
 #include <gflags/gflags.h>
 #include <boost/bind.hpp>
@@ -28,7 +29,6 @@
 DECLARE_int32(task_retry_times);
 DECLARE_int32(agent_app_stop_wait_retry_times);
 DECLARE_string(task_acct);
-
 namespace galaxy {
 
 static const std::string RUNNER_META_PREFIX = "task_runner_";
@@ -324,6 +324,7 @@ void AbstractTaskRunner::StartMonitorAfterFork(std::vector<int>& fd_vector,int s
     _exit(127);
 }
 int AbstractTaskRunner::ReStart(){
+    LOG(DEBUG, "restart task %ld", m_task_info.task_id());
     // only has retry times reach limit return -1
     int max_retry_times = FLAGS_task_retry_times;
     if (m_task_info.has_fail_retry_times()) {
@@ -340,10 +341,75 @@ int AbstractTaskRunner::ReStart(){
         // stop failed need retry last heartbeat
         return 0;
     }
-
     Start();
     StartMonitor();
     return 0;
+}
+
+void AbstractTaskRunner::UpdateTaskInfo(const TaskInfo& task_info) {
+    if (task_info.version() == m_task_info.version()) {
+        LOG(WARNING,"no need update task info , they have the same version %d",
+           task_info.version());
+        return;
+    }
+    LOG(INFO, "update task %ld with new version %d", task_info.task_id(),
+    task_info.version());
+    // 更新版本号，master 可能会多次调用更新接口，
+    // 避免重复下载包
+    int old_version = m_task_info.version();
+    m_task_info.set_version(task_info.version());
+    m_task_info.set_task_raw(task_info.task_raw());
+   
+    std::string uri = m_task_info.task_raw();
+    std::string path = m_workspace->GetPath();
+    path.append("/");
+    path.append("tmp.tar.gz");
+    SetStatus(DEPLOYING);
+    // set deploying state
+    DownloaderManager* downloader_handler = DownloaderManager::GetInstance();
+    downloader_id_ = downloader_handler->DownloadInThread(
+                     uri,
+                     path,
+                    boost::bind(&AbstractTaskRunner::UpdateCallBack, this, old_version, _1));
+    return;
+}
+
+void AbstractTaskRunner::UpdateCallBack(int32_t old_version, int status) {
+    if (status != 0) {
+        // roll back version
+        m_task_info.set_version(old_version);
+        LOG(WARNING, "fail to download task %ld package, roll back version to %d",
+          m_task_info.task_id(),
+          old_version);
+        return;
+    }
+
+    std::string tar_cmd = "cd "
+            + m_workspace->GetPath()
+            + " && tar -xzf " + "tmp.tar.gz";
+    status = system(tar_cmd.c_str());
+    if (status != 0) {
+        LOG(WARNING, "task with id %ld extract failed",  m_task_info.task_id());
+        m_task_info.set_version(old_version);
+        return;
+    }
+    SetStatus(RUNNING);
+    LOG(INFO, "update task %ld for updating package");
+    if (Stop() != 0) {
+        LOG(WARNING, "fail to stop task %ld", m_task_info.task_id());
+        m_task_info.set_version(old_version);
+        return ;
+    }
+    if (Start() != 0) {
+        LOG(WARNING, "fail to start task %ld", m_task_info.task_id());
+        m_task_info.set_version(old_version);
+        return ;
+    }
+    std::fstream fs;
+    fs.open("version", std::fstream::out | std::fstream::trunc);
+    fs << m_task_info.version();
+    fs.close();
+    StartMonitor();
 }
 
 void CommandTaskRunner::StopPost() {
@@ -383,7 +449,7 @@ void CommandTaskRunner::Status(TaskStatus* status) {
         LOG(WARNING, "cpu usage %f memory usage %ld",
                 status->cpu_usage(), status->memory_usage());
     }
-    
+    status->set_task_meta_version(m_task_info.version());
     status->set_job_id(m_task_info.job_id());
     LOG(INFO, "task with id %ld state %d", 
             m_task_info.task_id(),

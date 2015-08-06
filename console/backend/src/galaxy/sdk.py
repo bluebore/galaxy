@@ -155,6 +155,24 @@ class GalaxySDK(object):
                 base.job_name = job.job_name
                 base.running_task_num = job.running_task_num
                 base.replica_num = job.replica_num
+                base.job_raw = job.job_raw
+                base.cmd_line = job.cmd_line
+                base.cpu_share = job.cpu_share
+                base.mem_share = job.mem_share
+                base.deploy_step_size = job.deploy_step_size
+                base.killed = job.killed
+                base.cpu_limit = job.cpu_limit
+                base.one_task_per_host = job.one_task_per_host
+                base.version = job.version
+                update_info = BaseEntity()
+                update_info.update_step_size = job.update_job_info.update_step_size
+                update_info.version = job.update_job_info.version
+                update_info.cmd_line = job.update_job_info.cmd_line
+                update_info.job_raw = job.update_job_info.job_raw
+                update_info.migrate_delay_time = job.update_job_info.migrate_delay_time
+                update_info.switch_sched_type_num = job.update_job_info.switch_sched_type_num
+                update_info.is_suspended = job.update_job_info.is_suspended
+                base.update_job_info = update_info
                 trace = BaseEntity()
                 trace.killed_count = job.trace.killed_count
                 trace.overflow_killed_count = job.trace.overflow_killed_count
@@ -164,6 +182,8 @@ class GalaxySDK(object):
                 trace.deploy_start_time = job.trace.deploy_start_time
                 trace.deploy_end_time = job.trace.deploy_end_time
                 trace.state = SCHEDULE_STATE_MAP[job.trace.state]
+                trace.need_update_size = job.trace.need_update_size
+                trace.updating_size = job.trace.updating_size
                 base.trace = trace
                 ret.append(base)
             return True,ret
@@ -171,12 +191,24 @@ class GalaxySDK(object):
             LOG.exception('fail to list jobs')
         return False,[]
 
-    def update_job(self,id,replicate_num, deploy_step_size = None):
+    def update_job(self, id, 
+                        replicate_num, 
+                        package,
+                        deploy_step_size,
+                        update_step_size,
+                        is_suspended,
+                        switch_sched_type_num):
+        LOG.info("update job pkg %s , replicate_num %d, deploy_step_size %d, update_step_size %d, switch_sched_type_num %s"%(
+            package, replicate_num, deploy_step_size, update_step_size, switch_sched_type_num
+            ))
         req = master_pb2.UpdateJobRequest()
-        req.job_id = int(id)
-        req.replica_num = int(replicate_num)
-        if deploy_step_size != None :
-            req.deploy_step_size = deploy_step_size;          
+        req.job_id = id
+        req.replica_num = replicate_num
+        req.job_raw = package 
+        req.is_suspended = is_suspended
+        req.switch_sched_type_num = switch_sched_type_num 
+        req.deploy_step_size = deploy_step_size
+        req.update_step_size = update_step_size
         master = master_pb2.Master_Stub(self.channel)
         controller = client.Controller()
         controller.SetTimeout(1.5)
@@ -216,6 +248,7 @@ class GalaxySDK(object):
                 base.mem_used = task.memory_usage
                 base.cpu_used = task.cpu_usage
                 base.start_time = task.start_time
+                base.version = task.info.version
                 ret.append(base)
             return True,ret
         except:
@@ -247,6 +280,7 @@ class GalaxySDK(object):
                 base.mem_used = task.memory_usage
                 base.cpu_used = task.cpu_usage
                 base.start_time = task.start_time
+                base.version = task.info.version
                 ret.append(base)
             return True,ret
         except:

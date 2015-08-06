@@ -59,6 +59,7 @@
         <th>#id</th>
         <th>任务名称</th>
         <th>任务状态</th>
+        <th>任务版本</th>
         <th>资源状态(allocated/limit)</th>
         <th>agent</th>
       </tr>
@@ -68,6 +69,7 @@
         <td>{{task.id}}</td>
         <td><a href="{{task.path}}" target="__blank">{{task.name}}</a></td>
         <td>{{task.status}}</td>
+        <td>{{task.version}}</td>
         <td>CPU:{{task.cpu_used}}/{{task.cpu_limit}}</br>
             MEM:{{task.mem_used}}/{{task.mem_limit}}
         </td>

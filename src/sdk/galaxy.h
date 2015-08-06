@@ -62,6 +62,9 @@ struct JobDescription{
     double cpu_limit;
     bool one_task_per_host;
     std::string restrict_tag;
+    bool is_suspended;
+    int32_t update_step_size;
+    int32_t switch_sched_type_num;
 };
 
 struct NodeDescription {

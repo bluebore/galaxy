@@ -6,7 +6,8 @@
       <tr>
         <th>#id</th>
         <th>服务名称</th>
-        <th>状态</th>
+        <th>调度状态</th>
+        <th>更新状态</th>
         <th>调度历史</th>
         <th>运行任务</th>
         <th>总任务</th>
@@ -23,6 +24,11 @@
                    <span ng-if="service.trace.state == 'NoResource'" class="label label-danger">NoResource</span>
                    <span ng-if="service.trace.state == 'NoFitAgent'" class="label label-default">NoFitAgent</span>
           </td>
+          <td> 
+             <span  class="label label-primary" tooltip-placement="left" tooltip="第一个数字表示正在更新数，第二表示需要更新数，此时正在更新版本{{service.version}}" ng-if="!service.update_job_info.is_suspended && service.trace.need_update_size !=0 ">Updating:{{service.trace.updating_size}}/{{service.trace.need_update_size}} </span> 
+             <span ng-if="service.update_job_info.is_suspended" class="label label-default">Suspended</span>
+             <span tooltip-placement="left" tooltip="job版本{{service.version}}更新完成" ng-if="!service.update_job_info.is_suspended && service.trace.need_update_size==0" class="label label-success">Done</span>
+         </td>
         <td><a href ng-click="listTaskHistory(service)">调度历史</a></td>
     <td><a href ng-click="listTaskByService(service)">{{service.running_task_num}}</a> </td>
         <td>{{service.replica_num}}</td>

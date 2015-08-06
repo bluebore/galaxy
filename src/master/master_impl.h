@@ -79,7 +79,6 @@ typedef boost::multi_index::multi_index_container<
     >
 > AgentLoadIndex;
 
-
 struct JobInfo {
     int64_t id;
     int32_t replica_num;
@@ -104,6 +103,20 @@ struct JobInfo {
     std::set<std::string> restrict_tags;
     std::map<std::string, int32_t> sched_agent;
     JobInstanceTrace trace;
+    // 用于更新操作
+    int32_t version;
+    // job类型，不同类型是使用不同的调度器
+    SchedulerType sched_type;
+    // 用于更新job的配置信息
+    UpdateJobInfo update_job_info;
+    // 记录正在更新任务
+    std::set<int64_t> updating_tasks;
+    // 记录需要更新的任务
+    std::set<int64_t> need_update_tasks;
+    // last update
+    boost::unordered_map<int64_t, int64_t> last_task_updates;
+    // 记录已经更新的tasks,用于调度类型切换
+    std::set<int64_t> updated_tasks;
 };
 
 class RpcClient;
@@ -162,9 +175,11 @@ private:
     bool UpdatePersistenceTag(const PersistenceTagEntity& entity);
     void DeadCheck();
     void Schedule();
+    void KeepUpdate();
     bool ScheduleTask(JobInfo* job, const std::string& agent_addr);
     void UpdateJobsOnAgent(AgentInfo* agent,
                            const std::set<int64_t>& running_tasks,
+                           const std::set<int64_t>& need_update_tasks,
                            bool clear_all = false);
     bool CancelTaskOnAgent(AgentInfo* agent, int64_t task_id);
     void ScaleDown(JobInfo* job, int killed_num);
@@ -190,6 +205,9 @@ private:
             std::string agent_addr,
             const KillTaskRequest*, 
             KillTaskResponse*, bool, int);
+    int SendUpdateCmd(const UpdateJobInfo& update_job_info, 
+                      const AgentInfo& agent,
+                      int64_t task_id);
 private:
     /// Global threadpool
     common::ThreadPool thread_pool_;
