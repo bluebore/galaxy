@@ -232,6 +232,7 @@ void MasterImpl::ListNode(::google::protobuf::RpcController* /*controller*/,
         for (; inner_it != agent.tags.end(); ++inner_it) {
             node->add_tags(*inner_it);
         }
+        node->set_state(agent.state);
     }
     done->Run();
 }
@@ -363,6 +364,7 @@ void MasterImpl::DeadCheck() {
                 agent.addr.c_str(), agent.running_tasks.size(), it->first, now_time);
             std::set<int64_t> running_tasks;
             UpdateJobsOnAgent(&agent, running_tasks, true);
+            agent.state = kOffline;
             RemoveIndex(agent.id);
             //agents_.erase(*node);
             it->second.erase(node);
@@ -561,6 +563,7 @@ void MasterImpl::HeartBeat(::google::protobuf::RpcController* /*controller*/,
         agent->stub = NULL;
         agent->version = 1;
         agent->alive_timestamp = now_time;
+        agent->state = kHealthy;
         std::set<std::string> tags;
         boost::unordered_map<std::string,std::set<std::string> >::iterator tag_it = tags_.begin();
         for (;tag_it != tags_.end(); ++tag_it) {
@@ -583,6 +586,7 @@ void MasterImpl::HeartBeat(::google::protobuf::RpcController* /*controller*/,
         }
         alives_[now_time].insert(agent_addr);
         agent->alive_timestamp = now_time;
+        agent->state = kHealthy;
         if(request->version() < agent->version){
             LOG(WARNING,"mismatch agent version expect %d but %d ,heart beat message is discard", agent->version, request->version());
             response->set_agent_id(agent->id);

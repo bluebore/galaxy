@@ -54,6 +54,7 @@ class GalaxySDK(object):
                 base.mem_allocated = node.mem_allocated
                 base.mem_used = node.mem_used
                 base.cpu_used = node.cpu_used
+                base.stat = node.stat
                 ret.append(base)
             return ret
         except:

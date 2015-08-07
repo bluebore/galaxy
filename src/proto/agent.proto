@@ -23,6 +23,8 @@ message RunTaskRequest {
     optional string monitor_conf = 11;
 
     optional AgentResourceScheduleMode schedule_mode = 12;
+    // task configuration version which will be report to master
+    optional int32 version = 13;
 }
 
 message RunTaskResponse {
@@ -47,9 +49,22 @@ message SetPasswordResponse {
     optional int32 status = 1;    
 }
 
+message UpdateTaskRequest {
+    required int64 task_id = 1;
+    // just support package update currently
+    required bytes task_raw = 2;
+    required int32 version = 3;
+}
+
+message UpdateTaskResponse {
+    optional int32 status = 1;
+}
+
+
 service Agent {
     rpc RunTask(RunTaskRequest) returns(RunTaskResponse);
     rpc KillTask(KillTaskRequest) returns(KillTaskResponse);
     rpc SetPassword(SetPasswordRequest) returns (SetPasswordResponse);
+    rpc UpdateTask(UpdateTaskRequest) returns (UpdateTaskResponse);
 }
 

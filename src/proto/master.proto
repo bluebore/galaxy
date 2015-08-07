@@ -21,6 +21,12 @@ enum ScheduleState {
     // 没有适合的agent
     kNoFitAgent = 2;
 }
+
+enum AgentState {
+    kOffline = 0;
+    kHealthy = 1;
+}
+
 message HeartBeatRequest {
     optional int64 seq_id = 1;      // id for communicate
     optional int64 agent_id = 2 [default = -1];
@@ -62,7 +68,12 @@ message NewJobResponse {
 message UpdateJobRequest {
     optional int64 job_id = 3;
     optional int32 replica_num = 4;
-    optional int32 deploy_step_size = 5;
+    // new source package
+    optional bytes job_raw = 5;
+    optional int32 update_step_size = 7;
+    // control update and pause 
+    optional bool is_updating = 8;
+    optional int32 deploy_step_size = 9;
 };
 
 message UpdateJobResponse {
@@ -115,6 +126,9 @@ message JobCheckPointCell {
     optional bool one_task_per_host = 11;
     repeated string restrict_tags = 12;
     optional bytes monitor_conf = 13;
+    optional int32 version = 14;
+    optional bool is_updating = 15;
+    optional int32 update_step_size = 16;
 }
 
 message JobInstanceTrace {
@@ -161,6 +175,7 @@ message NodeInstance {
     optional double cpu_allocated = 9;
     optional int64 mem_allocated = 10;
     repeated string tags = 11;
+    optional AgentState state = 12;
 }
 
 message ListNodeRequest {

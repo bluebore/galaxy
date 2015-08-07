@@ -16,6 +16,7 @@ message TaskStatus{
     optional double cpu_usage = 3;
     optional int64 memory_usage = 4;
     optional int64 job_id = 5; // use to rebuild master 
+    optional int32 task_meta_version = 6;
 }
 
 message TaskInfo{
@@ -37,6 +38,8 @@ message TaskInfo{
     optional int32 frozen_time = 13;
     optional int32 dynamic_schedule_high_threshold = 14;
     optional int32 dynamic_schedule_low_threshold = 15;
+
+    optional int32 version = 16;
 }
 
 

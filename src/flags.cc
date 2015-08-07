@@ -51,5 +51,6 @@ DEFINE_string(pam_pwd_dir, "/tmp/", "directory that stores galaxy-ssh passwords 
 DEFINE_int32(master_reschedule_error_delay_time, 5000, "master for error job on the same agent reschedule delay time");
 DEFINE_int32(agent_heartbeat_timeout, 5000, "agent heartbeat rpc timeout");
 DEFINE_int32(agent_heartbeat_interval, 5000, "agent heartbeat interval");
+DEFINE_int32(cgroup_cpu_adjust_max, 10, "if cpu_limit is greater than this, adjust will minus 0.5 core or plus 0.5 core");
 
 /* vim: set expandtab ts=4 sw=4 sts=4 tw=100: */
