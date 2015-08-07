@@ -32,7 +32,7 @@ DEFINE_int32(agent_memory, 123123, "agent memory");
 DEFINE_string(agent_initd_bin, "../initd", "initd bin path");
 
 DEFINE_int32(agent_monitor_pods_interval, 10, "agent monitor pods interval, unit seconds");
-DEFINE_int32(agent_rpc_initd_timeout, 2, "agent monitor initd interval, unit seconds");
+DEFINE_int32(agent_rpc_initd_timeout, 20000, "agent monitor initd interval, unit seconds");
 
 // gce
 DEFINE_string(gce_cgroup_root, "/cgroups/", "Cgroup root mount path");

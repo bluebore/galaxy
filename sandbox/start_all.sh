@@ -5,11 +5,11 @@ echo "start master"
 nohup  ../master --flagfile=galaxy.flag >master.log 2>&1 &
 sleep 2
 echo "start gced"
-nohup ../gced --gce_initd_bin=../../initd --flagfile=galaxy.flag > gced.log 2>&1 &
+nohup ../gced --flagfile=galaxy.flag > gced.log 2>&1 &
 
 sleep 1
 echo "start agent"
-nohup  ../agent --agent_initd_bin=../../initd --flagfile=galaxy.flag >agent.log 2>&1 &
+nohup  ../agent --flagfile=galaxy.flag >agent.log 2>&1 &
 
 sleep 1
 echo "start scheduler"
