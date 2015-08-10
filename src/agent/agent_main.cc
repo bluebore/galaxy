@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <signal.h>
 
 #include "gflags/gflags.h"
 #include "sofa/pbrpc/pbrpc.h"
@@ -49,6 +50,8 @@ int main (int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
 
+    signal(SIGTERM, StopSigHandler);
+    signal(SIGINT, StopSigHandler);
     while (!s_is_stop) {
         sleep(5); 
     }
