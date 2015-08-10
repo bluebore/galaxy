@@ -136,7 +136,7 @@ int32_t Scheduler::ScheduleScaleUp(std::vector<JobInfo*>& pending_jobs,
 
     for (std::vector<PodScaleUpCell*>::iterator pod_it =
       keep_running_pods.begin();
-      pod_it != pending_pods.end(); ++pod_it) {
+      pod_it != keep_running_pods.end(); ++pod_it) {
         delete *pod_it;
     }
     return propose_count;
