@@ -14,7 +14,7 @@ DEFINE_string(master_host, "localhost", "Master service hostname");
 // master
 DEFINE_string(master_port, "7828", "Master service listen port");
 DEFINE_int32(master_agent_timeout, 40000, "Agent timeout");
-DEFINE_int32(master_agent_rpc_timeout, 10000, "Agent RPC timeout");
+DEFINE_int32(master_agent_rpc_timeout, 10, "Agent RPC timeout, unit seconds");
 DEFINE_int32(master_query_period, 30000, "Query period");
 DEFINE_string(master_lock_path, "/master_lock", "master lock name on nexus");
 DEFINE_string(master_path, "/master", "master path on nexus");
@@ -32,7 +32,7 @@ DEFINE_int32(agent_memory, 123123, "agent memory");
 DEFINE_string(agent_initd_bin, "../initd", "initd bin path");
 
 DEFINE_int32(agent_monitor_pods_interval, 10, "agent monitor pods interval, unit seconds");
-DEFINE_int32(agent_rpc_initd_timeout, 20000, "agent monitor initd interval, unit seconds");
+DEFINE_int32(agent_rpc_initd_timeout, 2, "agent monitor initd interval, unit seconds");
 
 // gce
 DEFINE_string(gce_cgroup_root, "/cgroups/", "Cgroup root mount path");
