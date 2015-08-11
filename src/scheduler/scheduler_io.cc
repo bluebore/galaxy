@@ -34,8 +34,16 @@ bool SchedulerIO::Init() {
     master_addr_ = master_watcher_.GetMasterEndpoint();
     LOG(INFO, "create scheduler io from master %s", master_addr_.c_str());
     bool ret = rpc_client_.GetStub(master_addr_, &master_stub_);
-    assert(ret == true);
+    assert(ret);
     return ok;
+}
+
+static inline void CleanUp(std::vector<ScheduleInfo*>& propose) {
+    for (std::vector<ScheduleInfo*>::iterator it = propose.begin();
+                it != propose.end(); ++it) {
+        delete *it;
+    }
+    propose.clear();
 }
 
 void SchedulerIO::Loop() {
@@ -96,17 +104,20 @@ void SchedulerIO::Loop() {
     int32_t status = scheduler_.ScheduleScaleUp(pending_jobs, &propose);
     if (status < 0) {
         LOG(INFO, "fail to schedule scale up ");
-        goto END;
+        CleanUp(propose);
+        return;
     }
     status = scheduler_.ScheduleScaleDown(reducing_jobs, &propose);
     if (status < 0) {
         LOG(INFO, "fail to schedule scale down ");
-        goto END;
+        CleanUp(propose);
+        return;
     }
     status = scheduler_.ScheduleAgentOverLoad(&propose);
     if (status < 0) {
         LOG(INFO, "fail to schedule agent overload");
-        goto END;
+        CleanUp(propose);
+        return;
     }
 
     for (std::vector<ScheduleInfo*>::iterator it = propose.begin();
@@ -122,12 +133,8 @@ void SchedulerIO::Loop() {
     if (!ret) {
         LOG(INFO, "fail to propose");
     }
-END:
-    for (std::vector<ScheduleInfo*>::iterator it = propose.begin();
-                it != propose.end(); ++it) {
-        delete *it;
-    }
-    propose.clear();
+
+    CleanUp(propose);
 }
 
 } // galaxy
