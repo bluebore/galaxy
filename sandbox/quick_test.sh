@@ -12,6 +12,7 @@ echo "--agent_mem_share=1000000" >> galaxy.flag
 
 echo "--nexus_servers=$hn:8868,$hn:8869,$hn:8870,$hn:8871,$hn:8872" >> galaxy.flag
 echo "--gce_initd_bin=`pwd`/../initd" >> galaxy.flag
+echo "--agent_initd_bin=`pwd`/../initd" >> galaxy.flag
 test -e work_dir && rm -rf work_dir
 echo "--gce_work_dir=./work_dir" >> galaxy.flag
 

@@ -14,7 +14,7 @@ DEFINE_string(master_host, "localhost", "Master service hostname");
 // master
 DEFINE_string(master_port, "7828", "Master service listen port");
 DEFINE_int32(master_agent_timeout, 40000, "Agent timeout");
-DEFINE_int32(master_agent_rpc_timeout, 10000, "Agent RPC timeout");
+DEFINE_int32(master_agent_rpc_timeout, 10, "Agent RPC timeout, unit seconds");
 DEFINE_int32(master_query_period, 30000, "Query period");
 DEFINE_string(master_lock_path, "/master_lock", "master lock name on nexus");
 DEFINE_string(master_path, "/master", "master path on nexus");
@@ -29,7 +29,7 @@ DEFINE_int32(agent_heartbeat_interval, 1000, "agent haertbeat interval ms");
 DEFINE_string(agent_ip, "127.0.0.1", "agent host ip");
 DEFINE_int32(agent_millicores, 123123, "agent millicores");
 DEFINE_int32(agent_memory, 123123, "agent memory");
-DEFINE_string(agent_initd_bin, "./initd", "initd bin path");
+DEFINE_string(agent_initd_bin, "../initd", "initd bin path");
 
 DEFINE_int32(agent_monitor_pods_interval, 10, "agent monitor pods interval, unit seconds");
 DEFINE_int32(agent_rpc_initd_timeout, 2, "agent monitor initd interval, unit seconds");
@@ -41,5 +41,5 @@ DEFINE_int64(gce_initd_zombie_check_interval, 10000, "Initd Zombie Check Interva
 DEFINE_string(gce_initd_dump_file, "initd_checkpoint_file", "Initd Checkpoint File Name");
 DEFINE_string(gce_initd_port, "8765", "gce initd listen port");
 DEFINE_string(gce_gced_port, "8766", "gce initd listen port");
-DEFINE_string(gce_initd_bin, "./initd", "initd bin path");
+DEFINE_string(gce_initd_bin, "../initd", "initd bin path");
 DEFINE_string(gce_work_dir, "./work_dir", "the work dir for storaging job package and runtime dir");
