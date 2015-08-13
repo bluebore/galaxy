@@ -8,6 +8,7 @@
 #define AGENT_WORKSPACE_H
 #include <string>
 #include "proto/task.pb.h"
+#include "proto/agent.pb.h"
 #include "common/mutex.h"
 
 namespace galaxy{
@@ -43,6 +44,8 @@ public:
     virtual std::string GetPath() = 0 ;
     virtual TaskInfo GetTaskInfo() = 0;
     virtual ~Workspace(){}
+    virtual bool LoadPersistenceInfo(const WorkspacePersistence& info) = 0;
+    virtual bool DumpPersistenceInfo(WorkspacePersistence* info) = 0;
 };
 
 class DefaultWorkspace:public Workspace{
@@ -64,7 +67,8 @@ public:
     }
     TaskInfo GetTaskInfo();
 
-
+    bool LoadPersistenceInfo(const WorkspacePersistence& info);
+    bool DumpPersistenceInfo(WorkspacePersistence* info);
 private:
     void DeployInThread();
     int MakePath(const char *path, mode_t mode);

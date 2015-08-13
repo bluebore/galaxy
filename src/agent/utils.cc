@@ -239,6 +239,17 @@ bool IsLink(const std::string& path, bool& is_link) {
     return true;
 }
 
+bool IsExists(const std::string& path, bool& is_exists) {
+    struct stat stat_buf;
+    int ret = ::lstat(path.c_str(), &stat_buf);
+    if (ret < 0) {
+        is_exists = false; 
+    } else {
+        is_exists = true; 
+    }
+    return true;
+}
+
 bool IsFile(const std::string& path, bool& is_file) {
     struct stat stat_buf;
     int ret = lstat(path.c_str(), &stat_buf);

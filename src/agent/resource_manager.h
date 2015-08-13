@@ -10,6 +10,7 @@
 
 #include <map>
 #include "common/mutex.h"
+#include "proto/agent.pb.h"
 namespace galaxy {
 
 //agent resource description
@@ -41,6 +42,8 @@ public:
     int Allocate(const TaskResourceRequirement& requirement, int64_t task_id);
     void Free(int64_t task_Id);
     void Status(AgentResource* resource);
+    bool DumpPersistenceInfo(ResourceManagerPersistence* info); 
+    bool LoadPersistenceInfo(const ResourceManagerPersistence& info);
 private:
     void Remove(int64_t task_id);
     bool CanAllocate(const TaskResourceRequirement& requirement,int64_t task_id);

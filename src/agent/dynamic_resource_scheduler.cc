@@ -58,7 +58,8 @@ DynamicResourceScheduler::DynamicResourceScheduler(
       right_threshold_in_quota_(100),
       left_threshold_out_of_quota_(60),
       right_threshold_out_of_quota_(100),
-      extra_queue_() {
+      extra_queue_(),
+      stop_(false) {
     scheduler_thread_ = new ThreadPool(1);
     scheduler_thread_->DelayTask(schedule_interval_, 
             boost::bind(&DynamicResourceScheduler::ScheduleResourceUsage, 
@@ -625,6 +626,9 @@ void DynamicResourceScheduler::CalcCpuNeed(
 
 void DynamicResourceScheduler::ScheduleResourceUsage() {
     common::MutexLock scope_lock(&lock_);    
+    if (stop_) {
+        return; 
+    }
     std::vector<ScheduleCell*> schedule_vector;
     // 1. calc for need
     CalcCpuNeed(&schedule_vector);
@@ -656,6 +660,79 @@ void DynamicResourceScheduler::ScheduleResourceUsage() {
             boost::bind(&DynamicResourceScheduler::ScheduleResourceUsage, 
                 this));
     return;
+}
+
+bool DynamicResourceScheduler::DumpPersistenceInfo(
+        DynamicSchedulerPersistence* info) {
+    if (info == NULL) {
+        return false; 
+    }
+
+    common::MutexLock scope_lock(&lock_);    
+    info->set_cpu_cores_left(cpu_cores_left_);
+    info->set_left_threshold(left_threshold_in_quota_);
+    info->set_right_threshold(right_threshold_in_quota_);
+    
+    ScheduleCellsMap::iterator it = schedule_cells_.begin();
+    for (; it != schedule_cells_.end(); ++it) {
+        ScheduleCell& cell = it->second;     
+        SchedulerCellPersistence* p_cell = info->add_cells();
+        p_cell->set_cgroup_name(cell.cgroup_name);
+        p_cell->set_cpu_quota(cell.cpu_quota);
+        p_cell->set_cpu_limit(cell.cpu_limit);
+        p_cell->set_cpu_extra(cell.cpu_extra);
+        p_cell->set_frozen_schedule(cell.frozen_schedule);
+        p_cell->set_frozen_time(cell.frozen_time);
+    }
+    return true;
+}
+
+bool DynamicResourceScheduler::LoadPersistenceInfo(
+        const DynamicSchedulerPersistence& info) {
+    common::MutexLock scope_lock(&lock_);    
+    if (info.has_cpu_cores_left()) {
+        cpu_cores_left_ = info.cpu_cores_left();
+    } else {
+        return false; 
+    }
+    if (info.has_left_threshold()) {
+        left_threshold_in_quota_ = info.left_threshold();
+    } else {
+        return false; 
+    }
+    if (info.has_right_threshold()) {
+        right_threshold_in_quota_ = info.right_threshold();
+    } else {
+        return false; 
+    }
+
+    schedule_cells_.clear();
+    for (int i = 0; i < info.cells_size(); i++) {
+        SchedulerCellPersistence p_cell = info.cells(i); 
+        ScheduleCell cell;  
+        cell.cgroup_name = p_cell.cgroup_name();
+        cell.cpu_quota = p_cell.cpu_quota();
+        cell.cpu_limit = p_cell.cpu_limit();
+        cell.cpu_extra = p_cell.cpu_extra();
+        cell.last_scheduler_time = 0;
+        cell.collector = NULL;
+        cell.collector_id = -1;
+        cell.cpu_extra_need = 0;
+        cell.frozen_schedule = p_cell.frozen_schedule();
+        cell.frozen_time = p_cell.frozen_time();
+        CGroupResourceCollector* collector = 
+            new CGroupResourceCollector(cell.cgroup_name);
+        ResourceCollectorEngine* engine = 
+            GetResourceCollectorEngine();
+        cell.collector_id = engine->AddCollector(collector);
+        cell.collector = collector;
+        schedule_cells_[cell.cgroup_name] = cell;
+        LOG(INFO, "[DYNAMIC_SCHEDULE] load %s "
+                "cpu_limit %ld cpu_extra %ld", 
+                cell.cgroup_name.c_str(), 
+                cell.cpu_limit, cell.cpu_extra);
+    }
+    return true; 
 }
 
 }   // ending namespace galaxy

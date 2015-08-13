@@ -87,7 +87,54 @@ void ResourceManager::Remove(int64_t task_id){
     task_req_map_.erase(it);
 }
 
+bool ResourceManager::DumpPersistenceInfo(
+        ResourceManagerPersistence* info) {
+    if (info == NULL)
+        return false;
 
+    common::MutexLock lock(&mutex_);
+    info->set_total_cpu(resource_.total_cpu); 
+    info->set_total_mem(resource_.total_mem);
+    info->set_left_cpu(resource_.the_left_cpu);
+    info->set_left_mem(resource_.the_left_mem);
+
+    std::map<int64_t, TaskResourceRequirement>::iterator it 
+        = task_req_map_.begin();
+    for (; it != task_req_map_.end(); ++it) {
+        TaskResourceRequirement& require = it->second; 
+        ResourceRequirePersistence* p_require = info->add_resource_requires();
+        p_require->set_id(it->first);
+        p_require->set_cpu_limit(require.cpu_limit);
+        p_require->set_mem_limit(require.mem_limit);
+    }
+    return true;
+}
+
+bool ResourceManager::LoadPersistenceInfo(
+        const ResourceManagerPersistence& info) {
+    common::MutexLock lock(&mutex_);
+    if (!info.has_total_cpu()
+            || !info.has_total_mem()
+            || !info.has_left_cpu()
+            || !info.has_left_mem()) {
+        return false; 
+    }
+
+    resource_.total_cpu = info.total_cpu();
+    resource_.total_mem = info.total_mem();
+    resource_.the_left_cpu = info.left_cpu();
+    resource_.the_left_mem = info.left_mem();
+
+    for (int i = 0; i < info.resource_requires_size(); i++) {
+        const ResourceRequirePersistence& p_require 
+            = info.resource_requires(i);
+        TaskResourceRequirement require;
+        require.cpu_limit = p_require.cpu_limit();
+        require.mem_limit = p_require.mem_limit();
+        task_req_map_[p_require.id()] = require;
+    }
+    return true;
+}
 
 }
 

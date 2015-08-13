@@ -71,6 +71,70 @@ int AbstractTaskRunner::IsProcessRunning(pid_t process){
     return ret;
 }
 
+bool AbstractTaskRunner::LoadPersistenceInfo(
+        const ::galaxy::TaskPersistence& info) {
+    if (!info.has_task_info()
+            || !info.has_child_pid()
+            || !info.has_group_pid()
+            || !info.has_monitor_pid()
+            || !info.has_monitor_gid()
+            || !info.has_has_retry_times()
+            || !info.has_task_state()) {
+        return false; 
+    }
+
+    m_task_info.CopyFrom(info.task_info());
+    m_child_pid = info.child_pid();
+    m_group_pid = info.group_pid();
+    m_monitor_pid = info.monitor_pid();
+    m_monitor_gid = info.monitor_gid();
+    m_has_retry_times = info.has_retry_times();
+    m_task_state = info.task_state();
+    //NOTE not running to master reschedule
+    if (m_task_state != RUNNING) {
+        SetStatus(ERROR);
+    }
+    persistence_path_dir_ = info.persistence_path();
+    LOG(DEBUG, "[PERSISTENCE] task runner load persistence "
+            "info[%ld:%d:%d:%d:%d:%d:%d:%s]",
+            m_task_info.task_id(),
+            m_child_pid,
+            m_group_pid,
+            m_monitor_pid,
+            m_monitor_gid,
+            m_has_retry_times,
+            m_task_state,
+            persistence_path_dir_.c_str());
+    return true;
+}
+
+bool AbstractTaskRunner::DumpPersistenceInfo(
+        ::galaxy::TaskPersistence* info) {
+    if (info == NULL) {
+        return false; 
+    }
+    LOG(DEBUG, "[PERSISTENCE] task runner dump persistence "
+            "info[%ld:%d:%d:%d:%d:%d:%d:%s]",
+            m_task_info.task_id(),
+            m_child_pid,
+            m_group_pid,
+            m_monitor_pid,
+            m_monitor_gid,
+            m_has_retry_times,
+            m_task_state,
+            persistence_path_dir_.c_str());
+
+    info->mutable_task_info()->CopyFrom(m_task_info);
+    info->set_child_pid(m_child_pid);
+    info->set_group_pid(m_group_pid);
+    info->set_monitor_pid(m_monitor_pid);
+    info->set_monitor_gid(m_monitor_gid);
+    info->set_has_retry_times(m_has_retry_times);
+    info->set_task_state(m_task_state);
+    info->set_persistence_path(persistence_path_dir_);
+    return true;
+}
+
 int AbstractTaskRunner::IsRunning() {
     
     int ret = IsProcessRunning(m_child_pid);
@@ -382,6 +446,11 @@ void CommandTaskRunner::Status(TaskStatus* status) {
         status->set_memory_usage(collector_->GetMemoryUsage());
         LOG(WARNING, "cpu usage %f memory usage %ld",
                 status->cpu_usage(), status->memory_usage());
+    } else if (m_child_pid != -1) {
+        collector_ = new ProcResourceCollector(m_child_pid); 
+        ResourceCollectorEngine* engine =
+            GetResourceCollectorEngine();
+        collector_id_ = engine->AddCollector(collector_);
     }
     
     status->set_job_id(m_task_info.job_id());

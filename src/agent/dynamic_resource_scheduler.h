@@ -63,6 +63,14 @@ public:
             int64_t frozen_time = -1);
     void UnFrozen(const std::string& cgroup_name); 
     void KeepQuota(const std::string& cgroup_name);
+
+    bool LoadPersistenceInfo(const DynamicSchedulerPersistence& info);
+    bool DumpPersistenceInfo(DynamicSchedulerPersistence* info);
+
+    bool Stop() {
+        stop_ = true; 
+        return scheduler_thread_->Stop(false);
+    }
 private:
 
     void ScheduleResourceUsage();
@@ -95,6 +103,7 @@ private:
                 std::vector<ScheduleCell*>,
                 ScheduleCellComp> SchedulePriorityQueue;
     SchedulePriorityQueue extra_queue_;
+    bool stop_;
 };
 
 }   // ending namespace galaxy

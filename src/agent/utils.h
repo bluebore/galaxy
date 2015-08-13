@@ -41,6 +41,8 @@ bool IsFile(const std::string& path, bool& is_file);
 
 bool IsLink(const std::string& path, bool& is_link);
 
+bool IsExists(const std::string& path, bool& is_exists);
+
 }   // ending namespace galaxy
 }   // ending namespace galaxy
 

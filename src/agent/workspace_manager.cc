@@ -121,6 +121,8 @@ void WorkspaceManager::OnGCTimeout(const std::string path) {
     if (!file::Remove(path)) {
         LOG(WARNING, "rm gc %s failed", path.c_str()); 
     }        
+    common::MutexLock lock(m_mutex);
+    m_gc_event.erase(path);
 }
 
 int WorkspaceManager::Remove(int64_t task_info_id, std::string* gc_path, bool delay) {
@@ -143,8 +145,11 @@ int WorkspaceManager::Remove(int64_t task_info_id, std::string* gc_path, bool de
             if (0 != ws->MoveTo(m_gc_path)) {
                 return -1; 
             }
+            int32_t now = common::timer::now_time(); 
+            m_gc_event[ws->GetPath()] = now + FLAGS_agent_gc_timeout;
             m_gc_thread->DelayTask(FLAGS_agent_gc_timeout, 
-                    boost::bind(WorkspaceManager::OnGCTimeout, ws->GetPath()));
+                    boost::bind(&WorkspaceManager::OnGCTimeout, 
+                        this, ws->GetPath()));
         }
         if (gc_path != NULL) {
             *gc_path = ws->GetPath(); 
@@ -168,6 +173,88 @@ DefaultWorkspace* WorkspaceManager::GetWorkspace(const TaskInfo& task_info) {
 
 }
 
+bool WorkspaceManager::LoadPersistenceInfo(const WorkspaceManagerPersistence& info) {
+    MutexLock lock(m_mutex);
+    if (!info.has_root_path()
+            || !info.has_data_path() 
+            || !info.has_gc_path()) {
+        LOG(WARNING, "[PERSISTENCE] persistence info is not valid"); 
+        return false;
+    }
+    
+    m_root_path = info.root_path();
+    m_data_path = info.data_path();
+    m_gc_path = info.gc_path();
+   
+    LOG(DEBUG, "[PERSISTENCE] workspace manager load "
+            "persistence info[%s:%s:%s:%ld:%ld]",
+            m_root_path.c_str(), 
+            m_data_path.c_str(), 
+            m_gc_path.c_str(),
+            info.work_paths_size(),
+            info.gc_events_size());
+    for (int i = 0; i < info.work_paths_size(); i++) {
+        WorkspacePersistence work_info = info.work_paths(i); 
+        DefaultWorkspace* ws = new DefaultWorkspace(work_info.task_info(), m_data_path);
+        m_workspace_map[work_info.task_info().task_id()] = ws;
+        if (!ws->LoadPersistenceInfo(work_info)) {
+            return false; 
+        }
+    }
+
+    if (m_gc_thread == NULL) {
+        LOG(WARNING, "[PERSISTENCE] workspace manager gc thread not init yet"); 
+        return false;
+    }
+    int32_t now = common::timer::now_time();
+    for (int i = 0; i < info.gc_events_size(); i++) {
+        GarbageEvent event = info.gc_events(i); 
+        m_gc_event[event.garbage_path()] = event.gc_time();
+        int32_t delay_time = now - event.gc_time();
+        if (delay_time < 0) {
+            delay_time = 0; 
+        }
+        m_gc_thread->DelayTask(delay_time, boost::bind(&WorkspaceManager::OnGCTimeout,
+                    this, event.garbage_path()));
+    }
+    return true;
 }
+
+bool WorkspaceManager::DumpPersistenceInfo(WorkspaceManagerPersistence* info) {
+    if (info == NULL) {
+        return false; 
+    }
+
+    MutexLock lock(m_mutex);
+    info->set_root_path(m_root_path); 
+    info->set_data_path(m_data_path);
+    info->set_gc_path(m_gc_path);
+    LOG(DEBUG, "[PERSISTENCE] workspace manager "
+            "dump persistence info[%s:%s:%s:%ld:%ld]",
+            m_root_path.c_str(),
+            m_data_path.c_str(),
+            m_gc_path.c_str(),
+            m_workspace_map.size(),
+            m_gc_event.size());
+    std::map<std::string, int64_t>::iterator gc_it 
+        = m_gc_event.begin();
+    for (; gc_it != m_gc_event.end(); ++gc_it) {
+        GarbageEvent* gc_event_pb = info->add_gc_events();     
+        gc_event_pb->set_garbage_path(gc_it->first);
+        gc_event_pb->set_gc_time(gc_it->second);
+    }
+
+    std::map<int64_t, DefaultWorkspace*>::iterator work_it
+        = m_workspace_map.begin();  
+    for (; work_it != m_workspace_map.end(); ++work_it) {
+        WorkspacePersistence* workspace_path = info->add_work_paths();
+        if (!work_it->second->DumpPersistenceInfo(workspace_path)) {
+            return false; 
+        }
+    }
+    return true;
+}
+
+}   // ending namespace galaxy
 
 /* vim: set expandtab ts=4 sw=4 sts=4 tw=100: */

@@ -99,7 +99,7 @@ agent_service_sources='src/flags.cc\
                src/agent/utils.cc \
                src/agent/dynamic_resource_scheduler.cc'
 agent_password_test_sources=agent_service_sources+' src/gssh/agent_password_test.cc'
-gssh_password_sources='src/proto/agent.proto common/logging.cc src/gssh/gssh_password.cc'
+gssh_password_sources='src/proto/agent.proto src/proto/task.proto common/logging.cc src/gssh/gssh_password.cc'
 
 #Application('galaxy',Sources(user_sources))
 Application('agent',Sources(agent_sources))

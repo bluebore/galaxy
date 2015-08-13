@@ -22,6 +22,17 @@ DownloaderManager::DownloaderManager()
     downloader_process_pool_ = new common::ThreadPool(10);
 }
 
+bool DownloaderManager::Stop() {
+    common::MutexLock lock(&handler_lock_);    
+    std::map<int, Downloader*>::iterator it = 
+        downloader_handler_.begin();
+    for (; it != downloader_handler_.end(); ++it) {
+        it->second->Stop(); 
+    }
+
+    return downloader_process_pool_->Stop(false);
+}
+
 void DownloaderManager::DownloadThreadWrapper(
         int id, 
         std::string uri,

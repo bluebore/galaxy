@@ -28,6 +28,7 @@ public:
     AgentImpl();
     virtual ~AgentImpl();
 public:
+    bool InitData();
     void Report();
 
     /// Services
@@ -39,6 +40,9 @@ public:
                          const ::galaxy::KillTaskRequest* request,
                          ::galaxy::KillTaskResponse* response,
                          ::google::protobuf::Closure* done);
+   bool DumpPersistenceInfo(AgentServicePersistence* service_info);
+   bool LoadPersistenceInfo(const AgentServicePersistence& service_info);
+   bool Stop();
    virtual void SetPassword(::google::protobuf::RpcController* controller,
                             const ::galaxy::SetPasswordRequest* request,
                             ::galaxy::SetPasswordResponse* response,

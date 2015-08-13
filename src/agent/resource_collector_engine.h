@@ -36,6 +36,9 @@ public:
     void DelCollector(long collector_id);
 
     void Start();
+    bool Stop() {
+        return collector_thread_->Stop(false); 
+    }
 protected:
     void OnTimeout();
 

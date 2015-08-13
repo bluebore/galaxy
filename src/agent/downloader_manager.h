@@ -24,7 +24,7 @@ public:
             boost::function<void (int)> callback);
 
     void KillDownload(int id);
-
+    bool Stop();
 private:
     static DownloaderManager* instance_;
     static pthread_once_t once_;

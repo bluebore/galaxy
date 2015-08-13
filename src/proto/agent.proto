@@ -1,6 +1,8 @@
 
 package galaxy;
 
+import "task.proto";
+
 option cc_generic_services = true;
 option py_generic_services = true;
 
@@ -51,5 +53,82 @@ service Agent {
     rpc RunTask(RunTaskRequest) returns(RunTaskResponse);
     rpc KillTask(KillTaskRequest) returns(KillTaskResponse);
     rpc SetPassword(SetPasswordRequest) returns (SetPasswordResponse);
+}
+
+message GarbageEvent {
+    optional int64 id = 1;
+    optional string garbage_path = 2;
+    optional int64 gc_time = 3;
+}
+
+message WorkspacePersistence {
+    optional string root_path = 1;
+    optional string task_root_path = 2;
+    optional bool has_created = 3;
+    optional TaskInfo task_info = 4;
+}
+
+message WorkspaceManagerPersistence {
+    optional string root_path = 1;
+    optional string data_path = 2;
+    optional string gc_path = 3;
+    repeated GarbageEvent gc_events = 4;
+    repeated WorkspacePersistence work_paths = 5;
+}
+
+message TaskPersistence {
+    optional TaskInfo task_info = 1;
+    optional int32 child_pid = 2;
+    optional int32 group_pid = 3;
+    optional int32 monitor_pid = 4;
+    optional int32 monitor_gid = 5;
+    optional int32 has_retry_times = 6;
+    optional int32 task_state = 7;
+    optional string persistence_path = 8;
+}
+
+message TaskManagerPersistence {
+    optional string task_meta_dir = 1;
+    repeated TaskPersistence tasks = 2;
+}
+
+message ResourceRequirePersistence {
+    optional int64 id = 1;    
+    optional double cpu_limit = 2;
+    optional int64 mem_limit = 3;
+}
+
+message ResourceManagerPersistence {
+    optional double total_cpu = 1;
+    optional int64 total_mem = 2;
+    optional double left_cpu = 3;
+    optional int64 left_mem = 4;
+    repeated ResourceRequirePersistence resource_requires = 5;
+}
+
+message SchedulerCellPersistence {
+    optional string cgroup_name = 1;
+    optional int64 cpu_quota = 2;
+    optional int64 cpu_limit = 3;
+    optional int64 cpu_extra = 4;
+    optional bool frozen_schedule = 5;
+    optional int64 frozen_time = 6;
+}
+
+message DynamicSchedulerPersistence {
+    optional int64 cpu_cores_left = 1;
+    optional int64 left_threshold = 2;
+    optional int64 right_threshold = 3;
+    optional int64 scheduler_interval = 4; 
+    repeated SchedulerCellPersistence cells = 5;
+}
+
+
+message AgentServicePersistence {
+    optional string workspace_path = 1;    
+    optional WorkspaceManagerPersistence workspace_manager = 2;
+    optional TaskManagerPersistence task_manager = 3;
+    optional ResourceManagerPersistence resource_manager = 4;
+    optional DynamicSchedulerPersistence dynamic_scheduler = 5;
 }
 

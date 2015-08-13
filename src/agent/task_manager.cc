@@ -226,7 +226,69 @@ int TaskManager::Status(std::vector< TaskStatus >& task_status_vector, int64_t i
     return 0;
 }
 
+bool TaskManager::LoadPersistenceInfo(
+        const TaskManagerPersistence& info, 
+        WorkspaceManager* wmgr) {
+    common::MutexLock lock(m_mutex);
+    if (!info.has_task_meta_dir()) {
+        return false; 
+    }
+
+    m_task_meta_dir = info.task_meta_dir();
+    LOG(DEBUG, "[PERSISTENCE] task manager load "
+            "persistence info[%s:%ld]",
+            m_task_meta_dir.c_str(),
+            info.tasks_size());
+    for (int i = 0; i < info.tasks_size(); i++) {
+        TaskPersistence task_info = info.tasks(i);
+        DefaultWorkspace* ws = wmgr->GetWorkspace(task_info.task_info());
+        bool ret = true;
+        if(FLAGS_container.compare("cgroup") == 0){
+            ContainerTaskRunner* runner = 
+                new ContainerTaskRunner(task_info.task_info(), FLAGS_cgroup_root, ws);
+            ret = runner->LoadPersistenceInfo(task_info);
+            // if LoadPersistenceInfo fail, delete runner in runner_map
+            m_task_runner_map[task_info.task_info().task_id()] 
+                = static_cast<TaskRunner*>(runner); 
+        } else {
+            CommandTaskRunner* runner =      
+                new CommandTaskRunner(task_info.task_info(), ws);
+            ret = runner->LoadPersistenceInfo(task_info);
+            m_task_runner_map[task_info.task_info().task_id()] 
+                = static_cast<TaskRunner*>(runner);
+        }
+        if (!ret) {
+            return false; 
+        }
+    }
+    return true;
 }
+
+bool TaskManager::DumpPersistenceInfo(TaskManagerPersistence* info) {
+    if (info == NULL) {
+        return false; 
+    }
+
+    common::MutexLock lock(m_mutex);
+    info->set_task_meta_dir(m_task_meta_dir);
+
+    LOG(DEBUG, "[PERSISTENCE] task manager "
+            "dump persistence info[%s:%d]",
+            m_task_meta_dir.c_str(),
+            m_task_runner_map.size());
+    std::map<int64_t, TaskRunner*>::iterator it 
+        = m_task_runner_map.begin();
+    for (; it != m_task_runner_map.end(); ++it) {
+        TaskPersistence* task_info = info->add_tasks();         
+        TaskRunner* runner = it->second;
+        if (!runner->DumpPersistenceInfo(task_info)) {
+            return false;         
+        } 
+    }
+    return true;
+}
+
+}   // ending namespace galaxy
 
 
 

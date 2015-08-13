@@ -324,6 +324,7 @@ int ContainerTaskRunner::Prepare() {
 
     if (status != 0) {
         LOG(FATAL, "fail to create subsystem for task %ld,status %d", m_task_info.task_id(), status);
+        SetStatus(ERROR);
         return status;
     }
 
@@ -347,12 +348,14 @@ int ContainerTaskRunner::Prepare() {
     if (_mem_ctrl->SetKillMode(GROUP_KILL_MODE) != 0) {
         LOG(FATAL, "fail to set memory kill mode for task %ld",
                 m_task_info.task_id());
+        SetStatus(ERROR);
         return -1;
     }
 
     if (_mem_ctrl->SetLimit(mem_size) != 0) {
         LOG(FATAL, "fail to set memory limit for task %ld", 
                 m_task_info.task_id()); 
+        SetStatus(ERROR);
         return -1;
     }
 
@@ -364,6 +367,7 @@ int ContainerTaskRunner::Prepare() {
     if (_cpu_ctrl->SetCpuQuota(limit) != 0) {
         LOG(FATAL, "fail to set cpu quota for task %ld", 
                 m_task_info.task_id()); 
+        SetStatus(ERROR);
         return -1;
     }
     int64_t quota = static_cast<int64_t>(cpu_core * CPU_SHARE_PER_CPU);
@@ -373,6 +377,7 @@ int ContainerTaskRunner::Prepare() {
     if (_cpu_ctrl->SetCpuShare(quota) != 0) {
         LOG(FATAL, "fail to set cpu share for task %ld",
                 m_task_info.task_id()); 
+        SetStatus(ERROR);
         return -1;
     }
 
@@ -392,6 +397,7 @@ int ContainerTaskRunner::Prepare() {
 
     int ret = Start();
     if (0 != ret) {
+        SetStatus(ERROR);
         return ret;
     }
     StartMonitor();
@@ -561,6 +567,13 @@ void ContainerTaskRunner::Status(TaskStatus* status) {
         status->set_memory_usage(collector_->GetMemoryUsage());
         LOG(WARNING, "cpu usage %f memory usage %ld",
                 status->cpu_usage(), status->memory_usage());
+    } else {
+        std::string group_path = 
+            boost::lexical_cast<std::string>(
+                    m_task_info.task_id());    
+        ResourceCollectorEngine* engine =
+            GetResourceCollectorEngine();
+        collector_id_ = engine->AddCollector(collector_);
     }
     status->set_job_id(m_task_info.job_id());
     

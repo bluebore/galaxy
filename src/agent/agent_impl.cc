@@ -15,6 +15,8 @@
 #include "common/httpserver.h"
 #include <gflags/gflags.h>
 #include "agent/dynamic_resource_scheduler.h"
+#include "agent/downloader_manager.h"
+#include "agent/resource_collector_engine.h"
 
 DECLARE_string(master_addr);
 DECLARE_string(agent_port);
@@ -33,15 +35,6 @@ AgentImpl::AgentImpl() {
     rpc_client_ = new RpcClient();
     ws_mgr_ = new WorkspaceManager(FLAGS_agent_work_dir);
     task_mgr_ = new TaskManager();
-    if (!task_mgr_->Init()) {
-        LOG(FATAL, "task manager init failed");
-        assert(0);
-    }
-    // should kill task first
-    if (!ws_mgr_->Init()) {
-        LOG(FATAL, "workspace manager init failed");
-        assert(0);
-    }
     AgentResource resource;
     resource.total_cpu = FLAGS_cpu_num;
     resource.total_mem = FLAGS_mem_bytes;
@@ -71,6 +64,19 @@ AgentImpl::~AgentImpl() {
     delete task_mgr_;
     delete resource_mgr_;
     delete http_server_;
+}
+
+bool AgentImpl::InitData() {
+    if (!task_mgr_->Init()) {
+        LOG(FATAL, "task manager init failed");
+        return false;
+    }
+    // should kill task first
+    if (!ws_mgr_->Init()) {
+        LOG(FATAL, "workspace manager init failed");
+        return false;
+    }
+    return true;
 }
 
 void AgentImpl::Report() {
@@ -211,6 +217,115 @@ void AgentImpl::KillTask(::google::protobuf::RpcController* /*controller*/,
     response->set_status(status);
     response->set_gc_path(gc_path);
     done->Run();
+}
+
+bool AgentImpl::Stop() {
+    DownloaderManager* downloader_mgr = 
+        DownloaderManager::GetInstance();
+    bool ret = downloader_mgr->Stop();
+    if (!ret) {
+        LOG(WARNING, "downloader mgr stop failed"); 
+        return false;
+    }
+
+    DynamicResourceScheduler* dy_scheduler =
+        GetDynamicResourceScheduler();
+    ret = dy_scheduler->Stop();
+    if (!ret) {
+        LOG(WARNING, "dynamic scheduler stop failed");
+        return false;
+    }
+    ResourceCollectorEngine* engine = 
+        GetResourceCollectorEngine();
+    ret = engine->Stop();
+    if (!ret) {
+        LOG(WARNING, "resource collector stop failed");
+        return false;
+    }
+    delete http_server_;
+    http_server_ = NULL;
+    return thread_pool_.Stop(false); 
+}
+
+bool AgentImpl::DumpPersistenceInfo(
+        AgentServicePersistence* service_info) {
+    if (service_info == NULL) {
+        return false; 
+    }
+
+    WorkspaceManagerPersistence* wmgr_persistence = 
+        service_info->mutable_workspace_manager();
+    if (!ws_mgr_->DumpPersistenceInfo(wmgr_persistence)) {
+        LOG(WARNING, "[PERSISTENCE] workspace manager dump failed"); 
+        return false;
+    }
+
+    TaskManagerPersistence* tmgr_persistence = 
+        service_info->mutable_task_manager();
+    if (!task_mgr_->DumpPersistenceInfo(tmgr_persistence)) {
+        LOG(WARNING, "[PERSISTENCE] task manager dump failed"); 
+        return false;
+    }
+
+    ResourceManagerPersistence* rmgr_persistence =
+        service_info->mutable_resource_manager();
+    if (!resource_mgr_->DumpPersistenceInfo(rmgr_persistence)) {
+        LOG(WARNING, "[PERSISTENCE] resource manager dump failed"); 
+        return false;
+    }
+    service_info->set_workspace_path(workspace_root_path_);
+
+    DynamicSchedulerPersistence* dsr_persistence = 
+        service_info->mutable_dynamic_scheduler();
+    DynamicResourceScheduler* dy_scheduler 
+        = GetDynamicResourceScheduler();
+    if (!dy_scheduler->DumpPersistenceInfo(dsr_persistence)) {
+        LOG(WARNING, "[PERSISTENCE] dynamic scheduler dump failed"); 
+        return false;
+    }
+
+    LOG(INFO, "[PERSISTENCE] dump service info success");
+    return true;
+}
+
+bool AgentImpl::LoadPersistenceInfo(
+        const AgentServicePersistence& service_info) {
+    if (!service_info.has_workspace_path()
+            || !service_info.has_workspace_manager()
+            || !service_info.has_task_manager()
+            || !service_info.has_resource_manager()
+            || !service_info.has_dynamic_scheduler()) {
+        return false; 
+    }
+
+    workspace_root_path_ = service_info.workspace_path();
+    if (!ws_mgr_->LoadPersistenceInfo(
+                service_info.workspace_manager())) {
+        LOG(WARNING, "[PERSISTENCE] load workspace manager failed"); 
+        return false;
+    }
+
+    if (!task_mgr_->LoadPersistenceInfo(
+                service_info.task_manager(), ws_mgr_)) {
+        LOG(WARNING, "[PERSISTENCE] load task manager failed");
+        return false;
+    }
+
+    if (!resource_mgr_->LoadPersistenceInfo(
+                service_info.resource_manager())) {
+        LOG(WARNING, "[PERSISTENCE] load resource manager failed"); 
+        return false;
+    }
+     
+    DynamicResourceScheduler* dy_scheduler 
+        = GetDynamicResourceScheduler();
+    if (!dy_scheduler->LoadPersistenceInfo(
+                service_info.dynamic_scheduler())) {
+        LOG(WARNING, "[PERSISTENCE] load dynamic scheduler failed"); 
+        return false;
+    }
+    LOG(INFO, "[PERSISTENCE] load service info success");
+    return true;
 }
 
 void AgentImpl::SetPassword(::google::protobuf::RpcController* controller,

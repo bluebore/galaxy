@@ -28,7 +28,7 @@ DEFINE_double(cpu_num, 4, "cpu number");
 
 DEFINE_int32(resource_collector_engine_interval, 100, "rc collect engine interval");
 DEFINE_int32(dynamic_resource_scheduler_interval, 100, "dynamic scheduler interval for agent");
-DEFINE_bool(agent_dynamic_scheduler_switch, true, "dynamic scheduler switch");
+DEFINE_bool(agent_dynamic_scheduler_switch, false, "dynamic scheduler switch");
 
 DEFINE_int32(max_cpu_usage_history_len, 10, "dynamic scheduelr cpu usage history len");
 DEFINE_int32(max_cpu_deinc_delta, 50, "dynamic scheduler cpu cores max update delta");
@@ -46,6 +46,8 @@ DEFINE_int32(master_safe_mode_last, 30, "how many seconds the safe-mode goes on"
 DEFINE_int32(agent_cgroup_clear_retry_times, 20, "how many times for retry destroy cgroup");
 DEFINE_int32(agent_app_stop_wait_retry_times, 10, "how many times for stop wait");
 DEFINE_string(monitor_conf_path, "", "path of monitor conf");
+DEFINE_string(agent_restart_key, "./agent", "agent restart key");
+DEFINE_string(agent_restart_persisten_data, "./restart_pb", "agent restart persistence data");
 
 DEFINE_string(pam_pwd_dir, "/tmp/", "directory that stores galaxy-ssh passwords on agent node");
 DEFINE_int32(master_reschedule_error_delay_time, 5000, "master for error job on the same agent reschedule delay time");

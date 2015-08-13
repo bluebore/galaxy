@@ -9,9 +9,12 @@
 #include <map>
 #include <stdint.h>
 #include "proto/task.pb.h"
+#include "proto/agent.pb.h"
 #include "common/mutex.h"
 #include "agent/task_runner.h"
 #include "agent/workspace.h"
+#include "agent/workspace_manager.h"
+
 namespace galaxy{
 
 class TaskManager{
@@ -33,6 +36,12 @@ public:
     int Start(const int64_t& task_info_id);
     int Remove(const int64_t& task_info_id);
     int Status(std::vector<TaskStatus>& task_status_vector, int64_t id = -1);
+    // for recover 
+    int SetWorkspaceForTask(const ::galaxy::TaskInfo& task_info,
+            DefaultWorkspace* workspace);
+    bool LoadPersistenceInfo(const TaskManagerPersistence& info,
+            WorkspaceManager* wgr);
+    bool DumpPersistenceInfo(TaskManagerPersistence* info);
 
 private:
     common::Mutex * m_mutex;

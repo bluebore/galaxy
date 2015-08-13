@@ -173,7 +173,45 @@ int DefaultWorkspace::MoveTo(const std::string& new_dir) {
     return 0;
 }
 
+bool DefaultWorkspace::LoadPersistenceInfo(const WorkspacePersistence& info) {   
+    if (!info.has_root_path()
+            || !info.has_task_root_path()
+            || !info.has_has_created() 
+            || !info.has_task_info()) {
+        LOG(WARNING, "[PERSISTENCE] persistence info not valid"); 
+        return false;
+    }
+    m_root_path = info.root_path(); 
+    m_task_root_path = info.task_root_path(); 
+    m_has_created = info.has_created();
+    m_task_info.CopyFrom(info.task_info());
+    LOG(DEBUG, "[PERSISTENCE] workspace load "
+            "persistence info[%s:%s:%s:%ld]",
+            m_root_path.c_str(),
+            m_task_root_path.c_str(),
+            m_has_created ? "true":"false",
+            m_task_info.task_id());
+    return true;
 }
+
+bool DefaultWorkspace::DumpPersistenceInfo(WorkspacePersistence* info) {
+    if (info == NULL) {
+        return false; 
+    }
+    info->set_root_path(m_root_path);
+    info->set_task_root_path(m_task_root_path);
+    info->set_has_created(m_has_created);
+    info->mutable_task_info()->CopyFrom(m_task_info);
+    LOG(DEBUG, "[PERSISTENCE] workspace dump "
+            "persistence info[%s:%s:%s:%ld]",
+            m_root_path.c_str(),
+            m_task_root_path.c_str(),
+            m_has_created ? "true" : "false",
+            m_task_info.task_id());
+    return true;
+}
+
+}   // ending namespace galaxy
 
 
 
