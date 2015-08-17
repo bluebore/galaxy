@@ -15,6 +15,11 @@ void GetStrFTime(std::string* time);
 
 int RandRange(int min, int max);
 
+int DownloadByDirectWrite(const std::string& binary, 
+                          const std::string& write_file);
+
+std::string GenerateTaskId(const std::string& pod_id);
+
 namespace process {
 
 void GetProcessOpenFds(const pid_t pid, 
@@ -23,6 +28,8 @@ void GetProcessOpenFds(const pid_t pid,
 bool PrepareStdFds(const std::string& pwd, 
                    int* stdout_fd, 
                    int* stderr_fd);
+
+void ReplaceEmptyChar(std::string& str);
 
 void PrepareChildProcessEnvStep1(pid_t pid, const char* work_dir);
 
@@ -43,7 +50,15 @@ bool Traverse(const std::string& path, const OptFunc& func);
 
 bool IsExists(const std::string& file);
 
+bool IsDir(const std::string& path, bool& is_dir);
+
+bool IsFile(const std::string& path, bool& is_file);
+
+bool IsSpecialDir(const char* path);
+
 bool Mkdir(const std::string& dir_path);
+
+bool Remove(const std::string& path);
 
 }   // ending namespace file
 }   // ending namespace galaxy

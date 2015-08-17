@@ -23,6 +23,7 @@ enum PodState {
     kPodRunning = 2;
     kPodTerminate = 3;
     kPodSuspend = 4;
+    kPodError = 5;
 }
 
 
@@ -44,6 +45,12 @@ message Resource {
     repeated Volume ssds = 5; 
 }
 
+enum SourceType {
+    kSourceTypeBinary = 0;
+    kSourceTypeFTP = 1;
+}
+
+
 message TaskDescriptor {
     optional bytes binary = 1; 
     optional string start_command = 2;
@@ -55,6 +62,7 @@ message TaskDescriptor {
     repeated string env = 6;
     // generate it automatically when create job
     optional int32 offset = 7;
+    optional SourceType source_type = 8;
 }
 
 message PodDescriptor {
@@ -71,6 +79,7 @@ message TaskStatus {
     optional int32 exit_code = 2;
     optional Resource resource_used = 3;
     optional string version = 4;
+    optional PodState state = 5;
 }
 
 message PodStatus {

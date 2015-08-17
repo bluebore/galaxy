@@ -14,7 +14,7 @@
 #include "gflags/gflags.h"
 #include "sofa/pbrpc/pbrpc.h"
 #include "logging.h"
-#include "gce/utils.h"
+#include "agent/utils.h"
 
 using baidu::common::Log;
 using baidu::common::FATAL;

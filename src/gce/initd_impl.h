@@ -19,7 +19,7 @@ namespace galaxy {
 class InitdImpl : public Initd {
 public:
     InitdImpl();
-    virtual ~InitdImpl() {}
+    virtual ~InitdImpl();
     bool Init();
     void GetProcessStatus(::google::protobuf::RpcController* controller,
                           const ::baidu::galaxy::GetProcessStatusRequest* request,
@@ -30,16 +30,6 @@ public:
                  const ::baidu::galaxy::ExecuteRequest* request,
                  ::baidu::galaxy::ExecuteResponse* response,
                  ::google::protobuf::Closure* done);
-
-    void CreatePod(::google::protobuf::RpcController* controller,
-                   const ::baidu::galaxy::CreatePodRequest* request,
-                   ::baidu::galaxy::CreatePodResponse* response,
-                   ::google::protobuf::Closure* done);
-
-    void GetPodStatus(::google::protobuf::RpcController* controller,
-                      const ::baidu::galaxy::GetPodStatusRequest* request,
-                      ::baidu::galaxy::GetPodStatusResponse* response,
-                      ::google::protobuf::Closure* done);
 
     bool LoadProcessInfoCheckPoint(const ProcessInfoCheckpoint& checkpoint);
     bool DumpProcessInfoCheckPoint(ProcessInfoCheckpoint* checkpoint);

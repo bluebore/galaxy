@@ -35,6 +35,7 @@ message ExecuteRequest {
     repeated string envs = 3;
     optional string path = 4;
     optional string cgroup_path = 5;
+    optional string user = 6;
 }
 
 message ExecuteResponse {
@@ -43,26 +44,8 @@ message ExecuteResponse {
     optional Status status = 3;
 }
 
-message GetPodStatusRequest {
-    optional string key = 1;
-}
-
-message GetPodStatusResponse {
-    optional Status status = 1;
-    optional PodStatus pod_status = 2;
-}
-
-message CreatePodRequest {
-    optional PodDescriptor pod = 1;
-}
-
-message CreatePodResponse {
-    optional Status status = 1;
-}
 
 service Initd {
     rpc GetProcessStatus(GetProcessStatusRequest) returns (GetProcessStatusResponse);
     rpc Execute(ExecuteRequest) returns (ExecuteResponse);
-    rpc GetPodStatus(GetPodStatusRequest) returns (GetPodStatusResponse);
-    rpc CreatePod(CreatePodRequest) returns (CreatePodResponse);
 }

@@ -13,7 +13,8 @@ message QueryResponse {
 
 message RunPodRequest {
     optional string podid = 1;
-    optional PodDescriptor pod = 2;
+    optional string jobid = 2;
+    optional PodDescriptor pod = 3;
 }
 
 message RunPodResponse {
