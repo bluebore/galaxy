@@ -20,7 +20,7 @@ enum Status {
 
 enum PodState {
     kPodPending = 0;
-    kPodDeploy = 1;
+    kPodDeploying = 1;
     kPodRunning = 2;
     kPodTerminate = 3;
     kPodSuspend = 4;

@@ -65,6 +65,7 @@ std::string GalaxyImpl::SubmitJob(const JobDescription& job){
     if (job.is_batch) {
         request.mutable_job()->set_type(kBatch);
     }
+    request.mutable_job()->set_deploy_step(job.deploy_step);
     Resource* pod_resource = request.mutable_job()->mutable_pod()->mutable_requirement();
     pod_resource->set_millicores(job.cpu_required);
     pod_resource->set_memory(job.mem_required);
@@ -116,6 +117,7 @@ bool GalaxyImpl::ListJobs(std::vector<JobInformation>* jobs) {
         job_info.priority = job.desc().priority();
         job_info.running_num = job.running_num();
         job_info.pending_num = job.pending_num();
+        job_info.deploying_num = job.deploying_num();
         job_info.cpu_used = job.resource_used().millicores();
         job_info.mem_used = job.resource_used().memory();
 				job_info.is_batch = (job.desc().type() == kBatch);

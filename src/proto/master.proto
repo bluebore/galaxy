@@ -124,6 +124,7 @@ message JobOverview {
     optional int32 running_num = 4;
     optional Resource resource_used = 5;
     optional int32 pending_num = 6;
+    optional int32 deploying_num = 7;
 }
 
 message ListJobsResponse {

@@ -82,8 +82,8 @@ void SchedulerIO::Loop() {
     if (!ret) {
         LOG(WARNING, "fail to get list jobs from master");
     }
-    LOG(INFO, "list jobs from master , #job %d", list_jobs_response.jobs_size());
-
+    int32_t jobs_size = scheduler_.SyncJobOverview(&list_jobs_response);
+    LOG(INFO, "list jobs from master , #job %d", jobs_size);
     std::vector<JobInfo*> pending_jobs;
     for (int i = 0; i < get_jobs_response.scale_up_jobs_size(); i++) {
         pending_jobs.push_back(get_jobs_response.mutable_scale_up_jobs(i));

@@ -230,13 +230,29 @@ int32_t Scheduler::ChoosePods(std::vector<JobInfo*>& pending_jobs,
     std::vector<JobInfo*>::iterator job_it = pending_jobs.begin();
     for (; job_it != pending_jobs.end(); ++job_it) {
         JobInfo* job = *job_it;
-        if (job->pods_size() <= 0) {
+        int32_t pending_size = job->pods_size();
+        if (pending_size <= 0) {
             LOG(WARNING, "job %s has no pending pod but it is in master pending queue", job->jobid().c_str());
             continue;
         }
+        int32_t deploying_num = 0;
+        int32_t deploy_step = pending_size;
+        if (job->desc().deploy_step() > 0) {
+            std::map<std::string, JobOverview*>::iterator jo_it = job_overview_.find(job->jobid());
+            if (jo_it == job_overview_.end()) {
+                LOG(WARNING, "job %s does not exist in master jobs ,scheduler skips it",
+                  job->jobid().c_str());
+                continue;
+            }
+            JobOverview* job_overview = jo_it->second;
+            deploying_num = job_overview->deploying_num();
+            deploy_step = job->desc().deploy_step();
+        }
         std::vector<std::string> need_schedule;
         std::map<std::string, std::string> no_need_schedule;
-        for (int i = 0; i < job->pods_size(); ++i) {
+        LOG(INFO, "job %s deploy stat: pending_size %d, deploying_num %d, deploy_step %d",
+          job->jobid().c_str(), pending_size, deploying_num, deploy_step);
+        for (int i = deploying_num; i < deploy_step; ++i) {
             //TODO handle dead agent
             if (job->desc().pod().pin_on_agent() &&
                 !job->pods(i).endpoint().empty() ){
@@ -409,7 +425,7 @@ int32_t PodScaleUpCell::Propose(std::vector<ScheduleInfo*>* propose) {
 }
 
 double PodScaleUpCell::ScoreAgent(const AgentInfo* agent_info,
-                   const PodDescriptor* desc) {
+                                  const PodDescriptor* /*desc*/) {
     // 计算机器当前使用率打分
     double score = Scheduler::CalcLoad(agent_info);
     LOG(DEBUG, "score %s %lf", agent_info->endpoint().c_str(), score);

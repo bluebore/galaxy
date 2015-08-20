@@ -93,9 +93,13 @@ void JobManager::Add(const JobId& job_id, const JobDescriptor& job_desc) {
     job->desc_.CopyFrom(job_desc);
     job->id_ = job_id;
     MutexLock lock(&mutex_);
-    FillPodsToJob(job);
     jobs_[job_id] = job;
-    LOG(INFO, "job[%s] submitted by user: %s, ", job_id.c_str(), job_desc.user().c_str());
+    FillPodsToJob(job);
+    LOG(INFO, "job %s submitted by user: %s, with deploy_step %d, replica %d ",
+      job_id.c_str(), 
+      job_desc.user().c_str(),
+      job_desc.deploy_step(),
+      job_desc.replica());
 }
 
 Status JobManager::Update(const JobId& job_id, const JobDescriptor& job_desc) {
@@ -113,9 +117,6 @@ Status JobManager::Update(const JobId& job_id, const JobDescriptor& job_desc) {
 
 void JobManager::FillPodsToJob(Job* job) {
     mutex_.AssertHeld();
-    if (jobs_.find(job->id_) == jobs_.end()) {
-        return;
-    }
     for(int i = job->pods_.size(); i < job->desc_.replica(); i++) {
         PodId pod_id = MasterUtil::GeneratePodId(job->desc_);
         PodStatus* pod_status = new PodStatus();
@@ -199,7 +200,7 @@ void JobManager::SuspendPod(PodStatus* pod) {
     PodState state = pod->state();
     if (state == kPodPending) {
         pod->set_state(kPodSuspend);
-    } else if (state == kPodDeploy) {
+    } else if (state == kPodDeploying) {
         const std::string& endpoint = pod->endpoint();
         AgentInfo* agent = agents_[endpoint];
         ReclaimResource(*pod, agent);
@@ -366,7 +367,7 @@ Status JobManager::Propose(const ScheduleInfo& sche_info) {
     // update agent version
     agent->set_version(agent->version() + 1);
     pod->set_endpoint(sche_info.endpoint());
-    pod->set_state(kPodDeploy);
+    pod->set_state(kPodDeploying);
     job_pending_pods.erase(jt);
     if (job_pending_pods.size() == 0) {
         pending_pods_.erase(it);
@@ -489,9 +490,7 @@ void JobManager::HandleAgentOffline(const std::string agent_addr) {
 
 void JobManager::ReschedulePod(PodStatus* pod_status) {
     assert(pod_status);
-    assert(pod_status->state() == kPodRunning);
     mutex_.AssertHeld();
-
     pod_status->set_state(kPodPending);
     // record last deploy agent endpoint
     pod_status->mutable_resource_used()->Clear();
@@ -515,15 +514,10 @@ void JobManager::DeployPod() {
         const PodDescriptor& pod_desc = job->desc_.pod();
         std::map<PodId, PodStatus*>::iterator jt;
         for (jt = job_deploy_pods.begin(); jt != job_deploy_pods.end(); ++jt) {
-            const PodId& podid = jt->first;
             PodStatus* pod = jt->second;
-            const std::string& endpoint = pod->endpoint();
-            pod->set_state(kPodRunning);
-
+            pod->set_state(kPodDeploying);
             // TODO:: check agent health
             // AgentInfo* agent = agents_[endpoint];
-
-            running_pods_[endpoint][jobid][podid] = pod;
             RunPod(pod_desc, pod);
         }
         it->second.clear();
@@ -536,7 +530,7 @@ void JobManager::RunPod(const PodDescriptor& desc, PodStatus* pod) {
     RunPodResponse* response = new RunPodResponse;
     request->set_podid(pod->podid());
     request->mutable_pod()->CopyFrom(desc);
-
+    request->set_jobid(pod->jobid());
     Agent_Stub* stub;
     const AgentAddr& endpoint = pod->endpoint();
     rpc_client_.GetStub(endpoint, &stub);
@@ -557,29 +551,21 @@ void JobManager::RunPodCallback(PodStatus* pod, AgentAddr endpoint,
     MutexLock lock(&mutex_);
     const std::string& jobid = pod->jobid();
     const std::string& podid = pod->podid();
-    if (pod->state() != kPodRunning || pod->endpoint() != endpoint) {
+    if (pod->endpoint() != endpoint) {
         LOG(INFO, "ignore run pod callback of pod [%s %s] on [%s]",
             jobid.c_str(), podid.c_str(), endpoint.c_str());
         return;
     }
-
     Status status = response->status();
     if (failed || status != kOk) {
         LOG(INFO, "run pod [%s %s] on [%s] fail: %d", jobid.c_str(),
             podid.c_str(), endpoint.c_str(), status);
-        assert(pod == running_pods_[endpoint][jobid][podid]);
-        running_pods_[endpoint][jobid].erase(podid);
-        if (running_pods_[endpoint][jobid].size() == 0) {
-            running_pods_[endpoint].erase(jobid);
-            if (running_pods_[endpoint].size() == 0) {
-                running_pods_.erase(endpoint);
-            }
-        }
         ReschedulePod(pod);
         return;
-    }
-    LOG(INFO, "run pod [%s %s] on [%s] success", jobid.c_str(),
+    } else {
+        LOG(INFO, "run pod [%s %s] on [%s] success", jobid.c_str(),
         podid.c_str(), endpoint.c_str());
+    }
 }
 
 void JobManager::ScheduleNextQuery() {
@@ -659,45 +645,79 @@ void JobManager::QueryAgentCallback(AgentAddr endpoint, const QueryRequest* requ
     agent->mutable_pods()->CopyFrom(report_agent_info.pods());
     agent->set_state(report_agent_info.state());
     //agent->CopyFrom(report_agent_info);
-    
-    PodMap agent_running_pods = running_pods_[endpoint]; // this is a copy
+    // currently pods_need_reschedule records pod 
+    // whoes state was changed from running to terminated 
+    // or which does not exist on agent
+    PodMap pods_need_reschedule = running_pods_[endpoint]; // this is a copy
     for (int32_t i = 0; i < report_agent_info.pods_size(); i++) {
         const PodStatus& report_pod_info = report_agent_info.pods(i);
         const JobId& jobid = report_pod_info.jobid();
-        const PodId& podid = report_pod_info.podid();
-       
+        const PodId& podid = report_pod_info.podid(); 
+        LOG(INFO, "the pod %s  of job %s on agent %s state %s",
+                  podid.c_str(), 
+                  jobid.c_str(), 
+                  report_agent_info.endpoint().c_str(),
+                  PodState_Name(report_pod_info.state()).c_str());
+        // for recovering
         if (first_query_on_agent && jobs_.find(jobid) != jobs_.end() && 
             jobs_[jobid]->pods_.find(podid) == jobs_[jobid]->pods_.end()) {
             PodStatus* pod = new PodStatus();
             pod->CopyFrom(report_pod_info);
             jobs_[jobid]->pods_[podid] = pod;
             if(pod->state() == kPodRunning) {
-                agent_running_pods[jobid][podid] = pod;
+                pods_need_reschedule[jobid][podid] = pod;
             }
         }
-        if (agent_running_pods.find(jobid) == agent_running_pods.end()) {
-            LOG(WARNING, "report non-exist pod [%s %s]", jobid.c_str(), podid.c_str());
+        // validate job 
+        std::map<JobId, Job*>::iterator job_it = jobs_.find(jobid);
+        if (job_it == jobs_.end()) {
+            LOG(WARNING, "the job %s from agent %s does not exist in master",
+               jobid.c_str(), 
+               report_agent_info.endpoint().c_str());
             continue;
         }
-        if (agent_running_pods[jobid].find(podid) == agent_running_pods[jobid].end()) {
-            LOG(WARNING, "report non-exist pod [%s %s]", jobid.c_str(), podid.c_str());
+        // validate pod
+        Job* job = job_it->second;
+        std::map<PodId, PodStatus*>::iterator p_it = job->pods_.find(podid);
+        if (p_it == job->pods_.end()) {
+            // TODO should kill this pod
+            LOG(WARNING, "the pod %s from agent %s does not exist in master",
+               podid.c_str(), report_agent_info.endpoint().c_str());
             continue;
         }
-        PodStatus* pod = agent_running_pods[jobid][podid];
-        // only copy dynamic information
+        // ignore it until it's state changes
+        if (report_pod_info.state() == kPodDeploying) {
+            continue;
+        }
+        // update pod in master
+        PodStatus* pod = jobs_[jobid]->pods_[podid];
         pod->mutable_status()->CopyFrom(report_pod_info.status());
         pod->mutable_resource_used()->CopyFrom(report_pod_info.resource_used());
-        LOG(DEBUG, "update pod [%s %s]", jobid.c_str(), podid.c_str());
-
-        agent_running_pods[jobid].erase(podid);
-        if (agent_running_pods[jobid].size() == 0) {
-            agent_running_pods.erase(jobid);
+        // pod state in master has difference with pod in agent
+        if (pod->state() == kPodDeploying 
+            && report_pod_info.state() == kPodRunning) {
+            pod->set_state(kPodRunning);
+            running_pods_[endpoint][jobid].insert(std::make_pair(podid, pod));
+        } else if ( pod->state() == kPodDeploying 
+            && report_pod_info.state() == kPodTerminate) {
+            LOG(WARNING, "pod %s 's state changes from deploying to terminated, reschedule it", podid.c_str());
+            ReschedulePod(pod);
+        } else if (pod->state() == kPodRunning
+            && report_pod_info.state() == kPodTerminate) {
+            LOG(WARNING, "pod %s 's state changes from running to termintaed, reschedule it ", podid.c_str()); 
+        } else if (pod->state() == kPodRunning 
+            && report_pod_info.state() == kPodRunning) {
+            pods_need_reschedule[jobid].erase(podid);
+            if (pods_need_reschedule[jobid].size() == 0) {
+                pods_need_reschedule.erase(jobid);
+            } 
         }
+
     }
 
     // reschedule un-report pods
-    PodMap::iterator pod_it = agent_running_pods.begin();
-    for (; pod_it != agent_running_pods.end(); ++pod_it) {
+    PodMap::iterator pod_it = pods_need_reschedule.begin();
+    for (; pod_it != pods_need_reschedule.end(); ++pod_it) {
         const JobId& jobid = pod_it->first;
         std::map<PodId, PodStatus*>& pods = pod_it->second;
         std::map<PodId, PodStatus*>::iterator pod_it = pods.begin();
@@ -829,6 +849,7 @@ void JobManager::GetJobsOverview(JobOverviewList* jobs_overview) {
 
         uint32_t running_num = 0;
         uint32_t pending_num = 0;
+        uint32_t deploying_num = 0;
         std::map<PodId, PodStatus*>& pods = job->pods_;
         std::map<PodId, PodStatus*>::iterator pod_it = pods.begin();
         for (; pod_it != pods.end(); ++pod_it) {
@@ -839,10 +860,13 @@ void JobManager::GetJobsOverview(JobOverviewList* jobs_overview) {
                 MasterUtil::AddResource(pod->resource_used(), overview->mutable_resource_used());
             } else if(pod->state() == kPodPending) {
                 pending_num++;
-            }
+            } else if(pod->state() == kPodDeploying) {
+                deploying_num++;
+            } 
         }
         overview->set_running_num(running_num);
         overview->set_pending_num(pending_num);
+        overview->set_deploying_num(deploying_num);
     }
 }
 
@@ -856,6 +880,7 @@ Status JobManager::GetJobInfo(const JobId& jobid, JobInfo* job_info) {
 
     Job* job = job_it->second;
     job_info->set_jobid(jobid);
+    job_info->set_state(job->state_);
     job_info->mutable_desc()->CopyFrom(job->desc_);
     std::map<PodId, PodStatus*>::iterator pod_it = job->pods_.begin();
     for (; pod_it != job->pods_.end(); ++pod_it) {
@@ -864,6 +889,7 @@ Status JobManager::GetJobInfo(const JobId& jobid, JobInfo* job_info) {
     }
     return kOk;
 }
+
 
 }
 }

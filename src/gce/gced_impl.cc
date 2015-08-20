@@ -53,7 +53,7 @@ void GcedImpl::GetProcessStatus() {
     MutexLock lock(&mutex_);
     std::map<std::string, Pod>::iterator it = pods_.begin();
     for (; it != pods_.end(); ++it) {
-        if (it->second.state == kPodDeploy) {
+        if (it->second.state == kPodDeploying) {
             std::stringstream ss("localhost:");
             ss << it->second.port;
             baidu::galaxy::Initd_Stub* initd;
@@ -293,7 +293,7 @@ void GcedImpl::LaunchPod(::google::protobuf::RpcController* controller,
             return;
         }
         LOG(WARNING, "execute task success");
-        pod.state = kPodDeploy;  
+        pod.state = kPodDeploying;  
 
         sleep(5);
 

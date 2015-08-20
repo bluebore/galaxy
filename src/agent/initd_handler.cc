@@ -12,7 +12,7 @@
 // DECLARE_int32(agent_monitor_initd_interval);
 DECLARE_int32(agent_rpc_initd_timeout);
 DECLARE_string(agent_initd_bin);
-
+DECLARE_string(gce_work_dir);
 namespace baidu {
 namespace galaxy {
 
@@ -36,7 +36,7 @@ InitdHandler::~InitdHandler() {
 int InitdHandler::Create(const PodDesc& pod) {
     
     // current dirertor as work_dir
-    const static std::string current_dir("./");
+    const static std::string current_dir(FLAGS_gce_work_dir + "/");
     std::string work_dir(current_dir + pod.id);
 
     // create work dir
