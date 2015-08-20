@@ -117,10 +117,6 @@ Status JobManager::Update(const JobId& job_id, const JobDescriptor& job_desc) {
 
 void JobManager::FillPodsToJob(Job* job) {
     mutex_.AssertHeld();
-    if (jobs_.find(job->id_) == jobs_.end()) {
-        LOG(WARNING, "job %s does not exist on master", job->id_.c_str());
-        return;
-    }
     for(int i = job->pods_.size(); i < job->desc_.replica(); i++) {
         PodId pod_id = MasterUtil::GeneratePodId(job->desc_);
         PodStatus* pod_status = new PodStatus();
