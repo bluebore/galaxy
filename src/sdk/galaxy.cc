@@ -74,6 +74,11 @@ std::string GalaxyImpl::SubmitJob(const JobDescription& job){
         request.mutable_job()->mutable_pod()->add_labels(job.label);
     }
     TaskDescriptor* task = request.mutable_job()->mutable_pod()->add_tasks();
+    if (job.binary.substr(0, 6) == "ftp://") {
+        task->set_source_type(kSourceTypeFTP);
+    }else {
+        task->set_source_type(kSourceTypeBinary);
+    }
     task->set_binary(job.binary);
     task->set_start_command(job.cmd_line);
     task->mutable_requirement()->set_millicores(job.cpu_required);
