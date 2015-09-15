@@ -208,9 +208,10 @@ int32_t Scheduler::ChoosePods(std::vector<JobInfo*>& pending_jobs,
            || deploying_num >= max_deploy_pods) {
             continue;
         }
-        std::vector<std::string> need_schedule;
+
+        std::map<std::string, std::string> need_schedule;
         for (uint32_t i = 0; i < job_pending_pods.size() && deploying_num < max_deploy_pods; i++) {
-            need_schedule.push_back(job_pending_pods[i].podid());
+            need_schedule.insert(std::make_pair(job_pending_pods[i].podid(), job_pending_pods[i].endpoint()));
             deploying_num++;
         }
         PodDescriptor* pod_desc = NULL;
@@ -228,7 +229,7 @@ int32_t Scheduler::ChoosePods(std::vector<JobInfo*>& pending_jobs,
         PodScaleUpCell* need_schedule_cell = new PodScaleUpCell();
         need_schedule_cell->pod = pod_desc;
         need_schedule_cell->job = job;
-        need_schedule_cell->pod_ids = need_schedule;
+        need_schedule_cell->pod_endpoints = need_schedule;
         need_schedule_cell->feasible_limit = job->pods_size() * FLAGS_scheduler_feasibility_factor;
         all_agent_needs += need_schedule_cell->feasible_limit;
         pending_pods->push_back(need_schedule_cell); 
@@ -389,24 +390,26 @@ int32_t PodScaleUpCell::Score() {
 int32_t PodScaleUpCell::Propose(std::vector<ScheduleInfo*>* propose) {
     int propose_count = 0;
     std::map<double, AgentInfo*>::iterator sorted_it = sorted.begin();
-    for (size_t i = 0; i < pod_ids.size(); ++i) {
+    std::map<std::string, std::string>::iterator pod_it = pod_endpoints.begin(); 
+    for (; pod_it != pod_endpoints.end(); ++pod_it) {
+        std::string endpoint;
         if (sorted_it == sorted.end()) {
-            break;
+            endpoint = pod_it->second;
         }
         else {
-            ScheduleInfo* sched = new ScheduleInfo();
-            sched->set_endpoint(sorted_it->second->endpoint());
-            sched->set_podid(pod_ids[i]);
-            sched->set_jobid(job->jobid());
-            sched->set_action(kLaunch);
-            propose->push_back(sched);
-            LOG(DEBUG, "propose[%d] %s:%s on %s", propose_count,
-                    sched->jobid().c_str(),
-                    sched->podid().c_str(),
-                    sched->endpoint().c_str());
-            ++propose_count;
+            endpoint = sorted_it->second->endpoint();
             ++sorted_it;
         }
+        if (endpoint.empty()) {
+            continue;
+        }
+        ScheduleInfo* sched = new ScheduleInfo();
+        sched->set_podid(pod_it->first);
+        sched->set_jobid(job->jobid());
+        sched->set_action(kLaunch);
+        sched->set_endpoint(endpoint);
+        propose->push_back(sched); 
+        ++propose_count;
     }
     return propose_count;
 }

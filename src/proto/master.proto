@@ -260,6 +260,11 @@ message GetMasterStatusResponse {
     optional Status status = 17;
 }
 
+message ReservedPodInfo {
+    optional string podid = 1;
+    optional string jobid = 2;
+    optional string endpoint = 3;
+}
 
 service Master {
     rpc SubmitJob(SubmitJobRequest) returns (SubmitJobResponse);

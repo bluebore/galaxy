@@ -76,9 +76,7 @@ private:
     void SuspendPod(PodStatus* pod);
     void ResumePod(PodStatus* pod);
     Status AcquireResource(const PodStatus& pod, AgentInfo* agent);
-    void ReclaimResource(const PodStatus& pod, AgentInfo* agent);
     void GetPodRequirement(const PodStatus& pod, Resource* requirement);
-    void CalculatePodRequirement(const PodDescriptor& pod_desc, Resource* pod_requirement);
     void HandleAgentOffline(const std::string agent_addr);
     void ReschedulePod(PodStatus* pod_status);
 
@@ -127,6 +125,15 @@ private:
                      Job* job);
 
     void CleanJob(const JobId& jobid);
+    void AddReservedPod(const AgentAddr& agent_addr, 
+                        const PodId& podid,
+                        const JobId& jobid);
+    void CleanReservedPod(const AgentAddr& agent_addr,
+                          const PodId& podid);
+
+    bool CalcAgentLeftResource(const AgentInfo* agent, Resource* left);
+    bool GetPodDesc(const JobId& jobid, const PodId& podid,
+                    PodDescriptor* desc);
     bool SaveToNexus(const Job* job);
     bool SaveLabelToNexus(const LabelCell& label_cell);
     bool DeleteFromNexus(const JobId& jobid);
@@ -143,8 +150,11 @@ private:
     // all jobs that need update
     std::set<JobId> need_update_jobs_;
     std::map<AgentAddr, PodMap> pods_on_agent_;
+    // the agents pods run on before pods make a migration
+    typedef std::map<PodId, ReservedPodInfo> ReservedPodMap;
+    std::map<AgentAddr, ReservedPodMap> reserved_pods_;
     std::map<AgentAddr, AgentInfo*> agents_;
-    std::map<AgentAddr, int64_t> agent_timer_;
+    std::map<AgentAddr, int64_t> agent_timer_; 
     ThreadPool death_checker_;
     ThreadPool thread_pool_;
     Mutex mutex_;   
