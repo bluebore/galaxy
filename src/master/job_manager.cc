@@ -1187,6 +1187,7 @@ bool JobManager::HandleCleanPod(PodStatus* pod, Job* job) {
             p_it->second.erase(pod->podid());
         }
     }
+    CleanReservedPod(pod->endpoint(), pod->podid());
     fsm_.erase(pod->podid());
     job->pods_.erase(pod->podid());
     delete pod;
