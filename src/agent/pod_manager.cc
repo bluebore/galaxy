@@ -63,7 +63,8 @@ static int LanuchInitdMain(void *arg) {
 
     process::PrepareChildProcessEnvStep1(::getpid(), 
                                          context->path.c_str());  
-    process::PrepareChildProcessEnvStep2(context->stdout_fd, 
+    process::PrepareChildProcessEnvStep2(-1,
+                                         context->stdout_fd, 
                                          context->stderr_fd, 
                                          context->fds);
     char* argv[] = {
@@ -95,7 +96,7 @@ int PodManager::Init() {
     int initd_port_begin = FLAGS_agent_initd_port_begin; 
     int initd_port_end = FLAGS_agent_initd_port_end;
     for (int i = initd_port_begin; i < initd_port_end; i++) {
-        initd_free_ports_.insert(i); 
+        initd_free_ports_.PushBack(i); 
     }
     if (!file::Remove(FLAGS_agent_gc_dir)
             || !file::Mkdir(FLAGS_agent_gc_dir)) {
@@ -150,7 +151,8 @@ int PodManager::LanuchInitdByFork(PodInfo* info) {
         pid_t my_pid = ::getpid(); 
         process::PrepareChildProcessEnvStep1(my_pid,
                 path.c_str());
-        process::PrepareChildProcessEnvStep2(stdout_fd, 
+        process::PrepareChildProcessEnvStep2(-1,
+                                             stdout_fd, 
                                              stderr_fd, 
                                              fd_vector);
         char* argv[] = {
@@ -507,24 +509,24 @@ int PodManager::ReloadPod(const PodInfo& info) {
 }
 
 int PodManager::AllocPortForInitd(int& port) {
-    if (initd_free_ports_.size() == 0) {
+    if (initd_free_ports_.Size() == 0) {
         LOG(WARNING, "no free ports for alloc");
         return -1; 
     }
-    std::set<int>::iterator it = initd_free_ports_.begin();
-    initd_free_ports_.erase(it);
-    port = *it;
+    port = initd_free_ports_.Front();
+    initd_free_ports_.PopFront();
     return 0;
 }
 
 void PodManager::ReleasePortFromInitd(int port) {
-    if (port > 0) {
-        initd_free_ports_.insert(port);
+    if (port >= FLAGS_agent_initd_port_begin 
+            && port < FLAGS_agent_initd_port_end) {
+        initd_free_ports_.PushBack(port);
     }
 }
 
 void PodManager::ReloadInitdPort(int port) {
-    initd_free_ports_.erase(port);
+    initd_free_ports_.Erase(port);
 }
 
 }   // ending namespace galaxy

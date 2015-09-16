@@ -44,9 +44,12 @@ AGENT_HEADER = $(wildcard src/agent/*.h)
 TEST_AGENT_SRC = src/agent/test_agent.cc src/agent/resource_collector.cc
 TEST_AGENT_OBJ = $(patsubst %.cc, %.o, $(TEST_AGENT_SRC))
 
-INITD_SRC = $(wildcard src/gce/initd*.cc) src/agent/utils.cc src/flags.cc  src/agent/cgroups.cc
+INITD_SRC = src/gce/initd_impl.cc src/gce/initd_main.cc src/agent/utils.cc src/flags.cc  src/agent/cgroups.cc
 INITD_OBJ = $(patsubst %.cc, %.o, $(INITD_SRC))
 INITD_HEADER = $(wildcard src/gce/*.h) src/agent/utils.h 
+
+INITD_CLI_SRC = src/gce/initd_cli.cc 
+INITD_CLI_OBJ = $(patsubst %.cc, %.o, $(INITD_CLI_SRC))
 
 TEST_INITD_SRC = src/gce/test_initd.cc
 TEST_INITD_OBJ = $(patsubst %.cc, %.o, $(TEST_INITD_SRC))
@@ -106,6 +109,9 @@ galaxy: $(CLIENT_OBJ) $(LIBS)
 
 initd: $(INITD_OBJ) $(LIBS) $(OBJS)
 	$(CXX) $(INITD_OBJ) $(LIBS) -o $@ $(LDFLAGS)
+
+initd_cli: $(INITD_CLI_OBJ) $(LIBS) $(OBJS)
+	$(CXX) $(INITD_CLI_OBJ) $(LIBS) -o $@ $(LDFLAGS)
 
 test_initd: $(TEST_INITD_OBJ) $(LIBS) $(OBJS)
 	$(CXX) $(TEST_INITD_OBJ) $(LIBS) -o $@ $(LDFLAGS)

@@ -15,6 +15,7 @@
 #include "mutex.h"
 #include "thread_pool.h"
 #include "agent/task_manager.h"
+#include "agent/index_list.h"
 
 namespace baidu {
 namespace galaxy {
@@ -49,8 +50,8 @@ protected:
     //Mutex pods_lock_;
     std::map<std::string, PodInfo> pods_;
     TaskManager* task_manager_;
+    IndexList<int> initd_free_ports_;
 
-    std::set<int> initd_free_ports_;   
     ThreadPool garbage_collect_thread_; 
 };
 

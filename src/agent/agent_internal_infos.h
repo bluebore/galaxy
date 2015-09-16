@@ -32,6 +32,8 @@ struct TaskInfo {
 
     std::string cgroup_path;
     std::string task_workspace;
+
+    std::string task_chroot_path; // chroot path
     int fail_retry_times;
     int max_retry_times;
     int stop_timeout_point;
@@ -76,6 +78,7 @@ struct TaskInfo {
         str_format.append("}\n");
         str_format.append("cgroup_path : " + cgroup_path + "\n");
         str_format.append("task_workspace : " + task_workspace + "\n");
+        str_format.append("task_chroot_path : " + task_chroot_path + "\n");
         return str_format;
     }
 
@@ -91,6 +94,7 @@ struct TaskInfo {
           stop_process(),
           cgroup_path(),
           task_workspace(),
+          task_chroot_path(),
           fail_retry_times(0),
           max_retry_times(3),
           stop_timeout_point(0),
@@ -111,6 +115,7 @@ struct TaskInfo {
         stop_process.CopyFrom(task.stop_process);
         cgroup_path = task.cgroup_path;
         task_workspace = task.task_workspace;
+        task_chroot_path = task.task_chroot_path;
         fail_retry_times = task.fail_retry_times;
         max_retry_times = task.max_retry_times;
         stop_timeout_point = task.stop_timeout_point;

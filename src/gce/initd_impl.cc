@@ -141,9 +141,12 @@ void InitdImpl::Execute(::google::protobuf::RpcController* /*controller*/,
         done->Run();
         return;
     }
+    std::vector<std::string> files;
+    if (!file::ListFiles(proc_path, &files)) {
+        LOG(WARNING, "list new proc failed");
+    }
     proc_path.append(boost::lexical_cast<std::string>(::getpid())); 
     proc_path.append("/fd/");
-    std::vector<std::string> files;
     if (!file::ListFiles(proc_path, &files)) {
         LOG(WARNING, "list new proc failed");
         response->set_status(kInputError);
@@ -156,10 +159,16 @@ void InitdImpl::Execute(::google::protobuf::RpcController* /*controller*/,
         } 
         fd_vector.push_back(::atoi(files[i].c_str()));
     }
+    // check if need chroot
+    bool is_chroot = request->has_chroot_path();
+    if (is_chroot) {
+        LOG(WARNING, "chroot %s", request->chroot_path().c_str()); 
+    }
 
     // 2. prepare std fds for child 
-    int stdout_fd = 0;
-    int stderr_fd = 0;
+    int stdout_fd = -1;
+    int stderr_fd = -1;
+    int stdin_fd = -1;
     if (!process::PrepareStdFds(request->path(), 
                                 &stdout_fd, &stderr_fd)) {
         if (stdout_fd != -1) {
@@ -176,11 +185,28 @@ void InitdImpl::Execute(::google::protobuf::RpcController* /*controller*/,
         return;
     }
 
+    int pty_fds = -1;
+    if (request->has_pty_file()) {
+        pty_fds = ::open(request->pty_file().c_str(), O_RDWR); 
+        stdout_fd = pty_fds;
+        stderr_fd = pty_fds;
+        stdin_fd = pty_fds;
+    }
+
     // 3. Fork     
     pid_t child_pid = ::fork();
     if (child_pid == -1) {
         LOG(WARNING, "fork %s failed err[%d: %s]",
                 request->key().c_str(), errno, strerror(errno)); 
+        if (pty_fds != -1) {
+            ::close(pty_fds); 
+        }
+        if (stdout_fd != -1) {
+            ::close(stdout_fd);     
+        }
+        if (stderr_fd != -1) {
+            ::close(stderr_fd); 
+        }
         response->set_status(kUnknown);
         done->Run();
         return;
@@ -195,9 +221,17 @@ void InitdImpl::Execute(::google::protobuf::RpcController* /*controller*/,
             assert(0); 
         }
 
-        process::PrepareChildProcessEnvStep2(stdout_fd, 
+        process::PrepareChildProcessEnvStep2(stdin_fd,
+                                             stdout_fd, 
                                              stderr_fd, 
                                              fd_vector);
+        // NOTE chroot 执行的位置会影响路径
+        if (is_chroot) {
+            if (::chroot(request->chroot_path().c_str()) != 0) {
+                assert(0);    
+            }
+        }
+        
         if (request->has_user() 
                 && !user::Su(request->user())) {
             assert(0); 
@@ -217,12 +251,21 @@ void InitdImpl::Execute(::google::protobuf::RpcController* /*controller*/,
         env[request->envs_size()] = NULL;
         // exec
         ::execve("/bin/sh", argv, env);
+        fprintf(stdout, "execve %s err[%d: %s]", 
+                request->commands().c_str(), errno, strerror(errno));
         assert(0);
     }
 
     // close child's std fds
-    ::close(stdout_fd); 
-    ::close(stderr_fd);
+    if (pty_fds != -1) {
+        ::close(pty_fds); 
+    }
+    if (stdout_fd != -1) {
+        ::close(stdout_fd);     
+    }
+    if (stderr_fd != -1) {
+        ::close(stderr_fd); 
+    }
 
     ProcessInfo info;      
     info.set_key(request->key());

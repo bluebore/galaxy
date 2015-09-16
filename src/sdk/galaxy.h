@@ -110,6 +110,22 @@ struct MasterStatus {
     int64_t scale_up_job_count;
     int64_t scale_down_job_count;
     int64_t need_update_job_count;
+    MasterStatus():addr(),
+    safe_mode(false),
+    agent_total(0),
+    agent_live_count(0),
+    agent_dead_count(0),
+    cpu_total(0),
+    cpu_used(0),
+    cpu_assigned(0),
+    mem_total(0),
+    mem_used(0),
+    mem_assigned(0),
+    job_count(0),
+    pod_count(0),
+    scale_up_job_count(0),
+    scale_down_job_count(0),
+    need_update_job_count(0){}
 };
 
 class Galaxy {

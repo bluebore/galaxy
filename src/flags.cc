@@ -67,3 +67,4 @@ DEFINE_string(gce_support_subsystems, "", "Cgroup default support subsystems");
 DEFINE_int64(gce_initd_zombie_check_interval, 100, "Initd Zombie Check Interval");
 DEFINE_string(gce_initd_dump_file, "initd_checkpoint_file", "Initd Checkpoint File Name");
 DEFINE_string(gce_initd_port, "8765", "gce initd listen port");
+DEFINE_string(gce_bind_config, "", "gce mount bind config");

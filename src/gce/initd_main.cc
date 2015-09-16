@@ -13,6 +13,7 @@
 #include <stdlib.h>
 
 #include <fstream>
+#include <boost/algorithm/string.hpp>
 #include "gce/initd_impl.h"
 #include "gflags/gflags.h"
 #include "sofa/pbrpc/pbrpc.h"
@@ -28,6 +29,7 @@ const int MAX_START_TIMES = 15;
 
 DECLARE_string(gce_initd_dump_file);
 DECLARE_string(gce_initd_port);
+DECLARE_string(gce_bind_config);
 
 volatile static bool s_is_stop = false;
 volatile static bool s_is_restart = false;
@@ -104,6 +106,87 @@ bool DumpInitdCheckpoint(baidu::galaxy::InitdImpl* service) {
     return true;
 }
 
+bool ReadMountBindConfig(std::vector<std::string>* files) {
+    if (files == NULL) {
+        return false; 
+    }
+    std::ifstream ifs(FLAGS_gce_bind_config.c_str(), std::ifstream::in);
+    if (ifs.fail()) {
+        LOG(WARNING, "open %s failed", FLAGS_gce_bind_config.c_str()); 
+        return false;
+    }
+
+    while (ifs.good()) {
+        std::string line;
+        getline(ifs, line);
+        boost::algorithm::trim(line);
+        if (line.empty()) {
+            continue; 
+        }
+        files->push_back(line);
+    }
+    if (!ifs.good() && !ifs.eof()) {
+        ifs.close(); 
+        return false;
+    }
+    ifs.close();
+    return true;
+}
+
+bool MountRootfs() {
+    if (::getpid() != 1) {
+        // TODO
+        LOG(WARNING, "no pid_namespace no need bind");
+        return true; 
+    }
+    std::vector<std::string> files;
+    if (!ReadMountBindConfig(&files)) {
+        LOG(WARNING, "read mount bind config failed");
+        return false; 
+    }
+    std::string cwd;
+    ::baidu::galaxy::process::GetCwd(&cwd);
+
+    for (size_t i = 0; i < files.size(); ++i) {
+        if (files[i] == "proc") {
+            LOG(INFO, "not bind proc");
+            continue; 
+        }    
+        if (files[i] == "." || files[i] == "..") {
+            continue; 
+        }
+        std::string old_mount_path(files[i]);
+        bool is_dir = false;
+        if (!baidu::galaxy::file::IsDir(old_mount_path, is_dir) 
+                || !is_dir) {
+            LOG(WARNING, "%s not dir no need bind", 
+                    old_mount_path.c_str());
+            continue; 
+        }
+        std::string new_mount_path(cwd);
+        new_mount_path.append("/");
+        new_mount_path.append(files[i]);
+        if (!baidu::galaxy::file::MkdirRecur(new_mount_path)) {
+            LOG(WARNING, "mdkir new mount %s failed", 
+                    new_mount_path.c_str());
+            return false;
+        }
+    
+        if (0 != ::mount(old_mount_path.c_str(), 
+                         new_mount_path.c_str(), 
+                         "", MS_BIND, "")
+                && errno != EBUSY) {
+            LOG(WARNING, "mount %s at %s failed", 
+                    old_mount_path.c_str(), new_mount_path.c_str());
+            return false;
+        }
+        LOG(INFO, "mount %s at %s success", 
+                old_mount_path.c_str(), new_mount_path.c_str());
+    }
+    
+    return true;
+}
+
 bool MountProc() {
     pid_t cur_pid = ::getpid();
     if (cur_pid != 1) {
@@ -146,6 +229,9 @@ int main(int argc, char* argv[]) {
     sofa::pbrpc::RpcServer rpc_server(options);
 
     if (!MountProc()) {
+        return EXIT_FAILURE; 
+    }
+    if (!MountRootfs()) {
         return EXIT_FAILURE; 
     }
 

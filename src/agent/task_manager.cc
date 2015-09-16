@@ -35,6 +35,7 @@ DECLARE_int32(agent_detect_interval);
 DECLARE_int32(agent_millicores_share);
 DECLARE_int64(agent_mem_share);
 DECLARE_string(agent_default_user);
+DECLARE_bool(agent_namespace_isolation_switch);
 
 namespace baidu {
 namespace galaxy {
@@ -269,6 +270,9 @@ int TaskManager::RunTask(TaskInfo* task_info) {
     ExecuteResponse initd_response;
     initd_request.set_key(task_info->main_process.key());
     initd_request.set_commands(task_info->desc.start_command());
+    if (FLAGS_agent_namespace_isolation_switch) {
+        initd_request.set_chroot_path(task_info->task_chroot_path); 
+    }
     initd_request.set_path(task_info->task_workspace);
     initd_request.set_cgroup_path(task_info->cgroup_path);
     initd_request.set_user(FLAGS_agent_default_user);
@@ -338,6 +342,9 @@ int TaskManager::TerminateTask(TaskInfo* task_info) {
     ExecuteResponse initd_response;
     initd_request.set_key(task_info->stop_process.key());
     initd_request.set_commands(stop_command);
+    if (FLAGS_agent_namespace_isolation_switch) {
+        initd_request.set_chroot_path(task_info->task_chroot_path); 
+    }
     initd_request.set_path(task_info->task_workspace);
     initd_request.set_cgroup_path(task_info->cgroup_path);
     initd_request.set_user(FLAGS_agent_default_user);
@@ -467,6 +474,9 @@ int TaskManager::DeployTask(TaskInfo* task_info) {
     ExecuteResponse initd_response;
     initd_request.set_key(task_info->deploy_process.key());
     initd_request.set_commands(deploy_command);
+    if (FLAGS_agent_namespace_isolation_switch) {
+        initd_request.set_chroot_path(task_info->task_chroot_path); 
+    }
     initd_request.set_path(task_info->task_workspace);
     initd_request.set_cgroup_path(task_info->cgroup_path);
 
@@ -549,7 +559,7 @@ int TaskManager::PrepareWorkspace(TaskInfo* task) {
         return -1;
     }
 
-    std::string task_workspace = workspace_root;
+    std::string task_workspace(workspace_root);
     task_workspace.append("/");
     task_workspace.append(task->task_id);
     if (!file::Mkdir(task_workspace)) {
@@ -557,6 +567,9 @@ int TaskManager::PrepareWorkspace(TaskInfo* task) {
         return -1;
     }
     task->task_workspace = task_workspace;
+    task->task_chroot_path = FLAGS_agent_work_dir;
+    task->task_chroot_path.append("/");
+    task->task_chroot_path.append(task->pod_id);
     LOG(INFO, "task %s workspace %s",
             task->task_id.c_str(), task->task_workspace.c_str());
     return 0;
