@@ -264,6 +264,7 @@ message ReservedPodInfo {
     optional string podid = 1;
     optional string jobid = 2;
     optional string endpoint = 3;
+    optional Resource resource = 4;
 }
 
 service Master {

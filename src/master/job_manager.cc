@@ -577,7 +577,7 @@ Status JobManager::Propose(const ScheduleInfo& sche_info) {
         }
         agent->set_version(agent->version() + 1);
         pod->set_endpoint(sche_info.endpoint());
-        ChangeStage(kStageRunning, pod, job_it->second);
+        ChangeStage(kStageDeploying, pod, job_it->second);
         LOG(INFO, "propose success, %s will be run on %s",
         podid.c_str(), endpoint.c_str());
         return kOk;
@@ -587,9 +587,8 @@ Status JobManager::Propose(const ScheduleInfo& sche_info) {
         LOG(INFO, "update pod %s of job %s", 
                   pod->podid().c_str(),
                   job->id_.c_str());
-        pod->set_version(job->latest_version);
-        AddReservedPod(pod->endpoint(), pod->podid(), job->id_);
         ChangeStage(kStageDeath, pod, job);
+        pod->set_version(job->latest_version);
         return kOk;
     }
     return kInputError;
@@ -917,9 +916,7 @@ void JobManager::QueryAgentCallback(AgentAddr endpoint, const QueryRequest* requ
         PodStage stage = state_to_stage_[pod->state()];
         if (job->state_ != kJobTerminated &&
             stage == kStageDeath) {
-            AddReservedPod(pod->endpoint(), 
-                           pod->podid(),
-                           job->id_);
+            
         }
         ChangeStage(stage, pod, job);
     }
@@ -1233,6 +1230,9 @@ bool JobManager::HandleDeathToPending(PodStatus* pod, Job* job) {
     }
     pod->set_stage(kStagePending);
     pod->set_state(kPodPending);
+    AddReservedPod(pod->endpoint(), 
+                   pod->podid(),
+                   job->id_);
     LOG(INFO, "reschedule pod %s of job %s", pod->podid().c_str(), job->id_.c_str());
     std::map<AgentAddr, PodMap>::iterator a_it = pods_on_agent_.find(pod->endpoint());
     if (a_it != pods_on_agent_.end()) {
@@ -1502,18 +1502,8 @@ bool JobManager::CalcAgentLeftResource(const AgentInfo* agent, Resource* left) {
         return true;
     }
     std::map<AgentAddr, PodMap>::iterator a_it = pods_on_agent_.find(agent->endpoint());
-    bool agent_has_pod = a_it != pods_on_agent_.end();
     ReservedPodMap::iterator pod_it = r_it->second.begin();
     for (; pod_it != r_it->second.end(); ++pod_it) {
-        if (agent_has_pod) {
-            PodMap::iterator job_it = a_it->second.find(pod_it->second.jobid());
-            if (job_it != a_it->second.end()
-        && job_it->second.find(pod_it->second.podid()) != job_it->second.end()) {
-                LOG(WARNING, "pod %s of job %s are still on agent %s", pod_it->second.podid().c_str(),
-                  pod_it->second.jobid().c_str(), agent->endpoint().c_str());
-                continue;
-            }
-        }
         PodDescriptor desc;
         bool ok = GetPodDesc(pod_it->second.jobid(), pod_it->second.podid(), &desc);
         if (!ok) {
