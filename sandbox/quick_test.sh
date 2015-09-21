@@ -2,6 +2,7 @@
 set -e
 
 ./clear.sh
+[ -d gc_dir ] || mkdir gc_dir 
 
 hn=`hostname`
 echo "--master_port=7810" > galaxy.flag
