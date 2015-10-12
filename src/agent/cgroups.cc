@@ -18,6 +18,32 @@ namespace baidu {
 namespace galaxy {
 namespace cgroups {
 
+bool FreezerSwitch(const std::string& hierarchy,
+                   const std::string& cgroup,
+                   const std::string& freezer_state) {
+    const int MAX_RETRY_TIMES = 3;    
+    for (int i = 0; i < MAX_RETRY_TIMES; ++i) {
+        if (0 != Write(hierarchy, 
+                       cgroup, 
+                       "freezer.state", 
+                       freezer_state)) {
+            return false; 
+        }     
+        ::usleep(100000);  
+        std::string freezer_state_val;
+        if (0 != Read(hierarchy,
+                      cgroup,
+                      "freezer.state",
+                      &freezer_state_val)) {
+            return false; 
+        } 
+        if (freezer_state_val == freezer_state) {
+            return true; 
+        }
+    }    
+    return false;
+}
+
 bool GetPidsFromCgroup(const std::string& hierarchy,
                        const std::string& cgroup,
                        std::vector<int>* pids) {
@@ -108,6 +134,7 @@ int Read(const std::string& hierarchy,
         return -1;
     }
     ::fclose(fin);
+    boost::algorithm::trim(*value);
     return 0;
 }
 

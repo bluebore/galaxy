@@ -53,13 +53,13 @@ struct CgroupResourceStatistics {
     long cpu_system_time;
 
     // cpu_cores from cfs_quota_usota_us
-    double cpu_cores_limit;
+    long cpu_cores_limit;
 
     long memory_rss_in_bytes;
     CgroupResourceStatistics() :
         cpu_user_time(0),
         cpu_system_time(0),
-        cpu_cores_limit(0.0),
+        cpu_cores_limit(0),
         memory_rss_in_bytes(0) {
     }
 };
@@ -75,6 +75,7 @@ public:
     double GetCpuCoresUsage();
     virtual bool CollectStatistics();
 private:
+    double GetCpuUsageInternal();
     ResourceStatistics global_statistics_prev_;
     ResourceStatistics global_statistics_cur_;
     CgroupResourceStatistics cgroup_statistics_prev_;

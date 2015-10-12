@@ -294,8 +294,9 @@ bool PodScaleUpCell::FeasibilityCheck(const AgentInfoExtend* agent_info_extend) 
         std::string label = pod->labels(0);
         if (!label.empty() && agent_info_extend->labels_set.find(label) 
                                             == agent_info_extend->labels_set.end()) {
-            LOG(INFO, "agent %s does not fit job %s label check %s", 
+            LOG(INFO, "agent %s with version %d does not fit job %s label check %s", 
                       agent_info_extend->agent_info->endpoint().c_str(),
+                      agent_info_extend->agent_info->version(),
                       job->jobid().c_str(),
                       label.c_str());         
             return false;
@@ -311,8 +312,9 @@ bool PodScaleUpCell::FeasibilityCheck(const AgentInfoExtend* agent_info_extend) 
         int32_t port = pod->requirement().ports(port_ind);
         if (agent_info_extend->used_port_set.find(port) != 
                 agent_info_extend->used_port_set.end()) {
-            LOG(INFO, "agent %s does not fit job %s port check used %d",
+            LOG(INFO, "agent %s with version %d does not fit job %s port check used %d",
                     agent_info_extend->agent_info->endpoint().c_str(),
+                    agent_info_extend->agent_info->version(),
                     job->jobid().c_str(),
                     port);
             return false; 
@@ -329,8 +331,9 @@ bool PodScaleUpCell::FeasibilityCheck(const AgentInfoExtend* agent_info_extend) 
                 agent_info_extend->agent_info->endpoint().c_str(), 
                 job->jobid().c_str());
         } else {
-            LOG(INFO, "agent %s does not fit job %s require:mem require %ld, cpu require %d , agent stat:mem total %ld, cpu total %d, mem assigned %ld, cpu assinged %d, mem used %ld, cpu used %d",
-              agent_info_extend->agent_info->endpoint().c_str(),job->jobid().c_str(),
+            LOG(INFO, "agent %s with version %d does not fit job %s require:mem require %ld, cpu require %d , agent stat:mem total %ld, cpu total %d, mem assigned %ld, cpu assinged %d, mem used %ld, cpu used %d",
+              agent_info_extend->agent_info->endpoint().c_str(), agent_info_extend->agent_info->version(),
+              job->jobid().c_str(),
               pod->requirement().memory(), pod->requirement().millicores(),
               agent_info_extend->agent_info->total().memory(), agent_info_extend->agent_info->total().millicores(),
               agent_info_extend->agent_info->assigned().memory(), agent_info_extend->agent_info->assigned().millicores(),

@@ -9,7 +9,7 @@
 #include "gflags/gflags.h"
 
 DEFINE_string(cgroup_mount_path, "", "cgroup mount root path");
-DEFINE_string(operation, "", "support operation : AttachPid GetPids Read Write");
+DEFINE_string(operation, "", "support operation : AttachPid GetPids Read Write Frozen Thaw");
 DEFINE_string(cgroups_subsystem, "", "operate subsystem");
 DEFINE_string(cgroups_name, "", "use cgroup_name");
 DEFINE_string(cgroup_control_file, "", "control file name");
@@ -65,7 +65,7 @@ int main(int argc, char* argv[]) {
                                                 FLAGS_cgroups_name,
                                                 FLAGS_cgroup_control_file,
                                                 FLAGS_write_value); 
-        if (!ret) {
+        if (ret != 0) {
             fprintf(stderr, "write %s to %s failed\n",
                             FLAGS_cgroup_control_file.c_str(),
                             FLAGS_cgroups_name.c_str()); 
@@ -74,6 +74,28 @@ int main(int argc, char* argv[]) {
                             FLAGS_cgroup_control_file.c_str(),
                             FLAGS_cgroups_name.c_str(),
                             FLAGS_write_value.c_str()); 
+        }
+    } else if (FLAGS_operation == "Frozen") {
+        bool ret = baidu::galaxy::cgroups::FreezerSwitch(hierarchy,
+                                                        FLAGS_cgroups_name, 
+                                                        "FROZEN");
+        if (!ret) {
+            fprintf(stderr, "freezer switch %s to Frozen failed\n",
+                            FLAGS_cgroups_name.c_str()); 
+        } else {
+            fprintf(stdout, "freezer switch %s to Frozen success\n",
+                            FLAGS_cgroups_name.c_str()); 
+        }
+    } else if (FLAGS_operation == "Thaw") {
+        bool ret = baidu::galaxy::cgroups::FreezerSwitch(hierarchy,
+                                                         FLAGS_cgroups_name,
+                                                         "THAWED"); 
+        if (!ret) {
+            fprintf(stderr, "freezer switch %s to Thaw failed\n",
+                    FLAGS_cgroups_name.c_str()); 
+        } else {
+            fprintf(stdout, "freezer switch %s to Thaw success\n",
+                    FLAGS_cgroups_name.c_str()); 
         }
     } else {
         fprintf(stderr, "invalid operation %s\n", FLAGS_operation.c_str());

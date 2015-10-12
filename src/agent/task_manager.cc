@@ -26,6 +26,7 @@
 #include "agent/resource_collector.h"
 #include "logging.h"
 #include "timer.h"
+#include "agent/cpu_scheduler.h"
 
 DECLARE_string(gce_cgroup_root);
 DECLARE_string(gce_support_subsystems);
@@ -36,6 +37,9 @@ DECLARE_int32(agent_millicores_share);
 DECLARE_int64(agent_mem_share);
 DECLARE_string(agent_default_user);
 DECLARE_bool(agent_namespace_isolation_switch);
+DECLARE_bool(cpu_scheduler_switch);
+DECLARE_int32(cpu_scheduler_intervals);
+DECLARE_int32(cpu_scheduler_start_frozen_time);
 
 namespace baidu {
 namespace galaxy {
@@ -68,6 +72,7 @@ int TaskManager::Init() {
         if (sub_systems[i].empty()) {
             continue; 
         }
+        // no deal with freezer
         std::string hierarchy =
             FLAGS_gce_cgroup_root + "/" 
             + sub_systems[i];
@@ -81,7 +86,8 @@ int TaskManager::Init() {
         }
 
         LOG(INFO, "support cgroups hierarchy %s", hierarchy.c_str());
-        hierarchies_.push_back(hierarchy);
+
+        hierarchies_[sub_systems[i]] = hierarchy;
     }
     LOG(INFO, "support cgroups types %u", sub_systems.size());
     return 0;
@@ -262,6 +268,8 @@ int TaskManager::RunTask(TaskInfo* task_info) {
         }
     }
     
+    ResetCpuScheduler(task_info); 
+
     task_info->stage = kTaskStageRUNNING;
     task_info->status.set_state(kTaskRunning);
     SetupRunProcessKey(task_info);
@@ -272,6 +280,9 @@ int TaskManager::RunTask(TaskInfo* task_info) {
     initd_request.set_commands(task_info->desc.start_command());
     if (FLAGS_agent_namespace_isolation_switch) {
         initd_request.set_chroot_path(task_info->task_chroot_path); 
+        std::string* chroot_path = initd_request.add_envs();
+        chroot_path->append("CHROOT_PATH=");
+        chroot_path->append(task_info->task_chroot_path);
     }
     initd_request.set_path(task_info->task_workspace);
     initd_request.set_cgroup_path(task_info->cgroup_path);
@@ -282,6 +293,7 @@ int TaskManager::RunTask(TaskInfo* task_info) {
     std::string* task_id = initd_request.add_envs();
     task_id->append("TASK_ID=");
     task_id->append(task_info->task_id);
+    
     if (task_info->initd_stub == NULL 
             && !rpc_client_->GetStub(task_info->initd_endpoint, 
                                      &(task_info->initd_stub))) {
@@ -344,6 +356,9 @@ int TaskManager::TerminateTask(TaskInfo* task_info) {
     initd_request.set_commands(stop_command);
     if (FLAGS_agent_namespace_isolation_switch) {
         initd_request.set_chroot_path(task_info->task_chroot_path); 
+        std::string* chroot_path = initd_request.add_envs();
+        chroot_path->append("CHROOT_PATH=");
+        chroot_path->append(task_info->task_chroot_path);
     }
     initd_request.set_path(task_info->task_workspace);
     initd_request.set_cgroup_path(task_info->cgroup_path);
@@ -476,6 +491,9 @@ int TaskManager::DeployTask(TaskInfo* task_info) {
     initd_request.set_commands(deploy_command);
     if (FLAGS_agent_namespace_isolation_switch) {
         initd_request.set_chroot_path(task_info->task_chroot_path); 
+        std::string* chroot_path = initd_request.add_envs();
+        chroot_path->append("CHROOT_PATH=");
+        chroot_path->append(task_info->task_chroot_path);
     }
     initd_request.set_path(task_info->task_workspace);
     initd_request.set_cgroup_path(task_info->cgroup_path);
@@ -562,20 +580,19 @@ int TaskManager::PrepareWorkspace(TaskInfo* task) {
     std::string task_workspace(workspace_root);
     task_workspace.append("/");
     task_workspace.append(task->task_id);
-    if (!file::Mkdir(task_workspace)) {
+    if (!file::MkdirRecur(task_workspace)) {
         LOG(WARNING, "mkdir task workspace failed");
         return -1;
     }
+
     task->task_workspace = task_workspace;
-    task->task_chroot_path = FLAGS_agent_work_dir;
-    task->task_chroot_path.append("/");
-    task->task_chroot_path.append(task->pod_id);
+    task->task_chroot_path = workspace_root;
     LOG(INFO, "task %s workspace %s",
             task->task_id.c_str(), task->task_workspace.c_str());
     return 0;
 }
 
-int TaskManager::CleanWorkspace(TaskInfo*) {
+int TaskManager::CleanWorkspace(TaskInfo* /*task*/) {
     tasks_mutex_.AssertHeld();
     return 0;
 }
@@ -672,7 +689,7 @@ int TaskManager::RunProcessCheck(TaskInfo* task_info) {
     // 1. query main_process status
     if (QueryProcessInfo(task_info->initd_stub, 
                 &(task_info->main_process)) != 0) {
-        LOG(WARNING, "task %s check deploy state failed",
+        LOG(WARNING, "task %s check run state failed",
                 task_info->task_id.c_str());
         task_info->status.set_state(kTaskError);
         return -1;
@@ -796,10 +813,10 @@ int TaskManager::PrepareCgroupEnv(TaskInfo* task) {
     std::string cgroup_name = FLAGS_agent_global_cgroup_path + "/" 
         + task->task_id;
     task->cgroup_path = cgroup_name;
-    std::vector<std::string>::iterator hier_it = 
+    std::map<std::string, std::string>::iterator hier_it = 
         hierarchies_.begin();
     for (; hier_it != hierarchies_.end(); ++hier_it) {
-        std::string cgroup_dir = *hier_it;     
+        std::string cgroup_dir = hier_it->second;     
         cgroup_dir.append("/");
         cgroup_dir.append(cgroup_name);
         if (!file::Mkdir(cgroup_dir)) {
@@ -811,8 +828,8 @@ int TaskManager::PrepareCgroupEnv(TaskInfo* task) {
                   cgroup_dir.c_str(), task->task_id.c_str());
     }
 
-    std::string cpu_hierarchy = FLAGS_gce_cgroup_root + "/cpu/";
-    std::string mem_hierarchy = FLAGS_gce_cgroup_root + "/memory/";
+    std::string cpu_hierarchy = hierarchies_["cpu"];
+    std::string mem_hierarchy = hierarchies_["memory"];
     const int CPU_CFS_PERIOD = 100000;
     const int MIN_CPU_CFS_QUOTA = 1000;
 
@@ -863,6 +880,11 @@ int TaskManager::PrepareCgroupEnv(TaskInfo* task) {
         return -1;
     }
     
+    if (PrepareCpuScheduler(task) != 0) {
+        LOG(WARNING, "prepare cpu scheduler for %s failed", 
+                        task->task_id.c_str());
+        return -1; 
+    }
     return 0;    
 }
 
@@ -871,25 +893,41 @@ int TaskManager::CleanCgroupEnv(TaskInfo* task) {
         return -1; 
     }
 
-    std::vector<std::string>::iterator hier_it = 
-        hierarchies_.begin();
+    if (CleanCpuScheduler(task) != 0) {
+        LOG(WARNING, "clean cpu scheduler for %s failed",
+                        task->task_id.c_str()); 
+        return -1;
+    }
+
     std::string cgroup = FLAGS_agent_global_cgroup_path + "/" 
         + task->task_id;
+    std::string freezer_hierarchy = hierarchies_["freezer"];
+    std::map<std::string, std::string>::iterator hier_it = 
+        hierarchies_.begin();
     for (; hier_it != hierarchies_.end(); ++hier_it) {
-        std::string cgroup_dir = *hier_it; 
+        if (hier_it->first == "freezer") {
+            continue; 
+        }
+        std::string cgroup_dir = hier_it->second; 
         cgroup_dir.append("/");
         cgroup_dir.append(cgroup);
         if (!file::IsExists(cgroup_dir)) {
             LOG(INFO, "%s %s not exists",
-                    (*hier_it).c_str(), cgroup.c_str()); 
+                    (hier_it->second).c_str(), cgroup.c_str()); 
             continue;
         }
+        if (!cgroups::FreezerSwitch(freezer_hierarchy, 
+                                    cgroup, "FROZEN")) {
+            LOG(WARNING, "%s %s frozen failed", freezer_hierarchy.c_str(), cgroup.c_str()); 
+            return -1;
+        }
         std::vector<int> pids;
-        if (!cgroups::GetPidsFromCgroup(*hier_it, cgroup, &pids)) {
+        if (!cgroups::GetPidsFromCgroup(hier_it->second, cgroup, &pids)) {
             LOG(WARNING, "get pids from %s failed",
                     cgroup.c_str());  
             return -1;
         }
+
         std::vector<int>::iterator pid_it = pids.begin();
         for (; pid_it != pids.end(); ++pid_it) {
             int pid = *pid_it;
@@ -897,6 +935,12 @@ int TaskManager::CleanCgroupEnv(TaskInfo* task) {
                 ::kill(pid, SIGKILL); 
             }
         }
+        if (!cgroups::FreezerSwitch(freezer_hierarchy,
+                                    cgroup, "THAWED")) {
+            LOG(WARNING, "%s %s thawed failed", freezer_hierarchy.c_str(), cgroup.c_str()); 
+            return -1;
+        }
+
         if (::rmdir(cgroup_dir.c_str()) != 0
                 && errno != ENOENT) {
             LOG(WARNING, "rmdir %s failed err[%d: %s]",
@@ -904,6 +948,16 @@ int TaskManager::CleanCgroupEnv(TaskInfo* task) {
             return -1;
         }
     }
+
+    std::string freezer_cgroup_path = freezer_hierarchy + "/" + cgroup;
+    if (::rmdir(freezer_cgroup_path.c_str()) != 0
+            && errno != ENOENT) {
+        LOG(WARNING, "rmdir %s/%s failed err[%d: %s]",
+                freezer_hierarchy.c_str(), cgroup.c_str(), 
+                errno, strerror(errno)); 
+        return -1;
+    }
+
     return 0;
 }
 
@@ -957,6 +1011,48 @@ void TaskManager::SetResourceUsage(TaskInfo* task_info) {
     task_info->status.mutable_resource_used()->set_memory(
             memory_used);
     return ; 
+}
+
+int TaskManager::ResetCpuScheduler(TaskInfo* task_info) {
+    if (!FLAGS_cpu_scheduler_switch) {
+        return 0; 
+    }
+
+    CpuScheduler* scheduler = CpuScheduler::GetInstance();
+    scheduler->SetFrozen(task_info->cgroup_path, 
+                         FLAGS_cpu_scheduler_start_frozen_time 
+                         * 1000);
+    return 0;
+}
+
+int TaskManager::PrepareCpuScheduler(TaskInfo* task_info) {
+    if (!FLAGS_cpu_scheduler_switch) {
+        return 0; 
+    }
+
+    CpuScheduler* scheduler = CpuScheduler::GetInstance(); 
+    if (!scheduler->EnqueueTask(
+                task_info->cgroup_path, 
+                task_info->desc.requirement().millicores())) {
+        LOG(WARNING, "enqueue task %s failed",
+                    task_info->task_id.c_str());
+        return -1;  
+    }
+    return 0;
+}
+
+int TaskManager::CleanCpuScheduler(TaskInfo* task_info) {
+    if (!FLAGS_cpu_scheduler_switch) {
+        return 0; 
+    }
+
+    CpuScheduler* scheduler = CpuScheduler::GetInstance();  
+    if (!scheduler->DequeueTask(task_info->cgroup_path)) {
+        LOG(WARNING, "dequeue task %s failed", 
+                    task_info->task_id.c_str());
+        return -1; 
+    }
+    return 0;
 }
 
 }   // ending namespace galaxy

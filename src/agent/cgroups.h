@@ -12,6 +12,10 @@ namespace baidu {
 namespace galaxy {
 namespace cgroups {
 
+bool FreezerSwitch(const std::string& hierarchy,
+                   const std::string& cgroup,
+                   const std::string& freezer_state);
+
 bool GetPidsFromCgroup(const std::string& hierarchy, 
                        const std::string& cgroup, 
                        std::vector<int>* pids);

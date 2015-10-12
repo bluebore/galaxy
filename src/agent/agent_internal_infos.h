@@ -41,6 +41,7 @@ struct TaskInfo {
     Initd_Stub* initd_stub;
     CGroupResourceCollector* resource_collector; 
 
+
     std::string ToString() {
         std::string pb_str;
         std::string str_format;     

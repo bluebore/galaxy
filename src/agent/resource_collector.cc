@@ -115,6 +115,13 @@ void CGroupResourceCollector::Clear() {
 }
 
 double CGroupResourceCollector::GetCpuUsage() {
+    if (cgroup_statistics_cur_.cpu_cores_limit == 0) {
+        return 0.0; 
+    }
+    return GetCpuUsageInternal() * CPU_CORES / cgroup_statistics_cur_.cpu_cores_limit * 100000;
+}
+
+double CGroupResourceCollector::GetCpuUsageInternal() {
     if (collector_times_ < 2) {
         return 0.0; 
     } 
@@ -149,6 +156,7 @@ double CGroupResourceCollector::GetCpuUsage() {
             || cgroup_cpu_after - cgroup_cpu_before < 0) {
         return 0.0; 
     }
+
     double rs = (cgroup_cpu_after - cgroup_cpu_before) 
                 / (double) (global_cpu_after - global_cpu_before);
     return rs;
@@ -162,7 +170,7 @@ long CGroupResourceCollector::GetMemoryUsage() {
 }
 
 double CGroupResourceCollector::GetCpuCoresUsage() {
-    return GetCpuUsage() * CPU_CORES;
+    return GetCpuUsageInternal() * CPU_CORES;
 }
 
 bool CGroupResourceCollector::CollectStatistics() {
@@ -380,6 +388,22 @@ bool GetCgroupCpuUsage(const std::string& group_path,
         return false; 
     }
     
+    statistics->cpu_cores_limit = 0L;
+    hierarchy = FLAGS_gce_cgroup_root  + "/cpu/";
+    value = "";
+    if (0 != cgroups::Read(hierarchy,
+                           group_path,
+                           "cpu.cfs_quota_us",
+                           &value)) {
+        LOG(WARNING, "get cpu cfs_quota_us failed %s",
+                     group_path.c_str()); 
+        return false;
+    }
+    statistics->cpu_cores_limit = ::atol(value.c_str());
+    if (statistics->cpu_cores_limit == 0) {
+        return false; 
+    }
+
     return true;
 }
 

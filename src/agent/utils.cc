@@ -491,6 +491,20 @@ bool Chown(const std::string& path, uid_t uid, gid_t gid) {
     return Traverse(path, boost::bind(::lchown, _1, uid, gid));
 }
 
+bool SymbolLink(const std::string& old_path, const std::string& new_path) {
+    if (IsExists(new_path)) {
+        return false; 
+    }
+
+    if (0 != ::symlink(old_path.c_str(), new_path.c_str())) {
+        LOG(WARNING, "symlink failed for old[%s] new[%s] err[%d: %s]",
+                     old_path.c_str(), new_path.c_str(),
+                     errno, strerror(errno));         
+        return false;
+    } 
+    return true;
+}
+
 }   // ending namespace file
 }   // ending namespace galaxy
 }   // ending namespace baidu

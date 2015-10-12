@@ -61,6 +61,16 @@ DEFINE_string(agent_global_cgroup_path, "galaxy", "agent cgroup global path");
 DEFINE_int32(agent_detect_interval, 1000, "agent detect process running interval");
 DEFINE_string(agent_default_user, "galaxy", "agent default run task user");
 
+DEFINE_int32(cpu_scheduler_intervals, 1000, "agent cpu scheduler intervals");
+DEFINE_int32(cpu_scheduler_collector_intervals, 200, "agent cpu scheduler resource collect intervals");
+DEFINE_int32(cpu_scheduler_idle_high_limit, 2000, "agent cpu scheduler idle high limit cores");
+DEFINE_int32(cpu_scheduler_idle_low_limit, 1000, "agent cpu scheduler idle low limit cores");
+DEFINE_int32(cpu_scheduler_guarantee, 1500, "agent cpu scheduler guarantee");
+DEFINE_int32(cpu_scheduler_dec, 500, "agent cpu scheduler dec");
+DEFINE_bool(cpu_scheduler_switch, false, "agent cpu scheduler switch");
+DEFINE_int32(cpu_scheduler_start_frozen_time, 20, "start forzen time, unit second");
+
+
 // gce
 DEFINE_string(gce_cgroup_root, "/cgroups/", "Cgroup root mount path");
 DEFINE_string(gce_support_subsystems, "", "Cgroup default support subsystems");

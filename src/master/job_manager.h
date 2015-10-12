@@ -30,6 +30,7 @@ typedef google::protobuf::RepeatedPtrField<baidu::galaxy::DiffVersion> DiffVersi
 typedef google::protobuf::RepeatedPtrField<std::string> StringList;
 typedef std::string Version;
 typedef google::protobuf::RepeatedPtrField<baidu::galaxy::PodOverview> PodOverviewList;
+typedef std::map<JobId, std::map<PodId, PodStatus*> > PodMap;
 
 struct Job {
     JobState state_;
@@ -84,14 +85,15 @@ private:
     void RunPodCallback(PodStatus* pod, AgentAddr endpoint, const RunPodRequest* request,
                         RunPodResponse* response, bool failed, int error);
 
-    void SendKillToAgent(PodStatus* pod);
+    void SendKillToAgent(const AgentAddr& addr, const PodId& podid,
+                         const JobId& jobid);
     void Query();
     void QueryAgent(AgentInfo* agent);
     void QueryAgentCallback(AgentAddr endpoint, const QueryRequest* request,
                             QueryResponse* response, bool failed, int error, 
                             int64_t seq_id_at_query);
-    void UpdateAgentVersion(AgentInfo* old_agent_info, 
-                            const AgentInfo& new_agent_info);
+    void UpdateAgent(const AgentInfo& agent,
+                     AgentInfo* agent_in_master);
     
     bool CompareAgentInfo(const AgentInfo* old_agent_info, const AgentInfo* new_agent_info);
 
@@ -120,7 +122,8 @@ private:
     std::string BuildHandlerKey(const PodStage& from,
                                 const PodStage& to);
 
-    void ChangeStage(const PodStage& to,
+    void ChangeStage(const std::string& reason,
+                     const PodStage& to,
                      PodStatus* pod,
                      Job* job);
 
@@ -140,9 +143,11 @@ private:
 
     bool HandleUpdateJob(const JobDescriptor& desc, Job* job, 
                          bool* replica_change, bool* pod_desc_change);
+
+    void HandleLostPod(const AgentAddr& addr, const PodMap& pods_not_on_agent);
+    void HandleExpiredPod(const std::vector<PodStatus>& pods);
 private:
     std::map<JobId, Job*> jobs_;
-    typedef std::map<JobId, std::map<PodId, PodStatus*> > PodMap;
     // all jobs that need scale up
     std::set<JobId> scale_up_jobs_;
     // all jobs that need scale down

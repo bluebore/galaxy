@@ -429,9 +429,10 @@ void JobManager::ProcessScaleDown(JobInfoList* scale_down_pods,
                 --scale_down_count;
                 pods_will_been_removed.push_back(pod_it->second);
             }
-        } 
+        }
+        std::string reason = "job " + job->id_ + " scale down";
         for (size_t i = 0; i < pods_will_been_removed.size(); ++i) {
-            ChangeStage(kStageRemoved, pods_will_been_removed[i], job);
+            ChangeStage(reason, kStageRemoved, pods_will_been_removed[i], job);
         }
         LOG(INFO, "process scale down job %s, replica %d, pods size %u , remove pending pods count %u, scheduler scale down count %d",
             job->id_.c_str(),
@@ -547,7 +548,8 @@ Status JobManager::Propose(const ScheduleInfo& sche_info) {
     if (sche_info.action() == kTerminate 
         && (job->state_ == kJobTerminated 
             || job->update_state_ == kUpdateSuspend)) {
-        ChangeStage(kStageRemoved, pod, job);
+        std::string reason = "job " + job->id_ + " scale down";
+        ChangeStage(reason, kStageRemoved, pod, job);
         return kOk;
     } else if (sche_info.action() == kLaunch
                && job->state_ != kJobTerminated) {
@@ -577,7 +579,7 @@ Status JobManager::Propose(const ScheduleInfo& sche_info) {
         }
         agent->set_version(agent->version() + 1);
         pod->set_endpoint(sche_info.endpoint());
-        ChangeStage(kStageDeploying, pod, job_it->second);
+        ChangeStage("scheduler propose ",kStageRunning, pod, job_it->second);
         LOG(INFO, "propose success, %s will be run on %s",
         podid.c_str(), endpoint.c_str());
         return kOk;
@@ -587,8 +589,8 @@ Status JobManager::Propose(const ScheduleInfo& sche_info) {
         LOG(INFO, "update pod %s of job %s", 
                   pod->podid().c_str(),
                   job->id_.c_str());
-        ChangeStage(kStageDeath, pod, job);
         pod->set_version(job->latest_version);
+        ChangeStage("kill for update",kStageDeath, pod, job);
         return kOk;
     }
     return kInputError;
@@ -703,9 +705,11 @@ void JobManager::HandleAgentOffline(const std::string agent_addr) {
                 continue;
             }
             pod->set_stage(kStageDeath);
-            ChangeStage(kStagePending, pod, job_it->second);
+            std::string reason = "agent " + agent_addr + " is dead";
+            ChangeStage(reason, kStagePending, pod, job_it->second);
         }
     }
+    pods_on_agent_.erase(agent_addr);
     LOG(INFO, "agent is dead: %s", agent_addr.c_str());
 }
 
@@ -747,7 +751,8 @@ void JobManager::RunPodCallback(PodStatus* pod, AgentAddr endpoint,
         LOG(WARNING, "run pod [%s %s] on [%s] fail: %d", jobid.c_str(),
             podid.c_str(), endpoint.c_str(), status);
         pod->set_stage(kStageDeath);
-        ChangeStage(kStagePending, pod, job_it->second);
+        std::string reason = "run fail on agent " + endpoint;
+        ChangeStage(reason, kStagePending, pod, job_it->second);
     } else {
         std::map<PodId, PodStatus*>::iterator pod_it = job_it->second->pods_.find(podid);
         if (pod_it == job_it->second->pods_.end()) {
@@ -830,7 +835,7 @@ void JobManager::QueryAgentCallback(AgentAddr endpoint, const QueryRequest* requ
     }
     int64_t current_seq_id = agent_sequence_ids_[endpoint];
     if (seq_id_at_query < current_seq_id) {
-        LOG(FATAL, "outdated query callback, just ignore it. %ld < %ld, %s", 
+        LOG(WARNING, "outdated query callback, just ignore it. %ld < %ld, %s",
             seq_id_at_query, current_seq_id, endpoint.c_str());
         return;
     }
@@ -839,22 +844,11 @@ void JobManager::QueryAgentCallback(AgentAddr endpoint, const QueryRequest* requ
         LOG(INFO, "query agent [%s] fail: %d", endpoint.c_str(), status);
         return;
     }
-    const AgentInfo& report_agent_info = response->agent();
-    LOG(INFO, "agent %s stat: mem total %ld, cpu total %d, mem assigned %ld, cpu assigend %d, mem used %ld , cpu used %d, pod size %d , used port size %d",
-        report_agent_info.endpoint().c_str(),
-        report_agent_info.total().memory(), report_agent_info.total().millicores(),
-        report_agent_info.assigned().memory(), report_agent_info.assigned().millicores(),
-        report_agent_info.used().memory(), report_agent_info.used().millicores(),
-        report_agent_info.pods_size(),
-        report_agent_info.assigned().ports_size());
+    const AgentInfo& report_agent_info = response->agent(); 
     AgentInfo* agent = it->second;
-    UpdateAgentVersion(agent, report_agent_info);
-    // copy only needed 
-    agent->mutable_total()->CopyFrom(report_agent_info.total()); 
-    agent->mutable_assigned()->CopyFrom(report_agent_info.assigned());
-    agent->mutable_used()->CopyFrom(report_agent_info.used());
-    agent->mutable_pods()->CopyFrom(report_agent_info.pods());
-    PodMap pods_not_on_agent = pods_on_agent_[endpoint]; // this is a copy
+    UpdateAgent(report_agent_info, agent);
+    PodMap pods_on_agent = pods_on_agent_[endpoint]; // this is a copy
+    std::vector<PodStatus> pods_has_expired;
     for (int32_t i = 0; i < report_agent_info.pods_size(); i++) {
         const PodStatus& report_pod_info = report_agent_info.pods(i);
         const JobId& jobid = report_pod_info.jobid();
@@ -865,8 +859,8 @@ void JobManager::QueryAgentCallback(AgentAddr endpoint, const QueryRequest* requ
                   report_agent_info.endpoint().c_str(),
                   PodState_Name(report_pod_info.state()).c_str(),
                   report_pod_info.version().c_str()); 
-        // validate job 
         std::map<JobId, Job*>::iterator job_it = jobs_.find(jobid);
+        // job does not exist in master
         if (job_it == jobs_.end()) {
             LOG(WARNING, "the job %s from agent %s does not exist in master",
                jobid.c_str(), 
@@ -874,8 +868,7 @@ void JobManager::QueryAgentCallback(AgentAddr endpoint, const QueryRequest* requ
             PodStatus fake_pod;
             fake_pod.CopyFrom(report_pod_info);
             fake_pod.set_endpoint(report_agent_info.endpoint());
-            fake_pod.set_stage(state_to_stage_[fake_pod.state()]);
-            ChangeStage(kStageRemoved, &fake_pod, NULL);
+            pods_has_expired.push_back(fake_pod);
             continue;
         }
         // for recovering
@@ -886,12 +879,15 @@ void JobManager::QueryAgentCallback(AgentAddr endpoint, const QueryRequest* requ
             pod->set_stage(state_to_stage_[pod->state()]);
             pod->set_endpoint(report_agent_info.endpoint());
             jobs_[jobid]->pods_[podid] = pod;
-            pods_not_on_agent[jobid][podid] = pod;
+            pods_on_agent[jobid][podid] = pod;
             pods_on_agent_[endpoint][jobid][podid] = pod;
+            LOG(INFO, "recover pod %s of job %s on agent %s", podid.c_str(), jobid.c_str(), report_agent_info.endpoint().c_str());
         }
+
         // validate pod
         Job* job = job_it->second;
         std::map<PodId, PodStatus*>::iterator p_it = job->pods_.find(podid);
+        // pod does not exist in master
         if (p_it == job->pods_.end()) {
             // TODO should kill this pod
             LOG(WARNING, "the pod %s from agent %s does not exist in master",
@@ -899,43 +895,37 @@ void JobManager::QueryAgentCallback(AgentAddr endpoint, const QueryRequest* requ
             PodStatus fake_pod;
             fake_pod.CopyFrom(report_pod_info);
             fake_pod.set_endpoint(report_agent_info.endpoint());
-            fake_pod.set_stage(state_to_stage_[fake_pod.state()]);
-            ChangeStage(kStageRemoved, &fake_pod, NULL);
-            continue;
-        } 
-        // update pod in master
-        PodStatus* pod = jobs_[jobid]->pods_[podid];
-        pod->mutable_status()->CopyFrom(report_pod_info.status());
-        pod->mutable_resource_used()->CopyFrom(report_pod_info.resource_used());
-        pod->set_state(report_pod_info.state());
-        pod->set_endpoint(report_agent_info.endpoint());
-        pods_not_on_agent[jobid].erase(podid);
-        if (pods_not_on_agent[jobid].size() == 0) {
-            pods_not_on_agent.erase(jobid);
-        }
-        PodStage stage = state_to_stage_[pod->state()];
-        if (job->state_ != kJobTerminated &&
-            stage == kStageDeath) {
-            
-        }
-        ChangeStage(stage, pod, job);
-    }
-
-    PodMap::iterator j_it = pods_not_on_agent.begin();
-    for (; j_it != pods_not_on_agent.end(); ++j_it) {
-        std::map<JobId, Job*>::iterator job_it = jobs_.find(j_it->first);
-        if (job_it == jobs_.end()) {
+            pods_has_expired.push_back(fake_pod);
             continue;
         }
-        std::map<PodId, PodStatus*>::iterator p_it = j_it->second.begin();
-        for (; p_it != j_it->second.end(); ++p_it) {
-            LOG(INFO, "pod %s in master but not in agent, stage in master is %s ", 
-              p_it->second->podid().c_str(),
-              PodStage_Name(p_it->second->stage()).c_str());
-            ChangeStage(kStagePending, p_it->second, job_it->second);
+        std::map<PodId, PodStatus*>::iterator pa_it =  pods_on_agent[jobid].find(podid);
+        // pod has been expired
+        if (pa_it == pods_on_agent[jobid].end()) {
+            LOG(WARNING, "the pod %s from agent %s has expired", podid.c_str(), report_agent_info.endpoint().c_str());
+            PodStatus fake_pod;
+            fake_pod.CopyFrom(report_pod_info);
+            fake_pod.set_endpoint(report_agent_info.endpoint());
+            pods_has_expired.push_back(fake_pod);
+        } else {
+            // update pod in master
+            PodStatus* pod = jobs_[jobid]->pods_[podid];
+            pod->mutable_status()->CopyFrom(report_pod_info.status());
+            pod->mutable_resource_used()->CopyFrom(report_pod_info.resource_used());
+            pod->set_state(report_pod_info.state());
+            pod->set_endpoint(report_agent_info.endpoint());
+            pods_on_agent[jobid].erase(podid);
+            if (pods_on_agent[jobid].size() == 0) {
+                pods_on_agent.erase(jobid);
+            }
+            std::string reason = "pod " + podid + " updates it's stage from agent " + report_agent_info.endpoint();
+            ChangeStage(reason, state_to_stage_[pod->state()], pod, job);
         }
     }
 
+    // handle lost pod
+    HandleLostPod(report_agent_info.endpoint(), pods_on_agent);
+    // send kill cmd to agent
+    HandleExpiredPod(pods_has_expired);
     if (queried_agents_.size() == agents_.size() && safe_mode_) {
         FillAllJobs();
         safe_mode_ = false;
@@ -943,52 +933,63 @@ void JobManager::QueryAgentCallback(AgentAddr endpoint, const QueryRequest* requ
     }
 }
 
-void JobManager::UpdateAgentVersion(AgentInfo* old_agent_info,
-                                    const AgentInfo& new_agent_info) {
-  
-    int old_version = old_agent_info->version();
+void JobManager::UpdateAgent(const AgentInfo& agent,
+                             AgentInfo* agent_in_master) {
+    LOG(INFO, "agent %s stat: mem total %ld, cpu total %d, mem assigned %ld, cpu assigend %d, mem used %ld , cpu used %d, pod size %d , used port size %d",
+        agent.endpoint().c_str(),
+        agent.total().memory(), agent.total().millicores(),
+        agent.assigned().memory(), agent.assigned().millicores(),
+        agent.used().memory(), agent.used().millicores(),
+        agent.pods_size(),
+        agent.assigned().ports_size());
+    int old_version = agent_in_master->version();
     // check assigned
     do {
         int32_t check_assigned = ResourceUtils::Compare(
-                        old_agent_info->assigned(),
-                        new_agent_info.assigned());
+                                 agent_in_master->assigned(),
+                                 agent.assigned());
         if (check_assigned != 0) {
-            old_agent_info->set_version(old_agent_info->version() + 1);
+            agent_in_master->set_version(old_version + 1);
             break;
         }
         
         // check total resource 
         int32_t check_total = ResourceUtils::Compare(
-                        old_agent_info->total(), 
-                        new_agent_info.total());
+                              agent_in_master->total(), 
+                              agent.total());
         if (check_total != 0) {
-            old_agent_info->set_version(old_agent_info->version() + 1);
+            agent_in_master->set_version(old_version + 1);
             break;
         }
 
-        if (old_agent_info->assigned().ports_size() 
-          != new_agent_info.assigned().ports_size()) {
-            old_agent_info->set_version(old_agent_info->version() + 1);
+        if (agent_in_master->assigned().ports_size() 
+            != agent.assigned().ports_size()) {
+            agent_in_master->set_version(old_version + 1);
             break;
         }
         std::set<int32_t> used_ports;
-        for (int i = 0; i < old_agent_info->assigned().ports_size(); i++) {
-            used_ports.insert(old_agent_info->assigned().ports(i));
+        for (int i = 0; i < agent_in_master->assigned().ports_size(); i++) {
+            used_ports.insert(agent_in_master->assigned().ports(i));
         }
-        for (int i = 0; i < new_agent_info.assigned().ports_size(); i++) {
-            if (used_ports.find(new_agent_info.assigned().ports(i))
+        for (int i = 0; i < agent.assigned().ports_size(); i++) {
+            if (used_ports.find(agent.assigned().ports(i))
                 != used_ports.end()) {
                 continue;
             }
-            old_agent_info->set_version(old_agent_info->version() + 1);
+            agent_in_master->set_version(old_version + 1);
             break;
         }
     } while(0);
-
-    LOG(INFO, "agent %s change version from %d to %d", 
-              old_agent_info->endpoint().c_str(), 
+    agent_in_master->mutable_total()->CopyFrom(agent.total()); 
+    agent_in_master->mutable_assigned()->CopyFrom(agent.assigned());
+    agent_in_master->mutable_used()->CopyFrom(agent.used());
+    agent_in_master->mutable_pods()->CopyFrom(agent.pods());
+    if (agent_in_master->version() != old_version) {
+        LOG(INFO, "agent %s change version from %d to %d", 
+              agent_in_master->endpoint().c_str(), 
               old_version,
-              old_agent_info->version());
+              agent_in_master->version());
+    }
     return; 
 }
 
@@ -1142,7 +1143,8 @@ std::string JobManager::BuildHandlerKey(const PodStage& from,
     return PodStage_Name(from) + ":" + PodStage_Name(to);
 }
 
-void JobManager::ChangeStage(const PodStage& to,
+void JobManager::ChangeStage(const std::string& reason,
+                             const PodStage& to,
                              PodStatus* pod,
                              Job* job) {
     mutex_.AssertHeld();
@@ -1164,11 +1166,17 @@ void JobManager::ChangeStage(const PodStage& to,
         PodStage_Name(to).c_str());
         return;
     }
-    LOG(INFO, "pod %s change stage from %s to %s",
-      pod->podid().c_str(),
-      PodStage_Name(old_stage).c_str(),
-      PodStage_Name(to).c_str());
-    h_it->second(pod, job);
+    PodId podid = pod->podid();
+    JobId jobid = pod->jobid();
+    bool ok = h_it->second(pod, job);
+    // log used for tracing 
+    LOG(INFO, "[trace] pod %s of job %s changes stage from %s to %s for %s %d",
+    podid.c_str(),
+    jobid.c_str(),
+    PodStage_Name(old_stage).c_str(),
+    PodStage_Name(to).c_str(),
+    reason.c_str(),
+    ok);
 }
 
 bool JobManager::HandleCleanPod(PodStatus* pod, Job* job) {
@@ -1218,7 +1226,7 @@ bool JobManager::HandleRunningToDeath(PodStatus* pod, Job*) {
         return false;
     }
     pod->set_stage(kStageDeath);
-    SendKillToAgent(pod);
+    SendKillToAgent(pod->endpoint(), pod->podid(), pod->jobid());
     return true;
 }
 
@@ -1253,7 +1261,7 @@ bool JobManager::HandleRunningToRemoved(PodStatus* pod, Job*) {
         return false;
     }
     pod->set_stage(kStageRemoved);
-    SendKillToAgent(pod);
+    SendKillToAgent(pod->endpoint(), pod->podid(), pod->jobid());
     return true;
 }
 
@@ -1262,30 +1270,29 @@ bool JobManager::HandleDoNothing(PodStatus*, Job*) {
     return true;
 }
 
-void JobManager::SendKillToAgent(PodStatus*  pod) {
-    mutex_.AssertHeld();
-    if (pod == NULL) {
-        return;
-    }
+void JobManager::SendKillToAgent(const AgentAddr& addr, 
+                                 const PodId& podid, 
+                                 const JobId& jobid) {
+    mutex_.AssertHeld(); 
     std::map<AgentAddr, AgentInfo*>::iterator a_it =
-      agents_.find(pod->endpoint());
+      agents_.find(addr);
     if (a_it == agents_.end()) {
-        LOG(WARNING, "no such agent %s", pod->endpoint().c_str());
+        LOG(WARNING, "no such agent %s", addr.c_str());
         return;
     }
-    AgentInfo* agent_info = agents_[pod->endpoint()]; 
+    AgentInfo* agent_info = a_it->second; 
     if (agent_info->state() == kDead) {
+        LOG(WARNING, "agent %s is dead, fail to kill pod %s", addr.c_str(), podid.c_str());
         return;
     }
     // tell agent to clean pod
     KillPodRequest* request = new KillPodRequest;
     KillPodResponse* response = new KillPodResponse;
-    request->set_podid(pod->podid());
+    request->set_podid(podid);
     Agent_Stub* stub;
-    rpc_client_.GetStub(pod->endpoint(), &stub);
+    rpc_client_.GetStub(addr, &stub);
     boost::function<void (const KillPodRequest*, KillPodResponse*, bool, int)> kill_pod_callback;
-    kill_pod_callback = boost::bind(&JobManager::KillPodCallback, this, pod->podid(),
-                                    pod->jobid(),pod->endpoint(),
+    kill_pod_callback = boost::bind(&JobManager::KillPodCallback, this, podid, jobid, addr,
                                     _1, _2, _3, _4);
     rpc_client_.AsyncRequest(stub, &Agent_Stub::KillPod, request, response,
                                  kill_pod_callback, FLAGS_master_agent_rpc_timeout, 0);
@@ -1522,5 +1529,32 @@ bool JobManager::CalcAgentLeftResource(const AgentInfo* agent, Resource* left) {
     left->CopyFrom(total);
     return true;
 }
+void JobManager::HandleLostPod(const AgentAddr& addr, const PodMap& pods_not_on_agent) {
+    mutex_.AssertHeld();
+    PodMap::const_iterator j_it = pods_not_on_agent.begin();
+    for (; j_it != pods_not_on_agent.end(); ++j_it) {
+        std::map<JobId, Job*>::iterator job_it = jobs_.find(j_it->first);
+        if (job_it == jobs_.end()) {
+            continue;
+        }
+        std::map<PodId, PodStatus*>::const_iterator p_it = j_it->second.begin();
+        for (; p_it != j_it->second.end(); ++p_it) {
+            std::string reason = "pod lost from agent  " + addr;
+            ChangeStage(reason, kStagePending, p_it->second, job_it->second);
+        }
+    }
+}
+
+void JobManager::HandleExpiredPod(const std::vector<PodStatus>& pods) {
+    mutex_.AssertHeld();
+    if (safe_mode_) {
+        return;
+    }
+    std::vector<PodStatus>::const_iterator it = pods.begin();
+    for (; it != pods.end(); ++it) {
+        SendKillToAgent(it->endpoint(), it->podid(), it->jobid());
+    }
+}
+
 }
 }

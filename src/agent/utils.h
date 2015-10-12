@@ -77,6 +77,8 @@ bool Remove(const std::string& path);
 
 bool Chown(const std::string& path, uid_t uid, gid_t gid);
 
+bool SymbolLink(const std::string& old_path, const std::string& new_path);
+
 }   // ending namespace file
 }   // ending namespace galaxy
 }   // ending namespace baidu

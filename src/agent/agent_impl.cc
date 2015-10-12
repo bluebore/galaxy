@@ -13,6 +13,7 @@
 #include "logging.h"
 #include "agent/agent_internal_infos.h"
 #include "agent/utils.h"
+#include "agent/cpu_scheduler.h"
 
 DECLARE_string(master_host);
 DECLARE_string(master_port);
@@ -26,6 +27,7 @@ DECLARE_int32(agent_millicores_share);
 DECLARE_int64(agent_mem_share);
 
 DECLARE_string(agent_persistence_path);
+DECLARE_bool(cpu_scheduler_switch);
 
 namespace baidu {
 namespace galaxy {
@@ -251,6 +253,10 @@ bool AgentImpl::Init() {
 
     resource_capacity_.millicores = FLAGS_agent_millicores_share;
     resource_capacity_.memory = FLAGS_agent_mem_share;
+    if (FLAGS_cpu_scheduler_switch) {
+        CpuScheduler* scheduler = CpuScheduler::GetInstance(); 
+        scheduler->Release(resource_capacity_.millicores); 
+    }
     
     if (!file::Mkdir(FLAGS_agent_work_dir)) {
         LOG(WARNING, "mkdir workdir %s falied", 
@@ -377,6 +383,15 @@ int AgentImpl::AllocResource(const Resource& requirement) {
             }
             ports.insert(port);
         }
+        CpuScheduler* scheduler = CpuScheduler::GetInstance();
+        if (FLAGS_cpu_scheduler_switch) {
+            if (scheduler->Allocate(
+                        requirement.millicores()) != 0) {
+                LOG(WARNING, "cpu scheduler allocate failed");
+                return -1; 
+            }  
+        }
+
 
         boost::unordered_set<int32_t>::iterator it = ports.begin();
         for (; it != ports.end(); ++it) {
@@ -392,6 +407,12 @@ int AgentImpl::AllocResource(const Resource& requirement) {
 
 void AgentImpl::ReleaseResource(const Resource& requirement) {
     lock_.AssertHeld();
+
+    CpuScheduler* scheduler = CpuScheduler::GetInstance();
+    if (FLAGS_cpu_scheduler_switch) {
+        scheduler->Release(requirement.millicores());
+    }
+    
     resource_capacity_.millicores += requirement.millicores();
     resource_capacity_.memory += requirement.memory();
     for (int i = 0; i < requirement.ports_size(); i++) {
