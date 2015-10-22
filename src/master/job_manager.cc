@@ -579,6 +579,10 @@ Status JobManager::Propose(const ScheduleInfo& sche_info) {
             LOG(INFO, "propose fail, no resource, error code:[%d]", feasible_status);
             return feasible_status;
         }
+        std::string old_endpoint = pod->endpoint();
+        if (!old_endpoint.empty()) {
+            CleanReservedPod(old_endpoint, pod->podid());
+        }
         agent->set_version(agent->version() + 1);
         pod->set_endpoint(sche_info.endpoint());
         ChangeStage("scheduler propose ",kStageRunning, pod, job_it->second);
@@ -600,46 +604,54 @@ Status JobManager::Propose(const ScheduleInfo& sche_info) {
 
 Status JobManager::AcquireResource(const PodStatus& pod, AgentInfo* agent) {
     mutex_.AssertHeld();
-    Resource pod_requirement;
-    GetPodRequirement(pod, &pod_requirement);
+    PodDescriptor desc;
+    bool ok = GetPodDesc(pod.jobid(), pod.podid(), &desc);
+    if (!ok) {
+        LOG(WARNING, "fail to get pod %s desc", pod.podid().c_str());
+        return kQuota;
+    }
+    Resource pod_requirement = desc.requirement();
     // calc agent unassigned resource 
     Resource unassigned;
-    unassigned.CopyFrom(agent->total());
-    bool ret = ResourceUtils::Alloc(agent->assigned(), unassigned);
-    if (!ret) {
+    ok = CalcAgentLeftResource(agent, &unassigned);
+    if (!ok) {
+        LOG(WARNING, "fail to calc agent %s left resource", agent->endpoint().c_str());
         return kQuota;
     }
-    if (!MasterUtil::FitResource(pod_requirement, unassigned)) {
-        return kQuota;
+    // check if pod exists in agent reserved pods
+    std::map<AgentAddr, ReservedPodMap>::iterator r_it = reserved_pods_.find(agent->endpoint());
+    if (r_it != reserved_pods_.end()) {
+        if (r_it->second.find(pod.podid()) != r_it->second.end()) {
+            LOG(INFO, "pod %s use agent %s reserved resource",
+              pod.podid().c_str(), agent->endpoint().c_str());
+            // use reserved resource
+            return kOk;
+        }
     }
-    return kOk;
+    ok = ResourceUtils::Alloc(pod_requirement, unassigned);
+    if (ok) {
+        Resource assigned;
+        assigned.CopyFrom(agent->total());
+        ok = ResourceUtils::Alloc(unassigned, assigned);
+        if (!ok) {
+            LOG(WARNING, "fail to calc agent %s assigned", agent->endpoint().c_str());
+            return kQuota;
+        }
+        agent->mutable_assigned()->CopyFrom(assigned);
+        return kOk;
+    }
+    LOG(WARNING, "agent %s has no enough left resource mem:%ld, cpu:%d, for pod mem:%ld, cpu:%d", 
+      agent->endpoint().c_str(), pod.podid().c_str(),
+      unassigned.memory(), unassigned.millicores(),
+      pod_requirement.memory(), pod_requirement.millicores());
+    return kQuota;
 }
 
-
-void JobManager::ReclaimResource(const PodStatus& pod, AgentInfo* agent) {
-    mutex_.AssertHeld();
-    Resource pod_requirement;
-    GetPodRequirement(pod, &pod_requirement);
-    MasterUtil::SubstractResource(pod_requirement, agent->mutable_assigned());
-}
 
 void JobManager::GetPodRequirement(const PodStatus& pod, Resource* requirement) {
     Job* job = jobs_[pod.jobid()];
     const PodDescriptor& pod_desc = job->desc_.pod();
     requirement->CopyFrom(pod_desc.requirement());
-}
-
-void JobManager::CalculatePodRequirement(const PodDescriptor& pod_desc,
-                                         Resource* pod_requirement) {
-    for (int32_t i = 0; i < pod_desc.tasks_size(); i++) {
-        const TaskDescriptor& task_desc = pod_desc.tasks(i);
-        const Resource& task_requirement = task_desc.requirement();
-        pod_requirement->set_millicores(pod_requirement->millicores() + task_requirement.millicores());
-        pod_requirement->set_memory(pod_requirement->memory() + task_requirement.memory());
-        for (int32_t j = 0; j < task_requirement.ports_size(); j++) {
-            pod_requirement->add_ports(task_requirement.ports(j));
-        }
-    }
 }
 
 void JobManager::KeepAlive(const std::string& agent_addr) {
@@ -1024,7 +1036,6 @@ void JobManager::GetAliveAgentsByDiff(const DiffVersionList& versions,
                                       StringList* deleted_agents,
                                       ::google::protobuf::Closure* done) {
     MutexLock lock(&mutex_);
-    LOG(INFO, "get alive agents by diff , diff count %u", versions.size());
     // ms
     long now_time = ::baidu::common::timer::get_micros() / 1000;
     boost::unordered_map<AgentAddr, int32_t> agents_ver_map;
@@ -1050,6 +1061,7 @@ void JobManager::GetAliveAgentsByDiff(const DiffVersionList& versions,
             LOG(INFO, "agent %s version has diff , the old is %d, the new is %d",
                 it->second->endpoint().c_str(), a_it->second, it->second->version());
         }
+
         agents_info->Add()->CopyFrom(*agent);
     }
     long used_time = ::baidu::common::timer::get_micros() / 1000 - now_time;
@@ -1193,6 +1205,7 @@ bool JobManager::HandleCleanPod(PodStatus* pod, Job* job) {
             p_it->second.erase(pod->podid());
         }
     }
+    CleanReservedPod(pod->endpoint(), pod->podid());
     fsm_.erase(pod->podid());
     job->pods_.erase(pod->podid());
     delete pod;
@@ -1208,14 +1221,14 @@ bool JobManager::HandlePendingToRunning(PodStatus* pod, Job* job) {
         LOG(WARNING, "fsm the input is invalidate");
         return false;
     }
-    std::map<Version, PodDescriptor>::iterator it = job->pod_desc_.find(pod->version());
-    if (it == job->pod_desc_.end()) {
-        LOG(WARNING, "fail to find pod %d description with version %s", pod->podid().c_str(), pod->version().c_str());
+    PodDescriptor desc;
+    bool ok = GetPodDesc(pod->jobid(), pod->podid(), &desc);
+    if (!ok) {
         return false;
     }
     pod->set_stage(kStageRunning);
     pod->set_state(kPodDeploying); 
-    RunPod(it->second, pod);
+    RunPod(desc, pod);
     return true;
 }
 
@@ -1238,6 +1251,9 @@ bool JobManager::HandleDeathToPending(PodStatus* pod, Job* job) {
     }
     pod->set_stage(kStagePending);
     pod->set_state(kPodPending);
+    AddReservedPod(pod->endpoint(), 
+                   pod->podid(),
+                   job->id_);
     LOG(INFO, "reschedule pod %s of job %s", pod->podid().c_str(), job->id_.c_str());
     std::map<AgentAddr, PodMap>::iterator a_it = pods_on_agent_.find(pod->endpoint());
     if (a_it != pods_on_agent_.end()) {
@@ -1447,6 +1463,85 @@ Status JobManager::GetStatus(::baidu::galaxy::GetMasterStatusResponse* response)
     return kOk;
 }
 
+void JobManager::AddReservedPod(const AgentAddr& agent_addr,
+                                const PodId& podid,
+                                const JobId& jobid) {
+    ReservedPodInfo pod_info;
+    pod_info.set_endpoint(agent_addr);
+    pod_info.set_podid(podid);
+    pod_info.set_jobid(jobid);
+    reserved_pods_[agent_addr][podid] = pod_info;
+}
+
+void JobManager::CleanReservedPod(const AgentAddr& agent_addr,
+                                  const PodId& podid) {
+    mutex_.AssertHeld();
+    std::map<AgentAddr, ReservedPodMap>::iterator a_it = reserved_pods_.find(agent_addr);
+    if (a_it == reserved_pods_.end()) {
+        return;
+    }
+    a_it->second.erase(podid);
+    if (a_it->second.size() <= 0) {
+        reserved_pods_.erase(agent_addr);
+    }
+}
+
+bool JobManager::GetPodDesc(const JobId& jobid,
+                            const PodId& podid,
+                            PodDescriptor* desc) {
+    mutex_.AssertHeld();
+    std::map<JobId, Job*>::iterator job_it = jobs_.find(jobid);
+    if (job_it == jobs_.end()) {
+        return false;
+    }
+    Job* job = job_it->second;
+    std::map<PodId, PodStatus*>::iterator pod_it = job->pods_.find(podid);
+    if (pod_it == job->pods_.end()) {
+        return false;
+    }
+    PodStatus* pod = pod_it->second;
+    std::map<Version, PodDescriptor>::iterator desc_it = job->pod_desc_.find(pod->version());
+    if (desc_it == job->pod_desc_.end()) {
+        return false;
+    }
+    desc->CopyFrom(desc_it->second);
+    return true;
+}
+
+bool JobManager::CalcAgentLeftResource(const AgentInfo* agent, Resource* left) {
+    mutex_.AssertHeld();
+    if (agent == NULL || left == NULL) {
+        return false;
+    }
+    Resource total;
+    total.CopyFrom(agent->total());
+    // alloc reserverd pod resource 
+    std::map<AgentAddr, ReservedPodMap>::iterator r_it = reserved_pods_.find(agent->endpoint());
+    if (r_it == reserved_pods_.end()) {
+        left->CopyFrom(total);
+        return true;
+    }
+    std::map<AgentAddr, PodMap>::iterator a_it = pods_on_agent_.find(agent->endpoint());
+    ReservedPodMap::iterator pod_it = r_it->second.begin();
+    for (; pod_it != r_it->second.end(); ++pod_it) {
+        PodDescriptor desc;
+        bool ok = GetPodDesc(pod_it->second.jobid(), pod_it->second.podid(), &desc);
+        if (!ok) {
+            LOG(WARNING, "fail to get pod %s, job %s descriptor", pod_it->second.podid().c_str(), pod_it->second.jobid().c_str());
+            return false;
+        }
+        ok = ResourceUtils::Alloc(desc.requirement(), total);
+        if (!ok) {
+            return false;
+        }
+    }
+    bool ok = ResourceUtils::Alloc(agent->assigned(), total);
+    if (!ok) {
+        return false;
+    }
+    left->CopyFrom(total);
+    return true;
+}
 void JobManager::HandleLostPod(const AgentAddr& addr, const PodMap& pods_not_on_agent) {
     mutex_.AssertHeld();
     PodMap::const_iterator j_it = pods_not_on_agent.begin();

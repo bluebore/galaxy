@@ -43,7 +43,8 @@ struct PodScaleUpCell {
     JobInfo* job;
     uint32_t schedule_count;
     uint32_t feasible_limit;
-    std::vector<std::string> pod_ids;
+    // key is pod id , value is old endpoint
+    std::map<std::string, std::string> pod_endpoints;
     std::vector<AgentInfoExtend*> feasible;
     std::map<double, AgentInfo*> sorted;
 
