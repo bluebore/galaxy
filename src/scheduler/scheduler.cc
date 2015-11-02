@@ -535,39 +535,9 @@ int32_t Scheduler::UpdateAgent(const AgentInfo* agent_info) {
 int32_t Scheduler::ScheduleUpdate(std::vector<JobInfo*>& update_jobs,
                                   std::vector<ScheduleInfo*>* propose) {
     std::vector<JobInfo*>::iterator job_it = update_jobs.begin();
-    boost::unordered_map<std::string, std::string> job_need_update;
     for(; job_it != update_jobs.end(); ++job_it) {
-        JobInfo* job_info = *job_it;
-        UpdateJobs::iterator update_job_it = update_jobs_.find(job_info->jobid());
-        // first update
-        if (update_job_it != update_jobs_.end()) {
-            for (int32_t i = 0; i < job_info->pods_size(); i++) {
-                PodStatus* pod = job_info->mutable_pods(i);
-                // ignore pending dead deploying
-                if (pod->stage() == kStagePending
-                    || pod->stage() == kStageDeath
-                    || pod->state() == kPodDeploying) {
-                    LOG(INFO , "ignore pod %s effect update step", pod->podid().c_str());
-                    continue;
-                }
-                update_jobs_[job_info->jobid()].insert(std::make_pair(pod->podid(), pod->podid()));
-            }
-            LOG(INFO, "add job %s to update jobs", job_info->jobid().c_str());
-        }
-        job_need_update.insert(std::make_pair(job_info->jobid(), job_info->jobid()));
+        JobInfo* job_info = *job_it; 
         HandleJobUpdate(job_info, propose);
-    }
-    std::vector<std::string> should_rm_keys;
-    // clean has updated
-    UpdateJobs::iterator update_job_it = update_jobs_.begin();
-    for (; update_job_it != update_jobs_.end(); ++update_job_it) {
-        if (job_need_update.find(update_job_it->first) == job_need_update.end()) {
-            should_rm_keys.push_back(update_job_it->first);
-        }
-    }
-    for (size_t i = 0; i < should_rm_keys.size(); i++) {
-        update_jobs_.erase(should_rm_keys[i]);
-        LOG(INFO, "remove job %s from update jobs", should_rm_keys[i].c_str());
     }
     return 0;
 }
@@ -581,14 +551,8 @@ void Scheduler::HandleJobUpdate(JobInfo* job_info,
         if (pod->version() != job_info->latest_version()) {
             need_update_pods.push_back(pod); 
         }
-        if (update_jobs_[job_info->jobid()].find(pod->podid())
-            == update_jobs_[job_info->jobid()].end()) {
-            continue;
-        }
-        if ((pod->stage() == kStagePending 
-           || pod->stage() == kStageDeath
-           || pod->state() == kPodDeploying)
-           && pod->version() == job_info->latest_version()) {
+        if ( pod->stage() == kStageDeath
+           || pod->state() == kPodDeploying) {
             updating_count++;
         }
     }

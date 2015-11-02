@@ -9,7 +9,6 @@
 #include <vector>
 
 #include <boost/unordered_map.hpp>
-//#include <mutex.h>
 #include <thread_pool.h>
 #include "ins_sdk.h"
 #include "proto/agent.pb.h"
@@ -83,7 +82,7 @@ private:
     void HandleAgentOffline(const std::string agent_addr);
     void ReschedulePod(PodStatus* pod_status);
 
-    void RunPod(const PodDescriptor& desc, PodStatus* pod) ;
+    void RunPod(const PodDescriptor& desc, Job* job, PodStatus* pod) ;
     void RunPodCallback(PodStatus* pod, AgentAddr endpoint, const RunPodRequest* request,
                         RunPodResponse* response, bool failed, int error);
 
@@ -138,7 +137,9 @@ private:
                          bool* replica_change, bool* pod_desc_change);
 
     void HandleLostPod(const AgentAddr& addr, const PodMap& pods_not_on_agent);
-    void HandleExpiredPod(const std::vector<PodStatus>& pods);
+    void HandleExpiredPod(std::vector<std::pair<PodStatus, PodStatus*> >& pods);
+    void HandleReusePod(const PodStatus& report_pod,
+                        PodStatus* pod);
 private:
     std::map<JobId, Job*> jobs_;
     // all jobs that need scale up

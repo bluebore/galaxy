@@ -132,8 +132,6 @@ private:
 private:
     boost::unordered_map<std::string, AgentInfoExtend*> resources_;
     int64_t schedule_turns_;    // 当前调度轮数
-    typedef boost::unordered_map<std::string, boost::unordered_map<std::string, std::string> > UpdateJobs;
-    UpdateJobs update_jobs_;
 };
 
 

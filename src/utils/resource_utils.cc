@@ -69,6 +69,46 @@ void ResourceUtils::VolumeAlloc(const VolumeList& total,
 }
 
 
+bool ResourceUtils::HasDiff(const Resource& left, 
+                            const Resource& right) {
+    if (left.millicores() != right.millicores()) {
+        return true;
+    }
+
+    if (left.memory() != left.memory()) {
+        return true;
+    }
+    std::vector<Volume> left_disks;
+    for (int i = 0; i < left.disks_size(); i++) {
+        left_disks.push_back(left.disks(i));
+    }
+    std::vector<Volume> right_disks;
+    for (int i = 0; i < right.disks_size(); i++) {
+        right_disks.push_back(right.disks(i));
+    }
+
+    int32_t disk_check = CompareVector(left_disks, 
+                                       right_disks,
+                                       CompareVolumeDesc);
+    if (disk_check != 0) {
+        return true;
+    }
+    std::vector<Volume> left_ssds;
+    for (int i = 0; i < left.ssds_size(); i++) {
+        left_ssds.push_back(left.ssds(i));
+    }
+    std::vector<Volume> right_ssds;
+    for (int i = 0; i < right.ssds_size(); i++) {
+        right_ssds.push_back(right.ssds(i));
+    }
+    int32_t ssd_check = CompareVector(left_ssds, 
+                                      right_ssds,
+                                      CompareVolumeDesc);
+    if (ssd_check != 0) {
+        return true;
+    }
+    return false;
+}
 
 int32_t ResourceUtils::Compare(const Resource& left,
                                const Resource& right) {
@@ -117,6 +157,7 @@ int32_t ResourceUtils::Compare(const Resource& left,
     if (ssd_check == -1) {
         return -1;
     }
+
     return cpu_check & mem_check & disk_check & ssd_check;
 }
 

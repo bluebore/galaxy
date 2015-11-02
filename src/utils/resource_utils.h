@@ -39,7 +39,8 @@ public:
     // TODO add port check
     static int32_t Compare(const Resource& left,
                        const Resource& right);
-
+    static bool HasDiff(const Resource& left,
+                        const Resource& right);
     // compare two vector
     template<class T, class Compare>
     static int32_t CompareVector(std::vector<T>& l, 
