@@ -23,17 +23,19 @@ DEFINE_string(master_path, "/master", "master path on nexus");
 DEFINE_string(f, "", "specify config file ,job config file or label config file");
 DEFINE_string(j, "", "specify job id");
 DEFINE_string(l, "", "add a label to agent");
+DEFINE_string(m, "", "specify master path to submit/update a job");
 DEFINE_int32(d, 0, "specify delay time to query");
+DEFINE_string(master_mark, "/baidu/galaxy/masters_mark", "mark masters");
 DECLARE_string(flagfile);
 
 const std::string kGalaxyUsage = "galaxy client.\n"
                                  "Usage:\n"
-                                 "    galaxy submit -f <jobconfig>\n" 
+                                 "    galaxy submit -m <master_path> -f <jobconfig>\n" 
                                  "    galaxy jobs \n"
                                  "    galaxy agents\n"
                                  "    galaxy pods -j <jobid>\n"
                                  "    galaxy kill -j <jobid>\n"
-                                 "    galaxy update -j <jobid> -f <jobconfig>\n"
+                                 "    galaxy update -j <jobid> -m <master_path> -f <jobconfig>\n"
                                  "    galaxy label -l <label> -f <lableconfig>\n"
                                  "    galaxy status \n"
                                  "Options:\n"
@@ -42,13 +44,12 @@ const std::string kGalaxyUsage = "galaxy client.\n"
                                  "    -d delay     Specify delay in second to update infomation.\n"
                                  "    -l label     Add label to list of agents.\n";
 
-bool GetMasterAddr(std::string* master_addr) {
+bool GetMasterAddr(const std::string master_path_key, std::string* master_addr) {
     if (master_addr == NULL) {
         return false;
     }
     ::galaxy::ins::sdk::SDKError err;
     ::galaxy::ins::sdk::InsSDK nexus(FLAGS_nexus_servers);
-    std::string master_path_key = FLAGS_nexus_root_path + FLAGS_master_path;
     bool ok = nexus.Get(master_path_key, master_addr, &err);
     return ok;
 }
@@ -125,13 +126,13 @@ bool LoadAgentEndpointsFromFile(
     return true;
 }
 
-int LabelAgent() {
+int LabelAgent(const std::string master_path) {
     std::vector<std::string> agent_endpoints;
     if (LoadAgentEndpointsFromFile(FLAGS_f, &agent_endpoints)) {
         return -1;     
     }
     std::string master_endpoint;
-    bool ok = GetMasterAddr(&master_endpoint);
+    bool ok = GetMasterAddr(master_path, &master_endpoint);
     if (!ok) {
         fprintf(stderr, "Fail to get master endpoint\n");
         return -1;
@@ -310,8 +311,13 @@ int BuildJobFromConfig(const std::string& config, ::baidu::galaxy::JobDescriptio
 
 
 int AddJob() {
+    if (FLAGS_m.empty()) {
+        fprintf(stderr, "need specify master data center label");
+        return -1;
+    } 
     std::string master_endpoint;
-    bool ok = GetMasterAddr(&master_endpoint);
+    std::string master_path_key = FLAGS_nexus_root_path + "-" + FLAGS_m + FLAGS_master_path;
+    bool ok = GetMasterAddr(master_path_key, &master_endpoint);
     if (!ok) {
         fprintf(stderr, "Fail to get master endpoint\n");
         return -1;
@@ -338,8 +344,13 @@ int AddJob() {
 }
 
 int UpdateJob() { 
+    if (FLAGS_m.empty()) {
+        fprintf(stderr, "need specify master data center label");
+        return -1;
+    }
     std::string master_endpoint;
-    bool ok = GetMasterAddr(&master_endpoint);
+    std::string master_path_key = FLAGS_nexus_root_path + "-" + FLAGS_m + FLAGS_master_path;
+    bool ok = GetMasterAddr(master_path_key, &master_endpoint);
     if (!ok) {
         fprintf(stderr, "Fail to get master endpoint\n");
         return -1;
@@ -362,9 +373,9 @@ int UpdateJob() {
 }
 
 
-int ListAgent() {
+int ListAgent(const std::string master_path) {
     std::string master_endpoint;
-    bool ok = GetMasterAddr(&master_endpoint);
+    bool ok = GetMasterAddr(master_path, &master_endpoint);
     if (!ok) {
         fprintf(stderr, "Fail to get master endpoint\n");
         return -1;
@@ -405,9 +416,9 @@ int ListAgent() {
     return 0;
 }
 
-int ShowPod() {
+int ShowPod(const std::string master_path) {
     std::string master_endpoint;
-    bool ok = GetMasterAddr(&master_endpoint);
+    bool ok = GetMasterAddr(master_path, &master_endpoint);
     if (!ok) {
         fprintf(stderr, "Fail to get master endpoint\n");
         return -1;
@@ -454,8 +465,13 @@ int ShowPod() {
     return 0;
 }
 int SwitchSafeMode(bool mode) {
+    if (FLAGS_m.empty()) {
+        fprintf(stderr, "need specify master data center label");
+        return -1;
+    }
     std::string master_endpoint;
-    bool ok = GetMasterAddr(&master_endpoint);
+    std::string master_path_key = FLAGS_nexus_root_path + "-" + FLAGS_m + FLAGS_master_path;
+    bool ok = GetMasterAddr(master_path_key, &master_endpoint);
     if (!ok) {
         fprintf(stderr, "Fail to get master endpoint\n");
         return -1;
@@ -470,9 +486,37 @@ int SwitchSafeMode(bool mode) {
     printf("sucessfully %s safemode\n", mode ? "enter" : "leave");
     return 0;
 }
-int GetMasterStatus() {
+
+int GetMasters(std::vector<std::string>* masters) {
+    ::galaxy::ins::sdk::SDKError err;
+    ::galaxy::ins::sdk::InsSDK nexus(FLAGS_nexus_servers);
+    std::string master_mark_key = FLAGS_master_mark;
+    std::string start_key = master_mark_key + "/";
+    std::string end_key = start_key + "~";
+    ::galaxy::ins::sdk::ScanResult* result = nexus.Scan(start_key, end_key);
+    int master_cnt = 0;
+    while (!result->Done()) {
+        assert(result->Error() == ::galaxy::ins::sdk::kOK);
+        std::string key = result->Key();
+        std::string master_path = result->Value();
+        masters->push_back(master_path);
+        result->Next();
+    }
+    return 0;
+}
+
+int ExecOnEachMaster(int(*func)(const std::string master_path)) {
+    std::vector<std::string> masters;
+    GetMasters(&masters);
+    for (uint32_t i = 0; i < masters.size(); i++) {
+        printf("label : %s\n", masters[i].c_str());
+        func(masters[i]);
+    }
+    return 0;
+}
+int GetMasterStatus(const std::string master_path) {
     std::string master_endpoint;
-    bool ok = GetMasterAddr(&master_endpoint);
+    bool ok = GetMasterAddr(master_path, &master_endpoint);
     if (!ok) {
         fprintf(stderr, "Fail to get master endpoint\n");
         return -1;
@@ -530,9 +574,9 @@ int GetMasterStatus() {
 }
 
 
-int ListJob() {
+int ListJob(const std::string master_path) {
     std::string master_endpoint;
-    bool ok = GetMasterAddr(&master_endpoint);
+    bool ok = GetMasterAddr(master_path, &master_endpoint);
     if (!ok) {
         fprintf(stderr, "Fail to get master endpoint\n");
         return -1;
@@ -574,9 +618,9 @@ int ListJob() {
     return 0;
 }
 
-int KillJob() {
+int KillJob(const std::string master_path) {
     std::string master_endpoint;
-    bool ok = GetMasterAddr(&master_endpoint);
+    bool ok = GetMasterAddr(master_path, &master_endpoint);
     if (!ok) {
         fprintf(stderr, "Fail to get master endpoint\n");
         return -1;
@@ -603,19 +647,19 @@ int main(int argc, char* argv[]) {
     if (strcmp(argv[1], "submit") == 0) {
         return AddJob();
     } else if (strcmp(argv[1], "jobs") == 0) {
-        return ListJob();
+        return ExecOnEachMaster(ListJob);
     } else if (strcmp(argv[1], "agents") == 0) {
-        return ListAgent();
+		return ExecOnEachMaster(ListAgent);
     } else if (strcmp(argv[1], "label") == 0) {
-        return LabelAgent();
+        return ExecOnEachMaster(LabelAgent);
     } else if (strcmp(argv[1], "update") == 0) {
         return UpdateJob();
     } else if (strcmp(argv[1], "kill") == 0){
-        return KillJob();
+        return ExecOnEachMaster(KillJob);
     } else if (strcmp(argv[1], "pods") ==0){
-        return ShowPod();
+        return ExecOnEachMaster(ShowPod);
     } else if (strcmp(argv[1], "status") == 0) {
-        return GetMasterStatus();
+        return ExecOnEachMaster(GetMasterStatus);
     } else if (argc > 2 && strcmp(argv[2], "safemode") == 0) {
         if (strcmp(argv[1], "enter") == 0) 
             return SwitchSafeMode(true);

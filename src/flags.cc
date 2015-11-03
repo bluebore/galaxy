@@ -22,6 +22,8 @@ DEFINE_string(master_lock_path, "/master_lock", "master lock name on nexus");
 DEFINE_string(master_path, "/master", "master path on nexus");
 DEFINE_string(safemode_store_path, "/safemode", "master safemode path on nexus");
 DEFINE_string(safemode_store_key, "safemode_switch", "master safemode key on nexus");
+DEFINE_string(master_mark, "/baidu/galaxy/masters_mark", "mark masters");
+DEFINE_string(data_center, "yq01", "data center label");
 DEFINE_string(jobs_store_path, "/jobs", "");
 DEFINE_string(labels_store_path, "/labels", "");
 DEFINE_int32(max_need_update_job_size, 10, "the max size of need update job size ");
