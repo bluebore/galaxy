@@ -9,6 +9,7 @@
 #include <vector>
 
 #include <boost/unordered_map.hpp>
+#include <boost/tuple/tuple.hpp>
 #include <thread_pool.h>
 #include "ins_sdk.h"
 #include "proto/agent.pb.h"
@@ -137,9 +138,10 @@ private:
                          bool* replica_change, bool* pod_desc_change);
 
     void HandleLostPod(const AgentAddr& addr, const PodMap& pods_not_on_agent);
-    void HandleExpiredPod(std::vector<std::pair<PodStatus, PodStatus*> >& pods);
-    void HandleReusePod(const PodStatus& report_pod,
-                        PodStatus* pod);
+    void HandleExpiredPod(std::vector<boost::tuples::tuple<PodStatus, PodStatus*, Job*> >& pods);
+    bool HandleReusePod(const PodStatus& report_pod,
+                        PodStatus* pod,
+                        Job* job);
 private:
     std::map<JobId, Job*> jobs_;
     // all jobs that need scale up
