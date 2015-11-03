@@ -1095,10 +1095,6 @@ void JobManager::UpdateAgent(const AgentInfo& agent,
 
 void JobManager::GetAgentsInfo(AgentInfoList* agents_info) {
     MutexLock lock(&mutex_);
-    if (safe_mode_) {
-        return;
-    }
-
     std::map<AgentAddr, AgentInfo*>::iterator it;
     for (it = agents_.begin(); it != agents_.end(); ++it) {
         AgentInfo* agent = it->second;
@@ -1600,6 +1596,7 @@ bool JobManager::HandleReusePod(const PodStatus& report_pod,
         job->pods_.insert(std::make_pair(report_pod.podid(), pod));
         pods_on_agent_[report_pod.endpoint()][pod->jobid()][pod->podid()] = pod;
         if (job->pods_.size() > (size_t)job->desc_.replica()) {
+            LOG(INFO, "scale down job %s for pods size %d replica %d",job->id_.c_str(), job->pods_.size(), job->desc_.replica());
             scale_down_jobs_.insert(job->id_);
         }
         LOG(INFO,"reuse pod %s not in master of job %s on timeout agent %s",
