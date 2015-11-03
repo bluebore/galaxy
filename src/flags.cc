@@ -20,6 +20,8 @@ DEFINE_int32(master_agent_rpc_timeout, 10, "Agent RPC timeout (seconds)");
 DEFINE_int32(master_query_period, 30000, "Query period");
 DEFINE_string(master_lock_path, "/master_lock", "master lock name on nexus");
 DEFINE_string(master_path, "/master", "master path on nexus");
+DEFINE_string(safemode_store_path, "/safemode", "master safemode path on nexus");
+DEFINE_string(safemode_store_key, "safemode_switch", "master safemode key on nexus");
 DEFINE_string(jobs_store_path, "/jobs", "");
 DEFINE_string(labels_store_path, "/labels", "");
 DEFINE_int32(max_need_update_job_size, 10, "the max size of need update job size ");

@@ -389,18 +389,18 @@ int ListAgent() {
                 vs.push_back(baidu::common::HumanReadableString(agents[i].mem_share));
                 vs.push_back(agents[i].labels);
                 tp.AddRow(vs);
-		    }
+            }
             printf("%s\n", tp.ToString().c_str());
-	    }else {
-	        printf("Listagent fail\n");
-	        return 1;
-	    }
-	    if (FLAGS_d <=0) {
-	        break;
-	    }else{
-	        ::sleep(FLAGS_d);
-	        ::system("clear");
-	    }
+        }else {
+            printf("Listagent fail\n");
+            return 1;
+        }
+        if (FLAGS_d <=0) {
+            break;
+        }else{
+            ::sleep(FLAGS_d);
+            ::system("clear");
+        }
     }
     return 0;
 }
@@ -444,13 +444,30 @@ int ShowPod() {
         }
         printf("%s\n", tp.ToString().c_str());
         if (FLAGS_d <=0) {
-	        break;
-	    }else{
-	        ::sleep(FLAGS_d);
-	        ::system("clear");
-	    }
+            break;
+        }else{
+            ::sleep(FLAGS_d);
+            ::system("clear");
+        }
 
     }
+    return 0;
+}
+int SwitchSafeMode(bool mode) {
+    std::string master_endpoint;
+    bool ok = GetMasterAddr(&master_endpoint);
+    if (!ok) {
+        fprintf(stderr, "Fail to get master endpoint\n");
+        return -1;
+    }
+    baidu::galaxy::Galaxy* galaxy = baidu::galaxy::Galaxy::ConnectGalaxy(master_endpoint);
+    ::baidu::galaxy::MasterStatus status;
+    ok = galaxy->SwitchSafeMode(mode);
+    if (!ok) {
+        fprintf(stderr, "fail to switch safemode\n");
+        return -1;
+    }
+    printf("sucessfully %s safemode\n", mode ? "enter" : "leave");
     return 0;
 }
 int GetMasterStatus() {
@@ -536,7 +553,7 @@ int ListJob() {
                              baidu::common::NumToString(infos[i].pending_num) + "/" +
                              baidu::common::NumToString(infos[i].deploying_num));
                 vs.push_back(baidu::common::NumToString(infos[i].replica));
-				    		vs.push_back(infos[i].is_batch ? "batch" : "");
+                            vs.push_back(infos[i].is_batch ? "batch" : "");
                 vs.push_back(baidu::common::NumToString(infos[i].cpu_used));
                 vs.push_back(baidu::common::HumanReadableString(infos[i].mem_used));
                 tp.AddRow(vs);
@@ -588,7 +605,7 @@ int main(int argc, char* argv[]) {
     } else if (strcmp(argv[1], "jobs") == 0) {
         return ListJob();
     } else if (strcmp(argv[1], "agents") == 0) {
-		return ListAgent();
+        return ListAgent();
     } else if (strcmp(argv[1], "label") == 0) {
         return LabelAgent();
     } else if (strcmp(argv[1], "update") == 0) {
@@ -599,6 +616,11 @@ int main(int argc, char* argv[]) {
         return ShowPod();
     } else if (strcmp(argv[1], "status") == 0) {
         return GetMasterStatus();
+    } else if (argc > 2 && strcmp(argv[2], "safemode") == 0) {
+        if (strcmp(argv[1], "enter") == 0) 
+            return SwitchSafeMode(true);
+        else if (strcmp(argv[1], "leave") == 0) 
+            return SwitchSafeMode(false);
     } else {
         fprintf(stderr,"%s", kGalaxyUsage.c_str());
         return -1;

@@ -147,6 +147,15 @@ message HeartBeatRequest {
 message HeartBeatResponse {
 }
 
+message SwitchSafeModeRequest {
+    optional bool enter_or_leave = 1;
+}
+
+message SwitchSafeModeResponse {
+    optional Status status = 1;
+}
+
+
 message GetPendingJobsRequest {
     optional int32 max_scale_down_size = 4;
     optional int32 max_scale_up_size = 5;
@@ -273,6 +282,8 @@ service Master {
     rpc GetStatus(GetMasterStatusRequest) returns (GetMasterStatusResponse);
 
     rpc HeartBeat(HeartBeatRequest) returns (HeartBeatResponse);
+
+    rpc SwitchSafeMode(SwitchSafeModeRequest) returns (SwitchSafeModeResponse);
 
     // rpc AddUser() returns ();
     // rpc DeleteUser() returns ();

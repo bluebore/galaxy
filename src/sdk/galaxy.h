@@ -147,6 +147,7 @@ public:
     virtual bool ShowPod(const std::string& jobid,
                          std::vector<PodInformation>* pods) = 0;
     virtual bool GetStatus(MasterStatus* status) = 0;
+    virtual bool SwitchSafeMode(bool mode) = 0;
 };
 
 } // namespace galaxy

@@ -70,6 +70,7 @@ public:
     void KeepAlive(const std::string& agent_addr);
     void DeployPod();
     void ReloadJobInfo(const JobInfo& job_info);
+    Status SetSafeMode(bool mode);
     Status LabelAgents(const LabelCell& label_cell);
     Status GetPods(const std::string& jobid, PodOverviewList* pods);
     Status GetStatus(::baidu::galaxy::GetMasterStatusResponse* response);
@@ -82,6 +83,8 @@ private:
     void CalculatePodRequirement(const PodDescriptor& pod_desc, Resource* pod_requirement);
     void HandleAgentOffline(const std::string agent_addr);
     void ReschedulePod(PodStatus* pod_status);
+    bool CheckSafeModeManual(bool& mode);
+    bool SaveSafeMode(bool mode);
 
     void RunPod(const PodDescriptor& desc, Job* job, PodStatus* pod) ;
     void RunPodCallback(PodStatus* pod, AgentAddr endpoint, const RunPodRequest* request,
@@ -160,7 +163,8 @@ private:
     RpcClient rpc_client_;
     int64_t on_query_num_;
     std::set<AgentAddr> queried_agents_;
-    bool safe_mode_;
+    enum SafeModeStatus {kSafeModeOff, kSafeModeManual, kSafeModeAutomatic};
+    SafeModeStatus safe_mode_;
 
     // for label on agent 
     typedef std::string LabelName;
