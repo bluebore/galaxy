@@ -10,6 +10,8 @@ DECLARE_string(nexus_servers);
 DECLARE_string(nexus_root_path);
 DECLARE_string(master_lock_path);
 DECLARE_string(master_path);
+DECLARE_string(master_mark);
+DECLARE_string(data_center);
 DECLARE_string(jobs_store_path);
 DECLARE_string(labels_store_path);
 DECLARE_int32(max_scale_down_size);
@@ -115,6 +117,9 @@ void MasterImpl::AcquireMasterLock() {
     assert(ret && err == ::galaxy::ins::sdk::kOK);
     std::string master_endpoint = MasterUtil::SelfEndpoint();
     std::string master_path_key = FLAGS_nexus_root_path + FLAGS_master_path;
+    std::string master_mark_key = FLAGS_master_mark + "/" + FLAGS_data_center;
+    ret = nexus_->Put(master_mark_key, master_path_key, &err);
+    assert(ret && err == ::galaxy::ins::sdk::kOK);
     ret = nexus_->Put(master_path_key, master_endpoint, &err);
     assert(ret && err == ::galaxy::ins::sdk::kOK);
     ret = nexus_->Watch(master_lock, &OnMasterLockChange, this, &err);
