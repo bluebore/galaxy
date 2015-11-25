@@ -40,6 +40,8 @@ DECLARE_bool(agent_namespace_isolation_switch);
 DECLARE_bool(cpu_scheduler_switch);
 DECLARE_int32(cpu_scheduler_intervals);
 DECLARE_int32(cpu_scheduler_start_frozen_time);
+DECLARE_int64(agent_task_refresh_interval);
+DECLARE_int64(agent_task_delay_check_interval);
 
 namespace baidu {
 namespace galaxy {
@@ -174,7 +176,7 @@ int TaskManager::ReloadTask(const TaskInfo& task) {
 
     LOG(INFO, "task %s is reload", task_info->task_id.c_str());
     background_thread_.DelayTask(
-                    50, 
+                    FLAGS_agent_task_delay_check_interval, 
                     boost::bind(
                         &TaskManager::DelayCheckTaskStageChange,
                         this, task_info->task_id));
@@ -216,7 +218,7 @@ int TaskManager::CreateTask(const TaskInfo& task) {
     }
     LOG(INFO, "task %s is add", task.task_id.c_str());
     background_thread_.DelayTask(
-                    50, 
+                    FLAGS_agent_task_delay_check_interval, 
                     boost::bind(
                         &TaskManager::DelayCheckTaskStageChange,
                         this, task_info->task_id));
@@ -267,7 +269,9 @@ int TaskManager::RunTask(TaskInfo* task_info) {
             return -1;
         }
     }
-    
+
+    // keep refresh point
+    task_info->retry_refresh_time = common::timer::now_time();
     ResetCpuScheduler(task_info); 
 
     task_info->stage = kTaskStageRUNNING;
@@ -638,6 +642,9 @@ int TaskManager::DeployProcessCheck(TaskInfo* task_info) {
                 task_info->task_id.c_str());
         return 0;
     }
+
+    task_info->status.set_exit_code(
+            task_info->deploy_process.exit_code());
     // 3. check deploy process exit code
     if (task_info->deploy_process.exit_code() != 0) {
         LOG(WARNING, "task %s deploy process failed exit code %d",
@@ -701,6 +708,8 @@ int TaskManager::RunProcessCheck(TaskInfo* task_info) {
         return 0;
     }
 
+    task_info->status.set_exit_code(
+            task_info->main_process.exit_code());
     // 3. check exit_code
     if (task_info->main_process.exit_code() != 0) {
         LOG(WARNING, "task %s main process run failed exit code %d",
@@ -769,6 +778,13 @@ void TaskManager::DelayCheckTaskStageChange(const std::string& task_id) {
                     < task_info->max_retry_times) {
             task_info->fail_retry_times++;
             RunTask(task_info);         
+            LOG(WARNING, "task %s restarting, has fail retry times %ld", 
+                    task_info->task_id.c_str(),
+                    task_info->fail_retry_times);
+            // NOTE show restart to master
+            task_info->status.set_state(kTaskRestart);
+        } else if (chk_res == 0) {
+            RefreshRetryTimes(task_info);         
         }
     } else if (task_info->stage == kTaskStageSTOPPING) {
         int chk_res = TerminateProcessCheck(task_info);
@@ -1067,6 +1083,20 @@ int TaskManager::CleanCpuScheduler(TaskInfo* task_info) {
         return -1; 
     }
     return 0;
+}
+
+void TaskManager::RefreshRetryTimes(TaskInfo* task_info) {
+    if (task_info->retry_refresh_time == 0) {
+        return; 
+    }
+    int64_t now_time = common::timer::now_time();    
+    if (now_time - task_info->retry_refresh_time 
+                    > FLAGS_agent_task_refresh_interval) {
+        task_info->fail_retry_times = 0; 
+        task_info->retry_refresh_time = now_time;
+        LOG(DEBUG, "task %s refresh retry times", task_info->task_id.c_str());
+    }
+    return;
 }
 
 }   // ending namespace galaxy

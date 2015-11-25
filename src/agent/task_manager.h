@@ -43,6 +43,8 @@ protected:
     int CleanProcess(TaskInfo* task_info);
     int CleanCpuScheduler(TaskInfo* task_info);
 
+    // simple strategy to clear retry_times
+    void RefreshRetryTimes(TaskInfo* task_info);
     void SetResourceUsage(TaskInfo* task_info);
     // task stage run
     int DeployTask(TaskInfo* task_info);

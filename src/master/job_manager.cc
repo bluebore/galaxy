@@ -38,6 +38,7 @@ JobManager::JobManager()
     state_to_stage_[kPodRunning] = kStageRunning;
     state_to_stage_[kPodTerminate] = kStageFinished;
     state_to_stage_[kPodError] = kStageDeath;
+    state_to_stage_[kPodRestart] = kStageRunning;
     BuildPodFsm();
     nexus_ = new ::galaxy::ins::sdk::InsSDK(FLAGS_nexus_servers);
     bool safe_mode_manual = false;
@@ -1178,7 +1179,8 @@ void JobManager::GetJobsOverview(JobOverviewList* jobs_overview) {
         for (; pod_it != pods.end(); ++pod_it) {
             // const PodId& podid = pod_it->first;
             const PodStatus* pod = pod_it->second;
-            if (pod->state() == kPodRunning) {
+            if (pod->state() == kPodRunning
+                    || pod->state() == kPodRestart) {
                 running_num++;
                 MasterUtil::AddResource(pod->resource_used(), overview->mutable_resource_used());
             } else if(pod->state() == kPodPending) {

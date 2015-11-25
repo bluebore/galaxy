@@ -71,7 +71,8 @@ DEFINE_int32(cpu_scheduler_guarantee, 1500, "agent cpu scheduler guarantee");
 DEFINE_int32(cpu_scheduler_dec, 500, "agent cpu scheduler dec");
 DEFINE_bool(cpu_scheduler_switch, false, "agent cpu scheduler switch");
 DEFINE_int32(cpu_scheduler_start_frozen_time, 20, "start forzen time, unit second");
-
+DEFINE_int64(agent_task_refresh_interval, 3600 * 12, "agent task refresh retry times");
+DEFINE_int64(agent_task_delay_check_interval, 50, "agent task deplay check interval unit ms");
 
 // gce
 DEFINE_string(gce_cgroup_root, "/cgroups/", "Cgroup root mount path");

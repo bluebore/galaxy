@@ -41,6 +41,7 @@ struct TaskInfo {
     Initd_Stub* initd_stub;
     CGroupResourceCollector* resource_collector; 
 
+    int64_t retry_refresh_time;
 
     std::string ToString() {
         std::string pb_str;
@@ -101,7 +102,8 @@ struct TaskInfo {
           stop_timeout_point(0),
           initd_check_failed(0),
           initd_stub(NULL),
-          resource_collector(NULL) {
+          resource_collector(NULL),
+          retry_refresh_time(0L) {
     }
 
     void CopyFrom(const TaskInfo& task) {
@@ -123,6 +125,7 @@ struct TaskInfo {
         initd_check_failed = task.initd_check_failed;
         initd_stub = task.initd_stub;
         resource_collector = task.resource_collector;
+        retry_refresh_time = task.retry_refresh_time;
     }
 
     TaskInfo& operator=(const TaskInfo& task) {

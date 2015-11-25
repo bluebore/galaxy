@@ -27,6 +27,7 @@ enum PodState {
     kPodSuspend = 4;
     kPodFinish = 5;
     kPodError = 6;
+    kPodRestart = 7;
 }
 
 enum PodStage {
@@ -45,6 +46,7 @@ enum TaskState {
     kTaskSuspend = 4;
     kTaskFinish = 5;
     kTaskError = 6;
+    kTaskRestart = 7;
 }
 
 

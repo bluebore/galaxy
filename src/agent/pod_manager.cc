@@ -348,6 +348,9 @@ int PodManager::CheckPod(const std::string& pod_id) {
         case kTaskFinish :
         pod_info.pod_status.set_state(kPodFinish);
         break;
+        case kTaskRestart : 
+        pod_info.pod_status.set_state(kPodRestart);
+        break;
     }
 
     for (size_t i = 0; i < to_del_task.size(); i++) {
