@@ -130,6 +130,14 @@ message AgentInfo {
     repeated PodStatus pods = 7;
     optional AgentState state = 8;
     optional int32 version = 9;
-
     repeated string tags = 10;
+}
+
+message User {
+    optional string uid = 1;
+    repeated string gids = 2;
+    optional string name = 3;
+    optional int64 create_time = 4;
+    optional int64 last_login_time = 5;
+    optional string workspace = 6;
 }
