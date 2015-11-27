@@ -79,11 +79,7 @@ bool GalaxyImpl::FillJobDescriptor(const JobDescription& sdk_job,
         return false;
     }
     job->set_type(job_type);
-    JobPriority priority;
-    ok = JobPriority_Parse(sdk_job.priority, &priority);
-    if (!ok) {
-        return false;
-    }
+    job->set_priority(sdk_job.priority);
     job->set_deploy_step(sdk_job.deploy_step);
     job->set_replica(sdk_job.replica);
 

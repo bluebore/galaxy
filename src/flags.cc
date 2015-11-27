@@ -23,6 +23,7 @@ DEFINE_string(master_path, "/master", "master path on nexus");
 DEFINE_string(safemode_store_path, "/safemode", "master safemode path on nexus");
 DEFINE_string(safemode_store_key, "safemode_switch", "master safemode key on nexus");
 DEFINE_string(jobs_store_path, "/jobs", "");
+DEFINE_string(users_store_path, "/users", "");
 DEFINE_string(labels_store_path, "/labels", "");
 DEFINE_int32(max_need_update_job_size, 10, "the max size of need update job size ");
 DEFINE_int32(max_scale_down_size, 10, "the max size of scale down jobs that schedule fetches");

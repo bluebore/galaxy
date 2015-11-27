@@ -46,7 +46,7 @@ struct PodDescription {
 struct JobDescription {
     std::string job_name;
     std::string type;
-    std::string priority;
+    int32_t priority;
     int32_t replica;
     int32_t deploy_step;
     std::string label;
