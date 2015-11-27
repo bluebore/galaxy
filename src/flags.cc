@@ -22,6 +22,8 @@ DEFINE_string(master_lock_path, "/master_lock", "master lock name on nexus");
 DEFINE_string(master_path, "/master", "master path on nexus");
 DEFINE_int32(master_session_timeout, 60 * 60 * 1000, "user session timeout , the default is one hour");
 DEFINE_int32(master_session_gc_period, 60 * 1000, "the period to clean timeout session");
+DEFINE_string(master_root_user_key, "/user/root", "the root user data in nexus ");
+DEFINE_string(master_total_quota_key, "/user/root/quota", "the total quota data in nexus");
 DEFINE_string(safemode_store_path, "/safemode", "master safemode path on nexus");
 DEFINE_string(safemode_store_key, "safemode_switch", "master safemode key on nexus");
 DEFINE_string(jobs_store_path, "/jobs", "");

@@ -17,6 +17,8 @@ enum Status {
     kJobTerminateFail = 19;
     kRpcError = 20;
     kLabelAgentFail = 21;
+    kSessionTimeout = 22;
+    kPermissionDenied = 23;
 }
 
 enum PodState {

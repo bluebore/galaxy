@@ -87,16 +87,18 @@ class UserManager {
 public:
     UserManager();
     ~UserManager();
+    bool Init();
     bool AddUser(const User& user);
     bool Login(const std::string& name, 
                const std::string& password,
                User* user,
                std::string* sid);
-    bool Auth(const std::string& sid);
+    bool Auth(const std::string& sid, User* user);
 private:
     std::string GenUuid();
     bool SaveUser(const User& user);
     void CleanSession();
+    void ReloadUser(const User& user);
 private:
     ::baidu::common::Mutex mutex_;
     UserSet* user_set_;
@@ -104,6 +106,8 @@ private:
     typedef boost::unordered_map<std::string, Session> Sessions;
     Sessions* sessions_;
     ::baidu::common::ThreadPool* worker_;
+    Quota cluster_quota_;
+    std::string root_uid_;
 };
 
 }

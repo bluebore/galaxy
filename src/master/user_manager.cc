@@ -13,6 +13,8 @@ DECLARE_string(nexus_root_path);
 DECLARE_string(users_store_path);
 DECLARE_int32(master_session_timeout);
 DECLARE_int32(master_session_gc_period);
+DECLARE_string(master_root_user_key);
+DECLARE_string(master_total_quota_key);
 
 namespace baidu {
 namespace galaxy {
@@ -27,6 +29,76 @@ UserManager::UserManager(){
 }
 
 UserManager::~UserManager(){}
+
+bool UserManager::Init() {
+    MutexLock lock(&mutex_);
+    std::string start_key = FLAGS_nexus_root_path  + FLAGS_users_store_path + "/";
+    std::string end_key = start_key + "~";
+    ::galaxy::ins::sdk::ScanResult* result = nexus_->Scan(start_key, end_key);
+    User user;
+    int32_t user_count = 0;
+    while (!result->Done()) {
+        if (result->Error() != ::galaxy::ins::sdk::kOK) {
+            assert(0);
+        }
+        std::string key = result->Key();
+        std::string value = result->Value(); 
+        bool ok = user.ParseFromString(value);
+        if (ok) {
+            ReloadUser(user);
+        }
+        result->Next();
+        user_count ++;
+    }
+    LOG(INFO, "reload user count %d", user_count);
+    ::galaxy::ins::sdk::SDKError err;
+    bool ok = nexus_->Get(FLAGS_master_root_user_key, &root_uid_, &err);
+    if (!ok || err != ::galaxy::ins::sdk::kOK) {
+        LOG(WARNING, "fail to get root user key %s", FLAGS_master_root_user_key.c_str());
+        assert(0);
+    }
+    std::string quota_value;
+    ok = nexus_->Get(FLAGS_master_total_quota_key, &quota_value, &err);
+    if (!ok || err != ::galaxy::ins::sdk::kOK) {
+        LOG(WARNING, "fail to get quota");
+        assert(0);
+    }
+    ok = cluster_quota_.ParseFromString(quota_value);
+    if (!ok) {
+        LOG(WARNING, "fail to parse quota value");
+        assert(0);
+    }
+    return true;
+}
+
+void UserManager::ReloadUser(const User& user) {
+    mutex_.AssertHeld();
+    LOG(INFO, "reload user %s", user.name().c_str());
+    UserIndex user_index;
+    user_index.uid = user.uid(); 
+    user_index.name = user.name();
+    user_index.user.CopyFrom(user);
+    user_set_->insert(user_index);
+}
+
+bool UserManager::Auth(const std::string& sid, User* user) {
+    MutexLock lock(&mutex_);
+    Sessions::iterator sit = sessions_->find(sid);
+    if (sit != sessions_->end()) {
+        if (user == NULL) {
+            return true;
+        }
+        const UserSetIdIndex& id_index = user_set_->get<id_tag>();
+        UserSetIdIndex::const_iterator uit = id_index.find(sit->second.uid);
+        if (uit == id_index.end()) {
+            LOG(WARNING, "user with uid %s does not exist", sit->second.uid.c_str());
+            return false;
+        }
+        user->CopyFrom(uit->user);
+        return true;
+    }
+    return false;
+}
 
 bool UserManager::AddUser(const User& user) {
     UserIndex user_index;

@@ -87,6 +87,12 @@ public:
                          const LoginRequest* request,
                          LoginResponse* response,
                          ::google::protobuf::Closure* done);
+
+      virtual void AddUser(::google::protobuf::RpcController* controller,
+                           const AddUserRequest* request,
+                           AddUserResponse* response,
+                           ::google::protobuf::Closure* done);
+ 
       void OnSessionTimeout();
       void OnLockChange(std::string lock_session_id);
 private:

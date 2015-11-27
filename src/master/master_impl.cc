@@ -333,5 +333,33 @@ void MasterImpl::Login(::google::protobuf::RpcController*,
     done->Run();
 }
 
+void MasterImpl::AddUser(::google::protobuf::RpcController*,
+                         const AddUserRequest* request,
+                         AddUserResponse* response,
+                         ::google::protobuf::Closure* done) {
+    User user;
+    bool ok = user_manager_->Auth(request->sid(), &user);
+    if (!ok) {
+        response->set_status(kSessionTimeout);
+        done->Run();
+        return;
+    }
+    if (!user.super_user()) {
+        response->set_status(kPermissionDenied);
+        done->Run();
+        return;
+    }
+    ok = user_manager_->AddUser(request->user());
+    if (!ok) {
+        LOG(WARNING, "fail to add user %s", request->user().name().c_str());
+        response->set_status(kInputError);
+        done->Run();
+        return;
+    }
+    response->set_status(kOk);
+    done->Run();
+}
+
+
 }
 }

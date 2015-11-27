@@ -312,4 +312,5 @@ service Master {
     rpc LabelAgents(LabelAgentRequest) returns (LabelAgentResponse);
 
     rpc Login(LoginRequest) returns (LoginResponse);
+    rpc AddUser(AddUserRequest) returns (AddUserResponse);
 }
