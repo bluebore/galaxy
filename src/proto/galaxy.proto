@@ -141,6 +141,7 @@ message User {
     optional int64 last_login_time = 5;
     optional string workspace = 6;
     optional string password = 7;
+    optional bool super_user = 8 [ default = false];
 }
 
 message Group {
@@ -148,6 +149,7 @@ message Group {
     optional string name = 2;
     optional int64 create_time = 3;
     optional int64 last_update_time = 4;
+    optional bool super_group = 5 [ default = false];
 }
 
 enum PermissionType {
@@ -159,18 +161,27 @@ enum PermissionType {
 message Permission {
     // uid or gid
     optional string pid = 1;
-    // job id or group id
+    // job id or group id 
     optional string target = 2;
-
     optional PermissionType type = 3;
+}
+
+enum QuotaType {
+    kUserQuota = 0;
+    kGroupQuota = 1;
 }
 
 message Quota {
     optional string qid = 1;
     optional string name = 2;
-    optional int64 cpu = 3;
-    optional int64 memory = 4;
+    optional int64 cpu_quota = 3;
+    optional int64 memory_quota = 4;
     optional int64 create_time = 5;
     optional int64 update_time = 6;
+    // group id or user id
+    optional string target = 7;
+    optional int64 cpu_assigned = 8;
+    optional int64 mem_assigned = 9;
+    optional QuotaType type = 10;
 }
 

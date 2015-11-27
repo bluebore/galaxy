@@ -23,6 +23,7 @@ const std::string LABEL_PREFIX = "LABEL_";
 
 MasterImpl::MasterImpl() : nexus_(NULL){
     nexus_ = new ::galaxy::ins::sdk::InsSDK(FLAGS_nexus_servers);
+    user_manager_ = new UserManager();
 }
 
 MasterImpl::~MasterImpl() {
@@ -305,6 +306,30 @@ void MasterImpl::GetStatus(::google::protobuf::RpcController*,
                            ::google::protobuf::Closure* done) {
     Status ok = job_manager_.GetStatus(response);
     response->set_status(ok);
+    done->Run();
+}
+
+void MasterImpl::Login(::google::protobuf::RpcController*,
+                       const LoginRequest* request,
+                       LoginResponse* response,
+                       ::google::protobuf::Closure* done) {
+    User user;
+    std::string sid;
+    bool ok = user_manager_->Login(request->name(), 
+                                   request->password(),
+                                   &user,
+                                   &sid);
+    if (!ok) {
+        LOG(WARNING, "user %s login failed", request->name().c_str());
+        response->set_status(kInputError);
+        done->Run();
+        return;
+    }else {
+        LOG(INFO, "user %s login successed with sid %s", request->name().c_str(),
+                sid.c_str());
+    }
+    response->set_status(kOk);
+    response->set_sid(sid);
     done->Run();
 }
 

@@ -7,6 +7,7 @@
 #include "proto/master.pb.h"
 #include "job_manager.h"
 #include "ins_sdk.h"
+#include "master/user_manager.h"
 
 using ::galaxy::ins::sdk::InsSDK;
 
@@ -82,16 +83,21 @@ public:
                            ::baidu::galaxy::SwitchSafeModeResponse* response,
                            ::google::protobuf::Closure* done);
 
+      virtual void Login(::google::protobuf::RpcController* controller,
+                         const LoginRequest* request,
+                         LoginResponse* response,
+                         ::google::protobuf::Closure* done);
       void OnSessionTimeout();
       void OnLockChange(std::string lock_session_id);
 private:
       void AcquireMasterLock();
       // TODO should return value
       void ReloadJobInfo();
-      void ReloadLabelInfo(); private:
+      void ReloadLabelInfo(); 
+private:
       JobManager job_manager_;
       InsSDK* nexus_;
-
+      UserManager* user_manager_;
 };
 
 }
