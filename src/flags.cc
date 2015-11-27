@@ -33,7 +33,7 @@ DEFINE_int32(max_need_update_job_size, 10, "the max size of need update job size
 DEFINE_int32(max_scale_down_size, 10, "the max size of scale down jobs that schedule fetches");
 DEFINE_int32(max_scale_up_size, 10, "the max size of scale up jobs that schedule fetches");
 DEFINE_int32(master_pending_job_wait_timeout, 1000, "the timeout that master pending scheduler request");
-// scheduler
+// scheduler* (CPU_CFS_PERIOD / 1000)
 DEFINE_int32(scheduler_get_pending_job_timeout, 2000, "the timeout that scheduler get pending job from master");
 DEFINE_int32(scheduler_get_pending_job_period, 2000, "the period that scheduler get pending job from master");
 DEFINE_int32(scheduler_sync_resource_timeout, 1000, "the timeout that scheduler sync resource from master");
@@ -64,19 +64,15 @@ DEFINE_int32(agent_rpc_initd_timeout, 2, "agent monitor initd interval, unit sec
 DEFINE_int32(agent_initd_port_begin, 9000, "agent initd port used begin");
 DEFINE_int32(agent_initd_port_end, 9500, "agent initd port used end");
 DEFINE_string(agent_persistence_path, "./data", "agent persistence path");
+// hard limit
+DEFINE_string(agent_global_hardlimit_path, "galaxy", "agent cpu hard limit root");
+// soft limit
+DEFINE_string(agent_global_softlimit_path, "softlimit", "agent cpu soft limit root");
 DEFINE_string(agent_global_cgroup_path, "galaxy", "agent cgroup global path");
 DEFINE_int32(agent_detect_interval, 1000, "agent detect process running interval");
 DEFINE_string(agent_default_user, "galaxy", "agent default run task user");
-
-DEFINE_int32(cpu_scheduler_intervals, 1000, "agent cpu scheduler intervals");
-DEFINE_int32(cpu_scheduler_collector_intervals, 200, "agent cpu scheduler resource collect intervals");
-DEFINE_int32(cpu_scheduler_idle_high_limit, 2000, "agent cpu scheduler idle high limit cores");
-DEFINE_int32(cpu_scheduler_idle_low_limit, 1000, "agent cpu scheduler idle low limit cores");
-DEFINE_int32(cpu_scheduler_guarantee, 1500, "agent cpu scheduler guarantee");
-DEFINE_int32(cpu_scheduler_dec, 500, "agent cpu scheduler dec");
-DEFINE_bool(cpu_scheduler_switch, false, "agent cpu scheduler switch");
-DEFINE_int32(cpu_scheduler_start_frozen_time, 20, "start forzen time, unit second");
-
+DEFINE_int32(send_bps_quota, 200000000, "galaxy net send limit");
+DEFINE_int32(recv_bps_quota, 200000000, "galaxy new recv limit");
 
 // gce
 DEFINE_string(gce_cgroup_root, "/cgroups/", "Cgroup root mount path");

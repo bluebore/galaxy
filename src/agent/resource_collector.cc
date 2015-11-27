@@ -32,7 +32,8 @@ static const size_t PROC_STAT_FILE_SPLIT_SIZE = 44;
 static const size_t PROC_STATUS_FILE_SPLIT_SIZE = 3;
 static const int MIN_COLLECT_TIME = 2;
 
-static bool GetCgroupCpuUsage(const std::string& cgroup_path, 
+static bool GetCgroupCpuUsage(const std::string& cpu_path,
+                              const std::string& cpu_acc_path,
                               CgroupResourceStatistics* statistics);
 
 static bool GetCgroupMemoryUsage(const std::string& cgroup_path, 
@@ -90,23 +91,35 @@ long ProcResourceCollector::GetMemoryUsage() {
     return process_statistics_cur_.memory_rss_in_bytes;
 }
 
-CGroupResourceCollector::CGroupResourceCollector(const std::string& cgroup_name) : 
+CGroupResourceCollector::CGroupResourceCollector(const std::string& mem_path, 
+                                                 const std::string& cpu_path,
+                                                 const std::string& cpu_acc_path) : 
     global_statistics_prev_(),
     global_statistics_cur_(),
     cgroup_statistics_prev_(),
     cgroup_statistics_cur_(),
-    cgroup_name_(cgroup_name),
+    mem_path_(mem_path),
+    cpu_path_(cpu_path),
+    cpu_acc_path_(cpu_acc_path),
     timestamp_prev_(0.0),
     timestamp_cur_(0.0),
     collector_times_(0) {
+    LOG(INFO, "create resource collector for mem_path %s, cpu_path %s, cpu_acc_path %s",
+            mem_path.c_str(),
+            cpu_path.c_str(),
+            cpu_acc_path.c_str());
 }
 
 CGroupResourceCollector::~CGroupResourceCollector() {
 }
 
 void CGroupResourceCollector::ResetCgroupName(
-                            const std::string& cgroup_name) {
-    cgroup_name_ = cgroup_name;
+                            const std::string& mem_path,
+                            const std::string& cpu_path,
+                            const std::string& cpu_acc_path) {
+    mem_path_ = mem_path;
+    cpu_path_ = cpu_path;
+    cpu_acc_path_ = cpu_acc_path;
     collector_times_ = 0;
 }
 
@@ -179,22 +192,23 @@ bool CGroupResourceCollector::CollectStatistics() {
     timestamp_prev_ = timestamp_cur_;
     timestamp_cur_ = ::time(NULL);
 
-    if (!GetCgroupCpuUsage(cgroup_name_, 
+    if (!GetCgroupCpuUsage(cpu_path_,
+                           cpu_acc_path_, 
                            &temp_cgroup_statistics)) {
         LOG(WARNING, "cgroup collector collect cpu usage failed %s", 
-                     cgroup_name_.c_str());
+                     cpu_path_.c_str());
         return false;
     }
 
     if (!GetGlobalCpuUsage(&temp_global_statistics)) {
         LOG(WARNING, "cgroup collector collect global cpu usage failed %s",
-                     cgroup_name_.c_str()); 
+                     cpu_path_.c_str()); 
         return false;
     }
 
-    if (!GetCgroupMemoryUsage(cgroup_name_, &temp_cgroup_statistics)) {
+    if (!GetCgroupMemoryUsage(mem_path_, &temp_cgroup_statistics)) {
         LOG(WARNING, "cgroup collector collect memory failed %s",
-                     cgroup_name_.c_str()); 
+                     mem_path_.c_str()); 
         return false;
     }
     global_statistics_prev_ = global_statistics_cur_;
@@ -341,19 +355,18 @@ bool GetProcPidUsage(int pid, ResourceStatistics* statistics) {
     return true;
 }
 
-bool GetCgroupCpuUsage(const std::string& group_path, 
+bool GetCgroupCpuUsage(const std::string& cpu_path, 
+                       const std::string& cpu_acc_path,
                        CgroupResourceStatistics* statistics) {
     if (statistics == NULL) {
         return false; 
     }
-    std::string hierarchy = FLAGS_gce_cgroup_root + "/cpuacct/";
     std::string value;
-    if (0 != cgroups::Read(hierarchy, 
-                           group_path, 
+    if (0 != cgroups::Read(cpu_acc_path, 
                            "cpuacct.stat", 
                            &value)) {
         LOG(WARNING, "get cpuacct stat failed %s", 
-                     group_path.c_str()); 
+                     cpu_acc_path.c_str()); 
         return false;
     }
     std::vector<std::string> lines;
@@ -389,21 +402,18 @@ bool GetCgroupCpuUsage(const std::string& group_path,
     }
     
     statistics->cpu_cores_limit = 0L;
-    hierarchy = FLAGS_gce_cgroup_root  + "/cpu/";
     value = "";
-    if (0 != cgroups::Read(hierarchy,
-                           group_path,
+    if (0 != cgroups::Read(cpu_path,
                            "cpu.cfs_quota_us",
                            &value)) {
         LOG(WARNING, "get cpu cfs_quota_us failed %s",
-                     group_path.c_str()); 
+                     cpu_path.c_str()); 
         return false;
     }
     statistics->cpu_cores_limit = ::atol(value.c_str());
     if (statistics->cpu_cores_limit == 0) {
         return false; 
     }
-
     return true;
 }
 
@@ -412,11 +422,8 @@ bool GetCgroupMemoryUsage(const std::string& group_path,
     if (statistics == NULL) {
         return false; 
     }
-
-    std::string hierarchy = FLAGS_gce_cgroup_root + "/memory/";
     std::string value;
-    if (0 != cgroups::Read(hierarchy, 
-                           group_path, 
+    if (0 != cgroups::Read(group_path, 
                            "memory.stat", 
                            &value)) {
         LOG(WARNING, "get memory.stat falied %s",

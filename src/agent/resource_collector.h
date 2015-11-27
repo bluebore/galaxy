@@ -66,9 +66,13 @@ struct CgroupResourceStatistics {
 
 class CGroupResourceCollector : public ResourceCollector {
 public:
-    explicit CGroupResourceCollector(const std::string& cgroup_name);
+    explicit CGroupResourceCollector(const std::string& mem_path, 
+                                     const std::string& cpu_path,
+                                     const std::string& cpu_acc_path);
     virtual ~CGroupResourceCollector();
-    void ResetCgroupName(const std::string& group_name);
+    void ResetCgroupName(const std::string& mem_path,
+                         const std::string& cpu_path,
+                         const std::string& cpu_acc_path);
     void Clear();
     double GetCpuUsage();
     long GetMemoryUsage();
@@ -80,7 +84,9 @@ private:
     ResourceStatistics global_statistics_cur_;
     CgroupResourceStatistics cgroup_statistics_prev_;
     CgroupResourceStatistics cgroup_statistics_cur_;
-    std::string cgroup_name_;
+    std::string mem_path_;
+    std::string cpu_path_;
+    std::string cpu_acc_path_;
     double timestamp_prev_; 
     double timestamp_cur_;
     int collector_times_;

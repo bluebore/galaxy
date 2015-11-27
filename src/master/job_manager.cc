@@ -61,7 +61,6 @@ bool JobManager::CheckSafeModeManual(bool& mode) {
     ::galaxy::ins::sdk::SDKError err;
     std::string value = "off";
     bool ok = false;
-
     std::string safe_mode_key = FLAGS_nexus_root_path + FLAGS_safemode_store_path 
                                 + "/" + FLAGS_safemode_store_key; 
     ok = nexus_->Get(safe_mode_key, &value, &err);
@@ -182,6 +181,17 @@ Status JobManager::Add(const JobId& job_id, const JobDescriptor& job_desc) {
     Job* job = new Job();
     job->state_ = kJobNormal;
     job->desc_.CopyFrom(job_desc);
+    for (int i = 0; i < job->desc_.pod().tasks_size(); i++) {
+        TaskDescriptor* task_desc = job->desc_.mutable_pod()->mutable_tasks(i);
+        if (!task_desc->has_cpu_isolation_type()) {
+            // add default value
+            task_desc->set_cpu_isolation_type(kCpuIsolationHard);
+        }
+        if (!task_desc->has_mem_isolation_type()) { 
+            // add default value
+            task_desc->set_mem_isolation_type(kMemIsolationCgroup);
+        }
+    }
     job->id_ = job_id;
     // add default version
     if (!job->desc_.pod().has_version()
@@ -1448,7 +1458,6 @@ bool JobManager::SaveToNexus(const Job* job) {
           job_info.desc().name().c_str(),
           job_info.jobid().c_str(),
           ::galaxy::ins::sdk::InsSDK::StatusToString(err).c_str());
-
     }
     return put_ok; 
 }

@@ -39,18 +39,11 @@ private:
 
     bool GetProcPath(std::string* proc_path);
 
-    // collect fds for self
-    // void CollectFds(std::vector<int>* fd_vector);
-
-    // bool PrepareStdFds(const std::string& pwd, int* stdout_fd, int* stderr_fd);
-
     bool AttachCgroup(const std::string& cgroup_path, pid_t pid);
 
     std::map<std::string, ProcessInfo> process_infos_;
     Mutex lock_;
     ThreadPool background_thread_;
-    std::vector<std::string> cgroup_subsystems_;
-    std::string cgroup_root_;
 };
 
 }   // ending namespace galaxy

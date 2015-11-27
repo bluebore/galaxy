@@ -74,9 +74,8 @@ agent_src='src/agent/agent_impl.cc\
            src/agent/persistence_handler.cc\
            src/agent/cgroups.cc\
            src/proto/initd.proto\
-           src/agent/resource_collector.cc\
-           src/agent/cpu_scheduler.cc'
-
+           src/agent/resource_collector.cc'
+           
 initd_src='src/gce/initd_main.cc\
            src/gce/initd_impl.cc\
            src/agent/utils.cc \
@@ -94,19 +93,19 @@ sdk_headers='src/sdk/galaxy.h'
 
 client_src='src/client/galaxy_client.cc'
 
-test_task_manager_src='src/proto/initd.proto src/proto/galaxy.proto \
-                       src/agent/task_manager.cc src/agent/utils.cc src/flags.cc \
-                       src/agent/test_task_manager.cc src/agent/cgroups.cc\
-                       src/agent/resource_collector.cc\
-                       src/agent/cpu_scheduler.cc'
+#test_task_manager_src='src/proto/initd.proto src/proto/galaxy.proto \
+#                       src/agent/task_manager.cc src/agent/utils.cc src/flags.cc \
+#                       src/agent/test_task_manager.cc src/agent/cgroups.cc\
+#                       src/agent/resource_collector.cc\
+#                       src/agent/cpu_scheduler.cc'
 test_cgroup_src='src/agent/cgroups.cc src/agent/test_cgroups.cc'
 
-test_resource_collector_src='src/agent/test_resource_collector.cc\
-                            src/agent/resource_collector.cc src/flags.cc\
-                            src/agent/cgroups.cc'
-test_cgroup_resource_collector_src='src/agent/test_cgroup_resource_collector.cc\
-                                   src/agent/resource_collector.cc src/flags.cc\
-                                   src/agent/cgroups.cc'
+#test_resource_collector_src='src/agent/test_resource_collector.cc\
+#                            src/agent/resource_collector.cc src/flags.cc\
+#                            src/agent/cgroups.cc'
+#test_cgroup_resource_collector_src='src/agent/test_cgroup_resource_collector.cc\
+#                                   src/agent/resource_collector.cc src/flags.cc\
+                                   #src/agent/cgroups.cc'
 
 test_persistence_handler_src='src/proto/agent.proto src/proto/galaxy.proto  \
                               src/proto/initd.proto \
@@ -122,11 +121,11 @@ Application('agent',Sources(agent_src))
 Application('initd',Sources(initd_src))
 StaticLibrary('galaxy',Sources(sdk_src),HeaderFiles(sdk_headers))
 Application('galaxy',Sources(client_src), Libraries('./libgalaxy.a ./common/libcommon.a ./ins/libins_sdk.a'))
-Application('test_task_manager', Sources(test_task_manager_src))
+#Application('test_task_manager', Sources(test_task_manager_src))
 Application('test_cgroup', Sources(test_cgroup_src))
-Application('test_resource_collector', Sources(test_resource_collector_src))
-Application('test_persistence_handler', Sources(test_persistence_handler_src))
-Application('test_cgroup_resource_collector', Sources(test_cgroup_resource_collector_src))
+#Application('test_resource_collector', Sources(test_resource_collector_src))
+#Application('test_persistence_handler', Sources(test_persistence_handler_src))
+#Application('test_cgroup_resource_collector', Sources(test_cgroup_resource_collector_src))
 Application('test_index_list', Sources(test_index_list_src))
 Application('initd_cli', Sources(initd_cli_src))
 Application('initd_cli_server', Sources(initd_cli_server_src))

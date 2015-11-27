@@ -32,7 +32,7 @@ struct TaskInfo {
 
     std::string cgroup_path;
     std::string task_workspace;
-
+    std::map<std::string, std::string> cgroups;
     std::string task_chroot_path; // chroot path
     int fail_retry_times;
     int max_retry_times;
@@ -40,7 +40,6 @@ struct TaskInfo {
     int initd_check_failed;
     Initd_Stub* initd_stub;
     CGroupResourceCollector* resource_collector; 
-
 
     std::string ToString() {
         std::string pb_str;

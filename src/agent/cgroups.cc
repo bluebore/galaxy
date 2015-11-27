@@ -21,18 +21,21 @@ namespace cgroups {
 bool FreezerSwitch(const std::string& hierarchy,
                    const std::string& cgroup,
                    const std::string& freezer_state) {
+   return FreezerSwitch(hierarchy + "/" + cgroup, freezer_state); 
+}
+
+bool FreezerSwitch(const std::string& cgroup,
+                   const std::string& freezer_state) {
     const int MAX_RETRY_TIMES = 3;    
     for (int i = 0; i < MAX_RETRY_TIMES; ++i) {
-        if (0 != Write(hierarchy, 
-                       cgroup, 
+        if (0 != Write(cgroup, 
                        "freezer.state", 
                        freezer_state)) {
             return false; 
         }     
         ::usleep(100000);  
         std::string freezer_state_val;
-        if (0 != Read(hierarchy,
-                      cgroup,
+        if (0 != Read(cgroup,
                       "freezer.state",
                       &freezer_state_val)) {
             return false; 
@@ -44,14 +47,21 @@ bool FreezerSwitch(const std::string& hierarchy,
     return false;
 }
 
+
+
 bool GetPidsFromCgroup(const std::string& hierarchy,
                        const std::string& cgroup,
+                       std::vector<int>* pids) {
+    return GetPidsFromCgroup(hierarchy + "/" + cgroup, pids);
+}
+
+bool GetPidsFromCgroup(const std::string& cgroup,
                        std::vector<int>* pids) {
     if (pids == NULL) {
         return false; 
     }
     std::string value;
-    if (0 != Read(hierarchy, cgroup, "cgroup.procs", &value)) {
+    if (0 != Read(cgroup, "cgroup.procs", &value)) {
         return false; 
     }
 
@@ -69,12 +79,16 @@ bool GetPidsFromCgroup(const std::string& hierarchy,
     return true;
 }
 
+
 bool AttachPid(const std::string& hierarchy,
                const std::string& cgroup,
                int pid) {
-    if (0 == Write(
-                hierarchy, 
-                cgroup, 
+    return AttachPid(hierarchy+"/"+ cgroup, pid);
+}
+
+bool AttachPid(const std::string& cgroup_folder,
+              int pid) {
+    if (0 == Write( cgroup_folder, 
                 "tasks", 
                 boost::lexical_cast<std::string>(pid))) {
         return true; 
@@ -82,12 +96,10 @@ bool AttachPid(const std::string& hierarchy,
     return false;
 }
 
-int Write(const std::string& hierarchy,
-          const std::string& cgroup,
+int Write(const std::string& folder,
           const std::string& control_file,
-          const std::string& value) {                        
-    std::string file_path = hierarchy + "/" 
-        + cgroup + "/" + control_file;
+          const std::string& value) {
+    std::string file_path = folder + "/" + control_file;
     FILE* fd = ::fopen(file_path.c_str(), "we");
     if (fd == NULL) {
         LOG(WARNING, "open %s failed", file_path.c_str());
@@ -101,17 +113,31 @@ int Write(const std::string& hierarchy,
         return -1; 
     }
     return 0;
+
 }
+
+int Write(const std::string& hierarchy,
+          const std::string& cgroup,
+          const std::string& control_file,
+          const std::string& value) {                        
+    return Write(hierarchy + "/" + cgroup, control_file, value);
+}
+
 
 int Read(const std::string& hierarchy,
          const std::string& cgroup,
          const std::string& control_file,
          std::string* value) {
+    return Read(hierarchy+"/"+cgroup, control_file, value);
+}
+
+int Read(const std::string& cgroup,
+         const std::string& control_file,
+         std::string* value) {
     if (value == NULL) {
         return -1; 
     }    
-    std::string file_path = hierarchy + "/" 
-        + cgroup + "/" + control_file;
+    std::string file_path = cgroup + "/" + control_file;
     FILE* fin = ::fopen(file_path.c_str(), "re"); 
     if (NULL == fin) {
         return -1; 
@@ -137,6 +163,7 @@ int Read(const std::string& hierarchy,
     boost::algorithm::trim(*value);
     return 0;
 }
+
 
 
 }   // ending namespace cgroups

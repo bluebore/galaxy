@@ -10,6 +10,7 @@
 #include "proto/initd.pb.h"
 #include "rpc/rpc_client.h"
 #include "thread_pool.h"
+#include "boost/function.hpp"
 
 namespace baidu {
 namespace galaxy {
@@ -32,16 +33,12 @@ protected:
     int PrepareCgroupEnv(TaskInfo* task_info); 
     int PrepareResourceCollector(TaskInfo* task_info);
     int PrepareVolumeEnv(TaskInfo* task_info);
-    int PrepareCpuScheduler(TaskInfo* task_info);
-
-    int ResetCpuScheduler(TaskInfo* task_info);
 
     int CleanWorkspace(TaskInfo* task_info);
     int CleanCgroupEnv(TaskInfo* task_info);
     int CleanResourceCollector(TaskInfo* task_info);
     int CleanVolumeEnv(TaskInfo* task_info);
     int CleanProcess(TaskInfo* task_info);
-    int CleanCpuScheduler(TaskInfo* task_info);
 
     void SetResourceUsage(TaskInfo* task_info);
     // task stage run
@@ -73,13 +70,23 @@ protected:
         task_info->stop_process.set_key(task_info->task_id  
                                         + "_stop"); 
     }
+    bool InitCpuSubSystem();
+    bool HandleHardlimitChange(int32_t hardlimit_cores);
+    bool HandleInitTaskCpuCgroup(std::string& subsystem, TaskInfo* task);
+    bool HandleInitTaskMemCgroup(std::string& subsystem, TaskInfo* task);
+    bool HandleInitTaskComCgroup(std::string& subsystem, TaskInfo* task);
+    bool HandleInitTaskTcpCgroup(std::string& subsystem, TaskInfo* task);
+    int InitTcpthrotEnv();
 protected:
     Mutex tasks_mutex_;
     std::map<std::string, TaskInfo*> tasks_;
     ThreadPool background_thread_;
     std::string cgroup_root_;
+    typedef boost::function<bool (TaskInfo* task)> CgroupFunc;
+    std::map<std::string, CgroupFunc> cgroup_funcs_;
     std::map<std::string, std::string> hierarchies_;
     RpcClient* rpc_client_;
+    int32_t hardlimit_cores_;
 };
 
 }   // ending namespace galaxy

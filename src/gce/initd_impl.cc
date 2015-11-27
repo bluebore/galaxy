@@ -31,9 +31,7 @@ namespace galaxy {
 InitdImpl::InitdImpl() :
     process_infos_(),
     lock_(),
-    background_thread_(1),
-    cgroup_subsystems_(),
-    cgroup_root_() {
+    background_thread_(1) {
     background_thread_.DelayTask(
             FLAGS_gce_initd_zombie_check_interval,
             boost::bind(&InitdImpl::ZombieCheck, this));
@@ -65,11 +63,6 @@ void InitdImpl::ZombieCheck() {
 }
 
 bool InitdImpl::Init() {
-    boost::split(cgroup_subsystems_,
-            FLAGS_gce_support_subsystems,
-            boost::is_any_of(","),
-            boost::token_compress_on);      
-    cgroup_root_ = FLAGS_gce_cgroup_root;
     return true;
 }
 
@@ -216,16 +209,16 @@ void InitdImpl::Execute(::google::protobuf::RpcController* /*controller*/,
         process::PrepareChildProcessEnvStep1(my_pid, 
                                              request->path().c_str());
         // attach cgroup 
-        if (request->has_cgroup_path() 
-            && !AttachCgroup(request->cgroup_path(), my_pid)) {
-            assert(0); 
+        for (int i = 0; i < request->cgroups_size(); i++) {
+            bool ok = AttachCgroup(request->cgroups(i).cgroup_path(), my_pid);
+            if (!ok) {
+                assert(0);
+            }
         }
-
         process::PrepareChildProcessEnvStep2(stdin_fd,
                                              stdout_fd, 
                                              stderr_fd, 
                                              fd_vector);
-        // NOTE chroot 执行的位置会影响路径
         if (is_chroot) {
             if (::chroot(request->chroot_path().c_str()) != 0) {
                 assert(0);    
@@ -283,79 +276,17 @@ void InitdImpl::Execute(::google::protobuf::RpcController* /*controller*/,
     return;
 }
 
-// bool InitdImpl::PrepareStdFds(const std::string& pwd, 
-//                               int* stdout_fd, 
-//                               int* stderr_fd) {
-//     if (stdout_fd == NULL || stderr_fd == NULL) {
-//         LOG(WARNING, "prepare stdout_fd or stderr_fd NULL"); 
-//         return false;
-//     }
-//     std::string now_str_time;
-//     GetStrFTime(&now_str_time);
-//     std::string stdout_file = pwd + "/stdout_" + now_str_time;
-//     std::string stderr_file = pwd + "/stderr_" + now_str_time;
-// 
-//     const int STD_FILE_OPEN_FLAG = O_CREAT | O_APPEND | O_WRONLY;
-//     const int STD_FILE_OPEN_MODE = S_IRWXU | S_IRWXG | S_IROTH;
-//     *stdout_fd = ::open(stdout_file.c_str(), 
-//             STD_FILE_OPEN_FLAG, STD_FILE_OPEN_MODE);
-//     *stderr_fd = ::open(stderr_file.c_str(),
-//             STD_FILE_OPEN_FLAG, STD_FILE_OPEN_MODE);
-//     if (*stdout_fd == -1 || *stderr_fd == -1) {
-//         LOG(WARNING, "open file failed err[%d: %s]",
-//                 errno, strerror(errno));
-//         return false; 
-//     }
-//     return true;
-// }
-
-// void InitdImpl::CollectFds(std::vector<int>* fd_vector) {
-//     if (fd_vector == NULL) {
-//         return; 
-//     }
-// 
-//     pid_t current_pid = ::getpid();
-//     std::string pid_path = "/proc/";
-//     pid_path.append(boost::lexical_cast<std::string>(current_pid));
-//     pid_path.append("/fd/");
-// 
-//     std::vector<std::string> fd_files;
-//     if (!file::ListFiles(pid_path, &fd_files)) {
-//         LOG(WARNING, "list %s failed", pid_path.c_str());    
-//         return;
-//     }
-// 
-//     for (size_t i = 0; i < fd_files.size(); i++) {
-//         if (fd_files[i] == "." || fd_files[i] == "..") {
-//             continue; 
-//         }
-//         fd_vector->push_back(::atoi(fd_files[i].c_str()));    
-//     }
-//     return;
-// }
-
 bool InitdImpl::AttachCgroup(const std::string& cgroup_path, 
                              pid_t child_pid) {
     if (cgroup_path.empty()) {
         return true; 
     }
-
-    if (cgroup_subsystems_.size() == 0) {
-        return true; 
-    }
-    
-    std::string task_file_prefix = cgroup_root_ + "/";
-    for (size_t i = 0; i < cgroup_subsystems_.size(); i++) {
-        std::string hierarchy = task_file_prefix + cgroup_subsystems_[i];
-        if (!cgroups::AttachPid(hierarchy, 
-                                cgroup_path, 
-                                child_pid)) {
-            return false;     
-        }
+    if (!cgroups::AttachPid(cgroup_path, 
+                            child_pid)) {
+        return false;     
     }
     return true;
 }
-
 
 bool InitdImpl::LoadProcessInfoCheckPoint(const ProcessInfoCheckpoint& checkpoint) {
     MutexLock scope_lock(&lock_);

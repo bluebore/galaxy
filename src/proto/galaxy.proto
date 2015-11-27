@@ -78,6 +78,11 @@ enum MemIsolationType {
     kMemIsolationLimit = 1;
 }
 
+enum CpuIsolationType {
+    kCpuIsolationHard = 0;
+    kCpuIsolationSoft = 1;
+}
+
 message TaskDescriptor {
     optional bytes binary = 1; 
     optional string start_command = 2;
@@ -91,6 +96,7 @@ message TaskDescriptor {
     optional int32 offset = 7;
     optional SourceType source_type = 8;
     optional MemIsolationType mem_isolation_type = 9;
+    optional CpuIsolationType cpu_isolation_type = 10;
 }
 
 message PodDescriptor {

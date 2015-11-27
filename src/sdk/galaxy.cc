@@ -109,6 +109,12 @@ bool GalaxyImpl::FillJobDescriptor(const JobDescription& sdk_job,
         if (!ok) {
             return false;
         }
+        CpuIsolationType cpu_isolation_type;
+        ok = CpuIsolationType_Parse(sdk_job.pod.tasks[i].cpu_isolation_type, &cpu_isolation_type);
+        if (!ok) {
+            return false;
+        }
+        task->set_cpu_isolation_type(cpu_isolation_type);
         task->set_mem_isolation_type(mem_isolation_type);
         task->set_offset(sdk_job.pod.tasks[i].offset);
         std::set<std::string>::iterator envs_it = sdk_job.pod.tasks[i].envs.begin();
