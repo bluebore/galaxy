@@ -59,6 +59,7 @@ void MasterImpl::Init() {
     LOG(INFO, "begin to reload job descriptor from nexus");
     ReloadJobInfo();
     ReloadLabelInfo();
+    user_manager_->Init();
 }
 
 void MasterImpl::ReloadLabelInfo() {

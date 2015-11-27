@@ -69,6 +69,7 @@ bool UserManager::Init() {
         qresult->Next();
         quota_count ++;
     }
+    LOG(INFO, "reload quota count %d", quota_count);
     return true;
 }
 
@@ -84,7 +85,7 @@ void UserManager::ReloadQuota(const Quota& quota) {
 
 void UserManager::ReloadUser(const User& user) {
     mutex_.AssertHeld();
-    LOG(INFO, "reload user %s", user.name().c_str());
+    LOG(INFO, "reload user %s with uid %s", user.name().c_str(), user.uid().c_str());
     UserIndex user_index;
     user_index.uid = user.uid(); 
     user_index.name = user.name();
@@ -214,7 +215,6 @@ std::string UserManager::GenUuid() {
     boost::uuids::uuid uuid = boost::uuids::random_generator()();
     return boost::lexical_cast<std::string>(uuid); 
 }
-
 
 }
 }
