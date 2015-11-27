@@ -285,6 +285,7 @@ int BuildJobFromConfig(const std::string& config, ::baidu::galaxy::JobDescriptio
                 for (rapidjson::SizeType i = 0; i < task_envs.Size(); i++) {
                     task.envs.insert(task_envs[i].GetString());
                 }
+            }
             task.cpu_isolation_type= "kCpuIsolationHard";
             if (tasks_json[i].HasMember("cpu_isolation_type")) {
                 task.cpu_isolation_type = tasks_json[i]["cpu_isolation_type"].GetString();

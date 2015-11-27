@@ -11,16 +11,16 @@
 DECLARE_string(nexus_servers);
 DECLARE_string(nexus_root_path);
 DECLARE_string(users_store_path);
+DECLARE_string(quotas_store_path);
 DECLARE_int32(master_session_timeout);
 DECLARE_int32(master_session_gc_period);
-DECLARE_string(master_root_user_key);
-DECLARE_string(master_total_quota_key);
 
 namespace baidu {
 namespace galaxy {
 
 UserManager::UserManager(){
     user_set_ = new UserSet();
+    quota_set_ = new QuotaSet();
     nexus_ = new ::galaxy::ins::sdk::InsSDK(FLAGS_nexus_servers);
     sessions_ = new Sessions();
     worker_ = new ::baidu::common::ThreadPool(4);
@@ -51,24 +51,35 @@ bool UserManager::Init() {
         user_count ++;
     }
     LOG(INFO, "reload user count %d", user_count);
-    ::galaxy::ins::sdk::SDKError err;
-    bool ok = nexus_->Get(FLAGS_master_root_user_key, &root_uid_, &err);
-    if (!ok || err != ::galaxy::ins::sdk::kOK) {
-        LOG(WARNING, "fail to get root user key %s", FLAGS_master_root_user_key.c_str());
-        assert(0);
-    }
-    std::string quota_value;
-    ok = nexus_->Get(FLAGS_master_total_quota_key, &quota_value, &err);
-    if (!ok || err != ::galaxy::ins::sdk::kOK) {
-        LOG(WARNING, "fail to get quota");
-        assert(0);
-    }
-    ok = cluster_quota_.ParseFromString(quota_value);
-    if (!ok) {
-        LOG(WARNING, "fail to parse quota value");
-        assert(0);
+    std::string q_start_key = FLAGS_nexus_root_path  + FLAGS_quotas_store_path + "/";
+    std::string q_end_key = q_start_key + "~";
+    ::galaxy::ins::sdk::ScanResult* qresult = nexus_->Scan(q_start_key, q_end_key);
+    Quota quota;
+    int32_t quota_count = 0;
+    while (!qresult->Done()) {
+        if (qresult->Error() != ::galaxy::ins::sdk::kOK) {
+            assert(0);
+        }
+        std::string key = qresult->Key();
+        std::string value = qresult->Value(); 
+        bool ok = quota.ParseFromString(value);
+        if (ok) {
+            ReloadQuota(quota);
+        }
+        qresult->Next();
+        quota_count ++;
     }
     return true;
+}
+
+void UserManager::ReloadQuota(const Quota& quota) {
+    mutex_.AssertHeld();
+    QuotaIndex quota_index;
+    quota_index.qid = quota.qid();
+    quota_index.name = quota.name();
+    quota_index.target = quota.target();
+    quota_index.quota.CopyFrom(quota);
+    quota_set_->insert(quota_index);
 }
 
 void UserManager::ReloadUser(const User& user) {
@@ -79,6 +90,9 @@ void UserManager::ReloadUser(const User& user) {
     user_index.name = user.name();
     user_index.user.CopyFrom(user);
     user_set_->insert(user_index);
+    if (user.super_user()) {
+        supers_.insert(user.uid());
+    }
 }
 
 bool UserManager::Auth(const std::string& sid, User* user) {

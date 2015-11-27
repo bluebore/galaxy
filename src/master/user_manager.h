@@ -76,7 +76,7 @@ typedef boost::multi_index_container<
             BOOST_MULTI_INDEX_MEMBER(QuotaIndex, std::string, name)
         >,
         boost::multi_index::hashed_unique<
-            boost::multi_index::tag<name_tag>, 
+            boost::multi_index::tag<target_tag>, 
             BOOST_MULTI_INDEX_MEMBER(QuotaIndex, std::string, target)
         >
     >
@@ -99,15 +99,16 @@ private:
     bool SaveUser(const User& user);
     void CleanSession();
     void ReloadUser(const User& user);
+    void ReloadQuota(const Quota& quota);
 private:
     ::baidu::common::Mutex mutex_;
     UserSet* user_set_;
+    QuotaSet* quota_set_;
     InsSDK* nexus_;
     typedef boost::unordered_map<std::string, Session> Sessions;
     Sessions* sessions_;
     ::baidu::common::ThreadPool* worker_;
-    Quota cluster_quota_;
-    std::string root_uid_;
+    std::set<std::string> supers_;
 };
 
 }
