@@ -506,28 +506,45 @@ std::string GetAgentById(std::string job_id, std::string pod_id) {
     return agent_endpoint.substr(0, agent_endpoint.find_last_of(":"));
 }
 
-static int force_exit = 0;
-struct libwebsocket_context *context = NULL;
+
+
+static int force_exit = 0; 
 const int BUF_LEN = 1024 * 100;
 unsigned char buf_[BUF_LEN + LWS_SEND_BUFFER_PRE_PADDING + LWS_SEND_BUFFER_POST_PADDING];
 unsigned char* buf = buf_ + LWS_SEND_BUFFER_PRE_PADDING;
+int first_time = 0; //whether is the first time to write pod id to server
 
 static int callback_terminal_contact(struct libwebsocket_context* context,
                          struct libwebsocket* wsi,
                          enum libwebsocket_callback_reasons reason,
                          void* user, void* in, size_t len) {
     switch (reason) {
-    case LWS_CALLBACK_RECEIVE:
-        if (len == 1) {
+    case LWS_CALLBACK_CLIENT_ESTABLISHED:
+        //callback to write pod id
+        libwebsocket_callback_on_writable(context, wsi);
+        break;
+    case LWS_CALLBACK_CLIENT_RECEIVE:
+        // server send a zero character to tell client to finish
+        if (len == 1 && *((unsigned char*)in) == 0) { 
+            fprintf(stderr, "[end]\r\n");
             force_exit = 1;
             break;
         }
+        //write what you received 
         write(1, in, len);
+        break;
+    case LWS_CALLBACK_CLIENT_WRITEABLE:
+        if (first_time == 0) {
+            for (int i = 0; i < 36; i ++) 
+                buf[i] = FLAGS_p[i];
+            libwebsocket_write(wsi, buf, 36, LWS_WRITE_TEXT);
+            first_time = 1;
+        }
         break;
     default:
         break;
     }
-    
+    return 0;
 }
 
 
@@ -535,9 +552,8 @@ static struct libwebsocket_protocols protocols[] = {
     {
         "terminal-contact",
         callback_terminal_contact, 0,
-        1024 * 100
     },
-    {NULL, NULL, 0, 0, NULL}
+    {NULL, NULL, 0}
 };
 
 
@@ -547,27 +563,26 @@ static int AttachPod() {
         return -1;
     }
     
+    lws_set_log_level(0, NULL); //no log
+    struct libwebsocket_context *context = NULL;
     struct lws_context_creation_info info;
-    memset(&info, 0, sizeof(info));
+    memset(&info, 0, sizeof info);
     info.protocols = protocols;
     info.port = CONTEXT_PORT_NO_LISTEN;
     info.gid = -1;
     info.uid = -1;
     info.extensions = libwebsocket_get_internal_extensions();
 
-    fprintf(stderr, "to connect 0\n");
     context = libwebsocket_create_context(&info);
     assert(context != NULL);
     std::string server_addr = agent_endpoint + ":" + boost::lexical_cast<std::string>(FLAGS_cli_server_port);
-    fprintf(stderr, "server name: %s\n", server_addr.c_str());
+    fprintf(stderr, "server addr: %s\n", server_addr.c_str());
     libwebsocket* wsi = libwebsocket_client_connect(context, 
-                            //"localhost", 8775, 0, "", "localhost:8775", "localhost:8775",
-                            agent_endpoint.c_str(), FLAGS_cli_server_port, 0, "/", server_addr.c_str(), server_addr.c_str(),
-                            "terminal-contact", -1);
+                            agent_endpoint.c_str(), FLAGS_cli_server_port, 0, "/", server_addr.c_str(), NULL,
+                            protocols[0].name, -1);
     assert(wsi != NULL);
-    fprintf(stderr, "to connect 2\n");
-
-    //raw terminal
+    
+    //set raw terminal
     struct termios temp_termios;
     struct termios orig_termios;
     ::tcgetattr(0, &orig_termios);
@@ -576,35 +591,34 @@ static int AttachPod() {
     ::tcsetattr(0, TCSANOW, &temp_termios);
 
     int ret = 0;
-
-    for (int i = 0; i < 36; i ++) 
-        buf[i] = FLAGS_p[i];
-    libwebsocket_write(wsi, buf, 36, LWS_WRITE_TEXT);
-
     fd_set fd_in;
-    struct timeval timeout = {0, 10};
+    struct timeval timeout;
+    timeout.tv_sec = 0; timeout.tv_usec = 1000;
     while (!force_exit) {
+        //read from stdin
         FD_ZERO(&fd_in);
         FD_SET(0, &fd_in);
         ret = ::select(1, &fd_in, NULL, NULL, &timeout);
         if (ret < 0) {
-            fprintf(stderr, "error\n");
+            fprintf(stderr, "selct error\r\n");
             break;
         } else if (ret > 0 && FD_ISSET(0, &fd_in)) {
             ret = ::read(0, buf, BUF_LEN);
             if (ret > 0) {
                 libwebsocket_write(wsi, buf, ret, LWS_WRITE_TEXT);
             } else if (ret < 0) {
-                fprintf(stderr, "read error");
+                fprintf(stderr, "read error\r\n");
                 break;
             }
         }
-        libwebsocket_service(context, 10);
+        //check websockets
+        libwebsocket_service(context, 0);
     }
 
+    //set terminal back 
+    ::tcsetattr(0, TCSANOW, &orig_termios);
     libwebsocket_context_destroy(context);
 
-    ::tcsetattr(0, TCSANOW, &orig_termios);
     if (ret < 0) {
         return -1;
     }

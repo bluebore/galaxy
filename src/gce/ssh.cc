@@ -343,6 +343,7 @@ int main(int argc, char* argv[]) {
                             LOG(INFO, "read from pty: size %d", ret);
                             if (ret <= 0) {
                                 //send a one byte response to tell client to close websocket
+                                buf[0] = 0x00;
                                 libwebsocket_write(pty2wsi[fd], buf, 1, LWS_WRITE_BINARY);
                                 ClearPollFd(fd); i --;
                                 pty2wsi.erase(fd);
