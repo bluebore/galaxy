@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <errno.h>
 #include <string.h>
+#include <cstring>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -25,6 +26,9 @@
 #include "rapidjson/filereadstream.h"
 #include "master/master_watcher.h"
 #include "ins_sdk.h"
+
+#include "libwebsockets.h"
+#include <boost/lexical_cast.hpp>
 
 DEFINE_string(nexus_servers, "", "server list of nexus, e.g abc.com:1234,def.com:5342");
 DEFINE_string(nexus_root_path, "/baidu/galaxy", "root path of galaxy cluster on nexus, e.g /ps/galaxy");
@@ -502,89 +506,114 @@ std::string GetAgentById(std::string job_id, std::string pod_id) {
     return agent_endpoint.substr(0, agent_endpoint.find_last_of(":"));
 }
 
-int AttachPod() {
+static int force_exit = 0;
+struct libwebsocket_context *context = NULL;
+const int BUF_LEN = 1024 * 100;
+unsigned char buf_[BUF_LEN + LWS_SEND_BUFFER_PRE_PADDING + LWS_SEND_BUFFER_POST_PADDING];
+unsigned char* buf = buf_ + LWS_SEND_BUFFER_PRE_PADDING;
+
+static int callback_terminal_contact(struct libwebsocket_context* context,
+                         struct libwebsocket* wsi,
+                         enum libwebsocket_callback_reasons reason,
+                         void* user, void* in, size_t len) {
+    switch (reason) {
+    case LWS_CALLBACK_RECEIVE:
+        if (len == 1) {
+            force_exit = 1;
+            break;
+        }
+        write(1, in, len);
+        break;
+    default:
+        break;
+    }
+    
+}
+
+
+static struct libwebsocket_protocols protocols[] = {
+    {
+        "terminal-contact",
+        callback_terminal_contact, 0,
+        1024 * 100
+    },
+    {NULL, NULL, 0, 0, NULL}
+};
+
+
+static int AttachPod() {
     std::string agent_endpoint = GetAgentById(FLAGS_j, FLAGS_p);
     if (agent_endpoint == "") {
         return -1;
     }
-    int sockfd = 0;
-    const int BUFFER_LEN = 1024 * 10;
-    char buffer[BUFFER_LEN];
-    struct sockaddr_in serv_addr;
-    if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        fprintf(stderr, "Fail to create socket\n");
-        return -1;
-    }
-    memset(&serv_addr, 0, sizeof(serv_addr));
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(FLAGS_cli_server_port);
-
-    if (inet_pton(AF_INET, agent_endpoint.c_str(), &serv_addr.sin_addr) < 0) {
-        fprintf(stderr, "Wrong server address\n");
-        return -1;
-    }
-    if (connect(sockfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
-        fprintf(stderr, "Fail to connect cli server\n");
-        return -1;
-    }
     
+    struct lws_context_creation_info info;
+    memset(&info, 0, sizeof(info));
+    info.protocols = protocols;
+    info.port = CONTEXT_PORT_NO_LISTEN;
+    info.gid = -1;
+    info.uid = -1;
+    info.extensions = libwebsocket_get_internal_extensions();
+
+    fprintf(stderr, "to connect 0\n");
+    context = libwebsocket_create_context(&info);
+    assert(context != NULL);
+    std::string server_addr = agent_endpoint + ":" + boost::lexical_cast<std::string>(FLAGS_cli_server_port);
+    fprintf(stderr, "server name: %s\n", server_addr.c_str());
+    libwebsocket* wsi = libwebsocket_client_connect(context, 
+                            //"localhost", 8775, 0, "", "localhost:8775", "localhost:8775",
+                            agent_endpoint.c_str(), FLAGS_cli_server_port, 0, "/", server_addr.c_str(), server_addr.c_str(),
+                            "terminal-contact", -1);
+    assert(wsi != NULL);
+    fprintf(stderr, "to connect 2\n");
+
+    //raw terminal
     struct termios temp_termios;
     struct termios orig_termios;
-    ::signal(SIGINT, SIG_IGN);
-    ::signal(SIGTERM, SIG_IGN);
     ::tcgetattr(0, &orig_termios);
     temp_termios = orig_termios;
-    temp_termios.c_lflag &= ~(ICANON | ECHO | ECHOE | ECHOK | ECHONL | ECHOPRT | ECHOKE | ICRNL);
-    temp_termios.c_cc[VTIME] = 1;   // 终端等待延迟时间（十分之一秒为单位）
-    temp_termios.c_cc[VMIN] = 1;    // 终端接收字符数
+    ::cfmakeraw(&temp_termios);
     ::tcsetattr(0, TCSANOW, &temp_termios);
-    
-    fd_set fd_in;
+
     int ret = 0;
-    write(sockfd, FLAGS_p.c_str(), 36); //send pod id
 
-    fprintf(stderr, "send: %s\n", FLAGS_p.c_str());
-    
-    while (1) {
+    for (int i = 0; i < 36; i ++) 
+        buf[i] = FLAGS_p[i];
+    libwebsocket_write(wsi, buf, 36, LWS_WRITE_TEXT);
+
+    fd_set fd_in;
+    struct timeval timeout = {0, 10};
+    while (!force_exit) {
         FD_ZERO(&fd_in);
-        FD_SET(sockfd, &fd_in);
         FD_SET(0, &fd_in);
-
-        ret = ::select(sockfd + 1, &fd_in, NULL, NULL, NULL);
+        ret = ::select(1, &fd_in, NULL, NULL, &timeout);
         if (ret < 0) {
-            fprintf(stderr, "Select error\n");
+            fprintf(stderr, "error\n");
             break;
-        } else {
-            if (FD_ISSET(0, &fd_in)) {
-                ret = ::read(0, buffer, sizeof(buffer));
-                if (ret > 0) {
-                    write(sockfd, buffer, ret);
-                } else if (ret < 0) {
-                    fprintf(stderr, "Read error\n");
-                    break;
-                }
-            }
-            if (FD_ISSET(sockfd, &fd_in)) {
-                ret = ::read(sockfd, buffer, sizeof(buffer));
-                if (ret > 0) {
-                    write(1, buffer, ret);
-                } else if (ret < 0) {
-                    fprintf(stderr, "Read error\n");
-                } else {
-                    fprintf(stdout, "Attach pod finished!\n");
-                    break;
-                }
+        } else if (ret > 0 && FD_ISSET(0, &fd_in)) {
+            ret = ::read(0, buf, BUF_LEN);
+            if (ret > 0) {
+                libwebsocket_write(wsi, buf, ret, LWS_WRITE_TEXT);
+            } else if (ret < 0) {
+                fprintf(stderr, "read error");
+                break;
             }
         }
+        libwebsocket_service(context, 10);
     }
 
-    close(sockfd);
+    libwebsocket_context_destroy(context);
+
     ::tcsetattr(0, TCSANOW, &orig_termios);
     if (ret < 0) {
         return -1;
     }
     return 0;
 }
+
+
+
+
 int SwitchSafeMode(bool mode) {
     std::string master_endpoint;
     bool ok = GetMasterAddr(&master_endpoint);

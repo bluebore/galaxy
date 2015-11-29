@@ -25,10 +25,10 @@ CXXFLAGS('-g -pipe -W -Wall -fPIC')
 PROTOC('../../../third-64/protobuf/bin/protoc')
 
 #头文件路径.
-INCPATHS('. ./src ./output/include ./common/include ./ins/sdk/')
+INCPATHS('. ./src ./output/include ./common/include ./ins/sdk/ ./libwebsockets/lib ./libwebsockets/build')
 
 #使用库
-LIBS('./common/libcommon.a ./ins/libins_sdk.a')
+LIBS('./common/libcommon.a ./ins/libins_sdk.a ./libwebsockets/build/lib/libwebsockets.a')
 
 #链接参数.
 LDFLAGS('-lpthread -lz')
@@ -113,14 +113,14 @@ test_persistence_handler_src='src/proto/agent.proto src/proto/galaxy.proto  \
 
 test_index_list_src='src/agent/test_index_list.cc'
 initd_cli_src='src/proto/agent.proto src/proto/initd.proto src/proto/galaxy.proto src/flags.cc src/gce/initd_cli.cc'
-initd_cli_server_src='src/proto/agent.proto src/proto/initd.proto src/proto/galaxy.proto src/flags.cc src/gce/initd_cli_server.cc'
+initd_cli_server_src='src/proto/agent.proto src/proto/initd.proto src/proto/galaxy.proto src/flags.cc src/gce/ssh.cc'
 
 Application('scheduler',Sources(scheduler_src))
 Application('master',Sources(master_src))
 Application('agent',Sources(agent_src))
 Application('initd',Sources(initd_src))
 StaticLibrary('galaxy',Sources(sdk_src),HeaderFiles(sdk_headers))
-Application('galaxy',Sources(client_src), Libraries('./libgalaxy.a ./common/libcommon.a ./ins/libins_sdk.a'))
+Application('galaxy',Sources(client_src), Libraries('./libgalaxy.a ./common/libcommon.a ./ins/libins_sdk.a ./libwebsockets/build/lib/libwebsockets.a'))
 Application('test_task_manager', Sources(test_task_manager_src))
 Application('test_cgroup', Sources(test_cgroup_src))
 Application('test_resource_collector', Sources(test_resource_collector_src))
