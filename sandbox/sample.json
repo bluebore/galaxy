@@ -2,7 +2,7 @@
     "name":"sample",
     "replica":2,
     "type":"kLongRun",
-    "priority":"kOnline",
+    "priority":11,
     "deploy_step":3,
     "pod":{
         "version":"2.0.0",
