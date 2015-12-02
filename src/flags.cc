@@ -61,6 +61,11 @@ DEFINE_int32(agent_initd_port_end, 9500, "agent initd port used end");
 DEFINE_string(agent_persistence_path, "./data", "agent persistence path");
 // hard limit
 DEFINE_string(agent_global_hardlimit_path, "galaxy", "agent cpu hard limit root");
+
+// non proc
+DEFINE_string(agent_global_nonproclimit_path, "nonproc", "agent cpu nonproc root");
+DEFINE_string(agent_nonprcoclimit_abs_path, "", "agent nonproc-cpu cgroup absolute path");
+
 // soft limit
 DEFINE_string(agent_global_softlimit_path, "softlimit", "agent cpu soft limit root");
 DEFINE_string(agent_global_cgroup_path, "galaxy", "agent cgroup global path");
