@@ -103,6 +103,7 @@ int Write(const std::string& folder,
     FILE* fd = ::fopen(file_path.c_str(), "we");
     if (fd == NULL) {
         LOG(WARNING, "open %s failed", file_path.c_str());
+        assert(0);
         return -1;
     }
 
