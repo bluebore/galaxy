@@ -75,7 +75,7 @@ private:
     int AllocResource(const Resource& requirement, ResourceType type = kProc);
     void ReleaseResource(const Resource& requirement, ResourceType type = kNonProc);
 
-    int32_t NonprocCpuTotal(int32_t total_shared, int32_t proc_used);
+    int32_t NonprodCpuTotal(int32_t total_shared, int32_t proc_used);
 
     void ConvertToPodPropertiy(const PodInfo& info, PodPropertiy* pod_propertiy);
 
@@ -89,14 +89,14 @@ private:
         int64_t memory;
         // TODO initd port not included
         boost::unordered_set<int32_t> used_port;
-        int64_t nonproc_millicores;
-        int64_t nonproc_millicores_assigned;
+        int64_t nonprod_millicores;
+        int64_t nonprod_millicores_assigned;
         ResourceCapacity() 
             : millicores(0),
               memory(0),
               used_port(),
-              nonproc_millicores(0),
-              nonproc_millicores_assigned(0) {
+              nonprod_millicores(0),
+              nonprod_millicores_assigned(0) {
         }
     };
 private:

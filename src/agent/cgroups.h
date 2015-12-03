@@ -54,6 +54,10 @@ int Read(const std::string& cgroup,
          const std::string& control_file,
          std::string* value);
 
+int32_t CpuPixel2Share(int32_t p);
+int32_t CpuShare2Pixel(int32_t s);
+int32_t CpuPixel2Cfs(int32_t p);
+int32_t CpuCfs2Pixel(int32_t c);
 
 }   // ending namespace cgroups
 }   // ending namespace galaxy

@@ -35,7 +35,7 @@ DECLARE_string(agent_global_hardlimit_path);
 DECLARE_string(agent_global_softlimit_path);
 DECLARE_int32(agent_detect_interval);
 DECLARE_string(agent_global_nonproclimit_path);
-DECLARE_string(agent_nonprcoclimit_abs_path);
+DECLARE_string(agent_nonprodlimit_abs_path);
 
 DECLARE_int32(agent_millicores_share);
 DECLARE_int64(agent_mem_share);
@@ -171,16 +171,16 @@ bool TaskManager::InitCpuSubSystem() {
     }
 
 
-FLAGS_agent_nonprcoclimit_abs_path = hierarchy + "/" + FLAGS_agent_global_nonproclimit_path;
-    if (!file::IsExists(FLAGS_agent_nonprcoclimit_abs_path)) {
-        bool mkdir_ok = file::Mkdir(FLAGS_agent_nonprcoclimit_abs_path);
+FLAGS_agent_nonprodlimit_abs_path = hierarchy + "/" + FLAGS_agent_global_nonproclimit_path;
+    if (!file::IsExists(FLAGS_agent_nonprodlimit_abs_path)) {
+        bool mkdir_ok = file::Mkdir(FLAGS_agent_nonprodlimit_abs_path);
         if (!mkdir_ok) {
-            LOG(WARNING, "mkdir global cpu nonproclimit path %s failed", FLAGS_agent_nonprcoclimit_abs_path.c_str());
+            LOG(WARNING, "mkdir global cpu nonproclimit path %s failed", FLAGS_agent_nonprodlimit_abs_path.c_str());
             return false;
         }
     }
 
-    write_ok = cgroups::Write(FLAGS_agent_nonprcoclimit_abs_path, 
+    write_ok = cgroups::Write(FLAGS_agent_nonprodlimit_abs_path, 
                 "cpu.cfs_quota_us",
                 boost::lexical_cast<std::string>(softlimit_cores));
 
@@ -188,7 +188,7 @@ FLAGS_agent_nonprcoclimit_abs_path = hierarchy + "/" + FLAGS_agent_global_nonpro
         LOG(WARNING, 
                     "fail to write nonproclimit quota %d to %s",
                     softlimit_cores,
-                    FLAGS_agent_nonprcoclimit_abs_path.c_str());
+                    FLAGS_agent_nonprodlimit_abs_path.c_str());
         return false;
     }
     return true;
@@ -357,6 +357,19 @@ int TaskManager::DeleteTask(const std::string& task_id) {
     TerminateTask(it->second);
     return 0;
 }
+
+int TaskManager::MarkTaskError(const std::string& id) {
+    MutexLock scope_lock(&tasks_mutex_);   
+    std::map<std::string, TaskInfo*>::iterator it = 
+        tasks_.find(id); 
+    if (it == tasks_.end()) {
+        return -1; 
+    }
+    it->second->status.set_state(kTaskError);
+    return 0;
+}
+
+
 
 int TaskManager::RunTask(TaskInfo* task_info) {
     tasks_mutex_.AssertHeld();
@@ -1058,7 +1071,7 @@ bool TaskManager::HandleInitTaskCpuCgroup(std::string& subsystem, TaskInfo* task
             return false;
         } 
     } else if (task->desc.has_cpu_isolation_type()
-                    && task->desc.cpu_isolation_type() == kCpuIsolationNonproc) {
+                    && task->desc.cpu_isolation_type() == kCpuIsolationNonprod) {
             LOG(INFO, "create soft limit task %s", task->task_id.c_str());
             std::string cpu_path = hierarchies_["cpu"] + "/" + FLAGS_agent_global_nonproclimit_path 
                 + "/" + task->task_id;

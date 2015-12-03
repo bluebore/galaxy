@@ -24,7 +24,7 @@ DECLARE_string(agent_ip);
 DECLARE_string(agent_port);
 DECLARE_string(agent_work_dir);
 
-DECLARE_string(agent_nonprcoclimit_abs_path);
+DECLARE_string(agent_nonprodlimit_abs_path);
 
 DECLARE_int32(agent_millicores_share);
 DECLARE_int64(agent_mem_share);
@@ -257,9 +257,8 @@ bool AgentImpl::RestorePods() {
 }
 
 bool AgentImpl::Init() {
-    std::cout << "======================" << FLAGS_agent_millicores_share << std::endl;
     resource_capacity_.millicores = FLAGS_agent_millicores_share;
-    resource_capacity_.nonproc_millicores = FLAGS_agent_millicores_share;
+    resource_capacity_.nonprod_millicores = FLAGS_agent_millicores_share;
     resource_capacity_.memory = FLAGS_agent_mem_share; 
     if (!file::Mkdir(FLAGS_agent_work_dir)) {
         LOG(WARNING, "mkdir workdir %s falied", 
@@ -379,11 +378,7 @@ int AgentImpl::AllocResource(const Resource& requirement, ResourceType type) {
     lock_.AssertHeld();
     bool cpu_match = (((kProc == type) && resource_capacity_.millicores >= requirement.millicores())
                 || ((kNonProc == type) 
-                    && resource_capacity_.nonproc_millicores >= resource_capacity_.nonproc_millicores_assigned + requirement.millicores()));
-    std::cout << type << " " <<  
-        resource_capacity_.nonproc_millicores << " "
-        << resource_capacity_.nonproc_millicores_assigned << " "
-        << requirement.millicores() << " "<< cpu_match << std::endl;
+                    && resource_capacity_.nonprod_millicores >= resource_capacity_.nonprod_millicores_assigned + requirement.nonprod_millicores()));
 
     if (cpu_match && resource_capacity_.memory >= requirement.memory()) {
         boost::unordered_set<int32_t> ports;
@@ -404,7 +399,7 @@ int AgentImpl::AllocResource(const Resource& requirement, ResourceType type) {
         if (kProc == type) {
             resource_capacity_.millicores -= requirement.millicores(); 
         } else {
-            resource_capacity_.nonproc_millicores_assigned += requirement.millicores();
+            resource_capacity_.nonprod_millicores_assigned += requirement.millicores();
         }
 
         resource_capacity_.memory -= requirement.memory();
@@ -419,7 +414,7 @@ void AgentImpl::ReleaseResource(const Resource& requirement, ResourceType type) 
     if (kProc == type) {
         resource_capacity_.millicores += requirement.millicores();
     } else {
-        resource_capacity_.nonproc_millicores_assigned -= requirement.millicores();
+        resource_capacity_.nonprod_millicores_assigned -= requirement.millicores();
     }
     resource_capacity_.memory += requirement.memory();
     for (int i = 0; i < requirement.ports_size(); i++) {
@@ -484,7 +479,7 @@ AgentImpl::ResourceType AgentImpl::GetResourceType(const PodDescriptor& pd) {
     size_t size = pd.tasks_size();
     for (size_t i = 0; i < size; i++) {
         if (pd.tasks(i).has_cpu_isolation_type() 
-                    && pd.tasks(i).cpu_isolation_type() == kCpuIsolationNonproc) {
+                    && pd.tasks(i).cpu_isolation_type() == kCpuIsolationNonprod) {
             type = kNonProc;
             break;
         }
@@ -495,7 +490,7 @@ AgentImpl::ResourceType AgentImpl::GetResourceType(const PodDescriptor& pd) {
 }
 
 
-int32_t AgentImpl::NonprocCpuTotal(int32_t total_shared, int32_t proc_used) {
+int32_t AgentImpl::NonprodCpuTotal(int32_t total_shared, int32_t proc_used) {
     static int32_t last_total = 0;
     int32_t cur_total = total_shared - proc_used;
     
@@ -505,10 +500,10 @@ int32_t AgentImpl::NonprocCpuTotal(int32_t total_shared, int32_t proc_used) {
     // cpu.cfs_period_us : 100000
     if (cur_total - last_total >= 1000
                 || cur_total - last_total <= -1000) {
-        ret = cur_total / 1000 * 1000 * 100;
+        ret = cur_total / 1000 * 1000;
         last_total = cur_total;
     } else {
-        ret = last_total / 1000 * 1000 * 100;
+        ret = last_total / 1000 * 1000;
     }
     return ret;
 }
@@ -520,53 +515,53 @@ void AgentImpl::ProcessNonProc() {
     pod_manager_.ShowPods(&pods);
     std::vector<PodInfo>::iterator it = pods.begin();
     
-    int32_t nonproc_millicores_used = 0;
-    int32_t proc_millicores_used = 0;
+    int32_t prodmillicores_used = 0;
 
-    std::vector<const PodInfo*> nonproc_pod;
+    std::vector<const PodInfo*> nonprod_pod;
     for (; it != pods.end(); ++it) {
         if (GetResourceType(it->pod_desc) != kNonProc) {
             int used = it->pod_status.resource_used().millicores();
             if (used > it->pod_desc.requirement().millicores()) {
                 used = it->pod_desc.requirement().millicores();
             }
-            proc_millicores_used += used;
+            prodmillicores_used += used;
         } else {
-             nonproc_pod.push_back(&(*it));
+             nonprod_pod.push_back(&(*it));
         }
     }
 
     static int32_t last_ntc = -1;
-    int32_t nonproc_total_cpu = NonprocCpuTotal(FLAGS_agent_millicores_share, proc_millicores_used);
+    int32_t nonprod_total_cpu = NonprodCpuTotal(FLAGS_agent_millicores_share, prodmillicores_used);
 
-    if (last_ntc != nonproc_total_cpu) {
-        resource_capacity_.nonproc_millicores = nonproc_total_cpu;
-        // set nonproc cpu group
-        if (0 != cgroups::Write(FLAGS_agent_nonprcoclimit_abs_path,
+    if (last_ntc != nonprod_total_cpu) {
+        resource_capacity_.nonprod_millicores = nonprod_total_cpu;
+        // set nonprod cpu group
+        if (0 != cgroups::Write(FLAGS_agent_nonprodlimit_abs_path,
                         "cpu.cfs_quota_us",
-                        boost::lexical_cast<std::string>(nonproc_total_cpu))) {
+                        boost::lexical_cast<std::string>(nonprod_total_cpu * 100))) {
             LOG(WARNING, "failed to change cpu quota(%s/%s) from %d to %d",
-                        FLAGS_agent_nonprcoclimit_abs_path.c_str(),
+                        FLAGS_agent_nonprodlimit_abs_path.c_str(),
                         "cpu.cfs_quota_us",
                         last_ntc,
-                        nonproc_total_cpu);
+                        nonprod_total_cpu);
         } else {
             LOG(INFO, "change cpu quota(%s/%s) from %d to %d successfully",
-                        FLAGS_agent_nonprcoclimit_abs_path.c_str(),
+                        FLAGS_agent_nonprodlimit_abs_path.c_str(),
                         "cpu.cfs_quota_us",
                         last_ntc,
-                        nonproc_total_cpu);
-            last_ntc = nonproc_total_cpu;
+                        nonprod_total_cpu);
+            last_ntc = nonprod_total_cpu;
         }
         
     }
 
-    if (resource_capacity_.nonproc_millicores_assigned > nonproc_total_cpu 
-                && (resource_capacity_.nonproc_millicores_assigned - nonproc_total_cpu) / nonproc_total_cpu > 0.2) {
+    if (resource_capacity_.nonprod_millicores_assigned > nonprod_total_cpu 
+                && (resource_capacity_.nonprod_millicores_assigned - nonprod_total_cpu) / nonprod_total_cpu > 0.2) {
         // kill task
-        if (!nonproc_pod.empty()) {
-            size_t r = rand() % nonproc_pod.size();
-            pod_manager_.DeletePod(nonproc_pod[r]->pod_id);
+        if (!nonprod_pod.empty()) {
+            size_t r = rand() % nonprod_pod.size();
+            pod_manager_.MarkPodError(nonprod_pod[r]->pod_id);
+            LOG(INFO, "mark death nonprod pod %s by agent", nonprod_pod[r]->pod_id.c_str());
         }
     }
 
