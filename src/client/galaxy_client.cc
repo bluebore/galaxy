@@ -220,12 +220,26 @@ int BuildJobFromConfig(const std::string& config, ::baidu::galaxy::JobDescriptio
     }
     pod.version = pod_json["version"].GetString();
     const rapidjson::Value& pod_require = pod_json["requirement"];
-    if (!pod_require.HasMember("millicores")) {
-        fprintf(stderr, "millicores is required\n");
+    bool has_millicores = pod_require.HasMember("millicores");
+    bool has_nonprod_millicores = pod_require.HasMember("nonprod_millicores");
+    if (!has_millicores && !has_nonprod_millicores) {
+        fprintf(stderr, "millicores or nonprod_millicores is required\n");
         return -1;
     }
 
-    res->millicores = pod_require["millicores"].GetInt();
+    if (has_millicores && has_nonprod_millicores) {
+        fprintf(stderr, "millicores and nonprod_millicores can be specifed only one\n");
+        return -1;
+    }
+
+    if (has_millicores) {
+        res->millicores = pod_require["millicores"].GetInt();
+        res->nonprod_millicores = 0; 
+    } else {
+        res->millicores = 0;
+        res->nonprod_millicores = pod_require["nonprod_millicores"].GetInt(); 
+    }
+
     if (!pod_require.HasMember("memory")) {
         fprintf(stderr, "memory is required\n");
         return -1;
@@ -279,12 +293,25 @@ int BuildJobFromConfig(const std::string& config, ::baidu::galaxy::JobDescriptio
             if (tasks_json[i].HasMember("mem_isolation_type")) {
                 task.mem_isolation_type = tasks_json[i]["mem_isolation_type"].GetString();
             }
-            task.cpu_isolation_type= "kCpuIsolationHard";
+
+            task.cpu_isolation_type = "kCpuIsolationHard";
             if (tasks_json[i].HasMember("cpu_isolation_type")) {
                 task.cpu_isolation_type = tasks_json[i]["cpu_isolation_type"].GetString();
-            }
+                if (has_nonprod_millicores && task.cpu_isolation_type != "kCpuIsolationNonprod") {
+                        fprintf(stderr, "cpu_isolation_type must be kCpuIsolationNonprod");
+                        return -1;
+                }
+            } 
+
             res = &task.requirement;
-            res->millicores = tasks_json[i]["requirement"]["millicores"].GetInt();
+            if (has_millicores) {
+                res->millicores = tasks_json[i]["requirement"]["millicores"].GetInt();
+                res->nonprod_millicores = 0;
+            } else {
+                res->nonprod_millicores = tasks_json[i]["requirement"]["nonprod_millicores"].GetInt();
+                res->millicores = 0;
+            }
+
             ok = ReadableStringToInt(tasks_json[i]["requirement"]["memory"].GetString(), &res->memory);
             if (ok != 0) {
                 fprintf(stderr, "fail to parse task memory %s\n", tasks_json[i]["requirement"]["memory"].GetString());
