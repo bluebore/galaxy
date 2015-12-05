@@ -80,7 +80,13 @@ enum MemIsolationType {
 enum CpuIsolationType {
     kCpuIsolationHard = 0;
     kCpuIsolationSoft = 1;
-    kCpuIsolationNonprod = 2;
+}
+
+
+enum JobType {
+    kLongRun = 0;
+    kBatch = 1;
+    kSystem = 2;
 }
 
 message TaskDescriptor {
@@ -108,6 +114,7 @@ message PodDescriptor {
     optional bool pin_on_agent = 3 [default = false];
     repeated string labels = 4;
     optional string version = 5;
+    optional JobType job_type = 6;
 }
 
 message TaskStatus {

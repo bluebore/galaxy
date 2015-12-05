@@ -89,10 +89,20 @@ bool GalaxyImpl::FillJobDescriptor(const JobDescription& sdk_job,
 
     // pod meta
     PodDescriptor* pod_pb = job->mutable_pod();
+
+    pod_pb->set_job_type(job_type);
+
     pod_pb->set_version(sdk_job.pod.version);
     Resource* pod_res = pod_pb->mutable_requirement();
     // pod res
-    pod_res->set_millicores(sdk_job.pod.requirement.millicores);
+    if (job_type == kBatch) {
+        pod_res->set_nonprod_millicores(sdk_job.pod.requirement.millicores);
+        pod_res->set_millicores(0);
+    } else {
+        pod_res->set_millicores(sdk_job.pod.requirement.millicores);
+        pod_res->set_nonprod_millicores(0);
+    }
+
     pod_res->set_memory(sdk_job.pod.requirement.memory);
     for (size_t i = 0; i < sdk_job.pod.requirement.ports.size(); i++) {
         pod_res->add_ports(sdk_job.pod.requirement.ports[i]);
@@ -145,7 +155,11 @@ bool GalaxyImpl::FillJobDescriptor(const JobDescription& sdk_job,
 }
 
 void GalaxyImpl::FillResource(const Resource& res, ResDescription* res_desc) {
-    res_desc->millicores = res.millicores();
+    if (res.has_nonprod_millicores() && res.nonprod_millicores() > 0) {
+        res_desc->millicores = res.nonprod_millicores();
+    } else {
+        res_desc->millicores = res.millicores();
+    }
     res_desc->memory = res.memory();
     for (int j = 0; j < res.ports_size(); j++) {
         res_desc->ports.push_back(res.ports(j));

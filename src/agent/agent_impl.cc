@@ -14,7 +14,6 @@
 #include "agent/agent_internal_infos.h"
 #include "agent/utils.h"
 #include "agent/cgroups.h"
-#include <iostream>
 
 DECLARE_string(master_host);
 DECLARE_string(master_port);
@@ -132,8 +131,10 @@ void AgentImpl::CreatePodInfo(
         task_info.stage = kTaskStagePENDING;
         task_info.fail_retry_times = 0;
         task_info.max_retry_times = 10;
+        task_info.resource_type = GetResourceType(req->pod());
         pod_info->tasks[task_info.task_id] = task_info;
     }
+
     if (req->has_job_name()) {
         pod_info->job_name = req->job_name();
     }
@@ -169,6 +170,10 @@ void AgentImpl::RunPod(::google::protobuf::RpcController* /*cntl*/,
 
         PodInfo info;
         CreatePodInfo(req, &info);
+
+        std::map<std::string, TaskInfo>::iterator task_it = 
+            info.tasks.begin();
+
         // if add failed, clean by master?
         pod_manager_.AddPod(info);
         if (0 != pod_manager_.ShowPod(req->podid(), &info) 
@@ -292,7 +297,7 @@ bool AgentImpl::Init() {
                 boost::bind(&AgentImpl::LoopCheckPods, this)); 
 
     background_threads_.DelayTask(1000,
-                boost::bind(&AgentImpl::ProcessNonProc, this));
+                boost::bind(&AgentImpl::ProcessNonProd, this));
     return true;
 }
 
@@ -376,9 +381,15 @@ bool AgentImpl::RegistToMaster() {
 
 int AgentImpl::AllocResource(const Resource& requirement, ResourceType type) {
     lock_.AssertHeld();
-    bool cpu_match = (((kProc == type) && resource_capacity_.millicores >= requirement.millicores())
-                || ((kNonProc == type) 
-                    && resource_capacity_.nonprod_millicores >= resource_capacity_.nonprod_millicores_assigned + requirement.nonprod_millicores()));
+    
+    int req_cores = requirement.millicores();
+    if (kNonProd == type && requirement.has_nonprod_millicores()) {
+        req_cores = requirement.nonprod_millicores();
+    }
+
+    bool cpu_match = (((kProd == type) && resource_capacity_.millicores >= req_cores)
+                || ((kNonProd == type) 
+                    && resource_capacity_.nonprod_millicores >= resource_capacity_.nonprod_millicores_assigned + req_cores));
 
     if (cpu_match && resource_capacity_.memory >= requirement.memory()) {
         boost::unordered_set<int32_t> ports;
@@ -396,10 +407,10 @@ int AgentImpl::AllocResource(const Resource& requirement, ResourceType type) {
             resource_capacity_.used_port.insert(*it);
         }
 
-        if (kProc == type) {
-            resource_capacity_.millicores -= requirement.millicores(); 
+        if (kProd == type) {
+            resource_capacity_.millicores -= req_cores; 
         } else {
-            resource_capacity_.nonprod_millicores_assigned += requirement.millicores();
+            resource_capacity_.nonprod_millicores_assigned += req_cores;
         }
 
         resource_capacity_.memory -= requirement.memory();
@@ -411,7 +422,7 @@ int AgentImpl::AllocResource(const Resource& requirement, ResourceType type) {
 void AgentImpl::ReleaseResource(const Resource& requirement, ResourceType type) {
     lock_.AssertHeld();
 
-    if (kProc == type) {
+    if (kProd == type) {
         resource_capacity_.millicores += requirement.millicores();
     } else {
         resource_capacity_.nonprod_millicores_assigned -= requirement.millicores();
@@ -473,19 +484,11 @@ void AgentImpl::ShowPods(::google::protobuf::RpcController* /*cntl*/,
     return;
 }
 
-AgentImpl::ResourceType AgentImpl::GetResourceType(const PodDescriptor& pd) {
-    ResourceType type = kProc;
-    
-    size_t size = pd.tasks_size();
-    for (size_t i = 0; i < size; i++) {
-        if (pd.tasks(i).has_cpu_isolation_type() 
-                    && pd.tasks(i).cpu_isolation_type() == kCpuIsolationNonprod) {
-            type = kNonProc;
-            break;
-        }
+ResourceType AgentImpl::GetResourceType(const PodDescriptor& pd) {
+    ResourceType type = kProd;
+    if (pd.has_job_type() && pd.job_type() == kBatch) {
+        type = kNonProd;
     }
-
-
     return type;
 }
 
@@ -509,7 +512,7 @@ int32_t AgentImpl::NonprodCpuTotal(int32_t total_shared, int32_t proc_used) {
 }
 
 
-void AgentImpl::ProcessNonProc() {
+void AgentImpl::ProcessNonProd() {
     MutexLock scope_lock(&lock_);
     std::vector<PodInfo> pods;
     pod_manager_.ShowPods(&pods);
@@ -519,7 +522,7 @@ void AgentImpl::ProcessNonProc() {
 
     std::vector<const PodInfo*> nonprod_pod;
     for (; it != pods.end(); ++it) {
-        if (GetResourceType(it->pod_desc) != kNonProc) {
+        if (GetResourceType(it->pod_desc) != kNonProd) {
             int used = it->pod_status.resource_used().millicores();
             if (used > it->pod_desc.requirement().millicores()) {
                 used = it->pod_desc.requirement().millicores();
@@ -566,7 +569,7 @@ void AgentImpl::ProcessNonProc() {
     }
 
     background_threads_.DelayTask(1000,
-                boost::bind(&AgentImpl::ProcessNonProc, this));
+                boost::bind(&AgentImpl::ProcessNonProd, this));
 
 }
 

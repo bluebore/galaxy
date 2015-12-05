@@ -64,7 +64,7 @@ DEFINE_string(agent_global_hardlimit_path, "galaxy", "agent cpu hard limit root"
 
 // non proc
 DEFINE_string(agent_global_nonproclimit_path, "nonproc", "agent cpu nonproc root");
-DEFINE_string(agent_nonprcoclimit_abs_path, "", "agent nonproc-cpu cgroup absolute path");
+DEFINE_string(agent_nonprodlimit_abs_path, "", "agent nonproc-cpu cgroup absolute path");
 
 // soft limit
 DEFINE_string(agent_global_softlimit_path, "softlimit", "agent cpu soft limit root");

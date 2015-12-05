@@ -434,6 +434,7 @@ int PodManager::AddPod(const PodInfo& info) {
     std::string time_str;
     GetStrFTime(&time_str);
     PodInfo& internal_info = pods_[info.pod_id];
+
     std::string gc_dir = FLAGS_agent_gc_dir + "/" 
         + internal_info.pod_id + "_" + time_str;
     internal_info.pod_status.set_pod_gc_path(gc_dir);

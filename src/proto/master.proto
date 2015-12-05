@@ -4,13 +4,6 @@ package baidu.galaxy;
 
 option cc_generic_services = true;
 
-
-enum JobType {
-    kLongRun = 0;
-    kBatch = 1;
-    kSystem = 2;
-}
-
 enum JobPriority {
     kMonitor = 75;
     kOnline = 50;

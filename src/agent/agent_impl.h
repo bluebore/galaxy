@@ -52,11 +52,7 @@ public:
 
     void HandleMasterChange(const std::string& new_master_endpoint);
 private:
-    typedef enum {
-        kProc = 1,
-        kNonProc = 2
-    }ResourceType;
-
+   
     void KeepHeartBeat();
     
     bool RegistToMaster();
@@ -72,8 +68,8 @@ private:
     ResourceType GetResourceType(const PodDescriptor& pd);
     // ret ==  0 alloc success
     //        -1 alloc failed
-    int AllocResource(const Resource& requirement, ResourceType type = kProc);
-    void ReleaseResource(const Resource& requirement, ResourceType type = kNonProc);
+    int AllocResource(const Resource& requirement, ResourceType);
+    void ReleaseResource(const Resource& requirement, ResourceType type);
 
     int32_t NonprodCpuTotal(int32_t total_shared, int32_t proc_used);
 
@@ -82,7 +78,7 @@ private:
     void CreatePodInfo(const ::baidu::galaxy::RunPodRequest* req, 
                        PodInfo* pod_info);
 
-    void ProcessNonProc();
+    void ProcessNonProd();
 
     struct ResourceCapacity {
         int64_t millicores; 

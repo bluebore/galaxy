@@ -26,6 +26,7 @@
 #include "agent/resource_collector.h"
 #include "logging.h"
 #include "timer.h"
+#include <iostream>
 
 DECLARE_string(gce_cgroup_root);
 DECLARE_string(gce_support_subsystems);
@@ -1045,8 +1046,32 @@ bool TaskManager::HandleInitTaskCpuCgroup(std::string& subsystem, TaskInfo* task
         return true;
     }
 
-    if (task->desc.has_cpu_isolation_type()
-        && task->desc.cpu_isolation_type() == kCpuIsolationSoft) {
+    if (task->resource_type == kNonProd) {
+        LOG(INFO, "create nonprod soft limit task %s", task->task_id.c_str());
+        std::string cpu_path = hierarchies_["cpu"] + "/" + FLAGS_agent_global_nonproclimit_path 
+            + "/" + task->task_id;
+        if (!file::Mkdir(cpu_path)) {
+            LOG(WARNING, "create dir %s failed for %s", cpu_path.c_str(), task->task_id.c_str());
+            return false;
+        } 
+        task->cgroups[subsystem] = cpu_path;
+        int32_t cpu_limit = task->desc.requirement().millicores();
+        if (cgroups::Write(cpu_path,
+                        "cpu.shares",
+                        boost::lexical_cast<std::string>(cpu_limit)) != 0) {
+            LOG(WARNING, "set cpu shares %d failed for %s",
+                        cpu_limit, cpu_path.c_str()); 
+            return false;
+        }
+        if (cgroups::Write(cpu_path,
+                        "cpu.cfs_quota_us",
+                        boost::lexical_cast<std::string>(-1)
+                        ) != 0) {
+            LOG(WARNING, "disable cpu limit failed for %s", cpu_path.c_str()); 
+            return false;
+        } 
+    }  else if (task->desc.has_cpu_isolation_type()
+                && task->desc.cpu_isolation_type() == kCpuIsolationSoft) {
         LOG(INFO, "create soft limit task %s", task->task_id.c_str());
         std::string cpu_path = hierarchies_["cpu"] + "/" + FLAGS_agent_global_softlimit_path 
             + "/" + task->task_id;
@@ -1070,31 +1095,6 @@ bool TaskManager::HandleInitTaskCpuCgroup(std::string& subsystem, TaskInfo* task
             LOG(WARNING, "disable cpu limit failed for %s", cpu_path.c_str()); 
             return false;
         } 
-    } else if (task->desc.has_cpu_isolation_type()
-                    && task->desc.cpu_isolation_type() == kCpuIsolationNonprod) {
-            LOG(INFO, "create soft limit task %s", task->task_id.c_str());
-            std::string cpu_path = hierarchies_["cpu"] + "/" + FLAGS_agent_global_nonproclimit_path 
-                + "/" + task->task_id;
-            if (!file::Mkdir(cpu_path)) {
-                LOG(WARNING, "create dir %s failed for %s", cpu_path.c_str(), task->task_id.c_str());
-                return false;
-            } 
-            task->cgroups[subsystem] = cpu_path;
-            int32_t cpu_limit = task->desc.requirement().millicores();
-            if (cgroups::Write(cpu_path,
-                            "cpu.shares",
-                            boost::lexical_cast<std::string>(cpu_limit)) != 0) {
-                LOG(WARNING, "set cpu shares %d failed for %s",
-                            cpu_limit, cpu_path.c_str()); 
-                return false;
-            }
-            if (cgroups::Write(cpu_path,
-                            "cpu.cfs_quota_us",
-                            boost::lexical_cast<std::string>(-1)
-                            ) != 0) {
-                LOG(WARNING, "disable cpu limit failed for %s", cpu_path.c_str()); 
-                return false;
-            } 
     } else {
         LOG(INFO, "create hard limit task %s", task->task_id.c_str());
         std::string cpu_path = hierarchies_["cpu"] + "/" + FLAGS_agent_global_hardlimit_path + "/" + task->task_id;
