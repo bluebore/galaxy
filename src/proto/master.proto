@@ -287,6 +287,25 @@ message GetMasterStatusResponse {
     optional Status status = 17;
 }
 
+message LoginRequest {
+    optional string name = 1;
+    optional string password = 2;
+}
+
+message LoginResponse {
+    optional Status status = 1;
+    optional string sid = 2;
+}
+
+message AddUserRequest {
+    optional User user = 1;
+    // the current user session id
+    optional string sid = 2;
+}
+
+message AddUserResponse {
+    optional Status status = 1;
+}
 
 service Master {
     rpc SubmitJob(SubmitJobRequest) returns (SubmitJobResponse);
@@ -306,15 +325,13 @@ service Master {
     rpc ListLabels(ListLabelsRequest) returns (ListLabelsResponse);
     rpc ListLabelledAgents(ListLabelledAgentsRequest) returns (ListLabelledAgentsResponse);
 
-    // rpc AddUser() returns ();
-    // rpc DeleteUser() returns ();
-    // rpc UpdateUser() returns ();
-    // rpc ListUsers() returns ();
-
     rpc GetPendingJobs(GetPendingJobsRequest) returns (GetPendingJobsResponse);
     rpc GetResourceSnapshot(GetResourceSnapshotRequest) returns (GetResourceSnapshotResponse);
     rpc Propose(ProposeRequest) returns (ProposeResponse);
 
     rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse);
     rpc LabelAgents(LabelAgentRequest) returns (LabelAgentResponse);
+
+    rpc Login(LoginRequest) returns (LoginResponse);
+    rpc AddUser(AddUserRequest) returns (AddUserResponse);
 }

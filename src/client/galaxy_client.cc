@@ -199,7 +199,7 @@ int BuildJobFromConfig(const std::string& config, ::baidu::galaxy::JobDescriptio
     }
     job->type = document["type"].GetString();
     if (document.HasMember("priority")) {
-        job->priority = document["priority"].GetString();
+        job->priority = document["priority"].GetInt();
     }
     if (document.HasMember("labels")) {
         job->label = document["labels"].GetString();

@@ -52,6 +52,7 @@ scheduler_src='src/scheduler/scheduler.cc\
 master_src='src/master/master_impl.cc\
             src/master/master_util.cc\
             src/master/master_main.cc\
+            src/master/user_manager.cc\
             src/master/job_manager.cc\
             src/flags.cc \
             src/master/master_watcher.cc\

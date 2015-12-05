@@ -24,6 +24,7 @@ const std::string LABEL_PREFIX = "LABEL_";
 
 MasterImpl::MasterImpl() : nexus_(NULL){
     nexus_ = new ::galaxy::ins::sdk::InsSDK(FLAGS_nexus_servers);
+    user_manager_ = new UserManager();
 }
 
 MasterImpl::~MasterImpl() {
@@ -59,6 +60,7 @@ void MasterImpl::Init() {
     LOG(INFO, "begin to reload job descriptor from nexus");
     ReloadJobInfo();
     ReloadLabelInfo();
+    user_manager_->Init();
 }
 
 void MasterImpl::ReloadLabelInfo() {
@@ -330,6 +332,58 @@ void MasterImpl::GetStatus(::google::protobuf::RpcController*,
     response->set_status(ok);
     done->Run();
 }
+
+void MasterImpl::Login(::google::protobuf::RpcController*,
+                       const LoginRequest* request,
+                       LoginResponse* response,
+                       ::google::protobuf::Closure* done) {
+    User user;
+    std::string sid;
+    bool ok = user_manager_->Login(request->name(), 
+                                   request->password(),
+                                   &user,
+                                   &sid);
+    if (!ok) {
+        LOG(WARNING, "user %s login failed", request->name().c_str());
+        response->set_status(kInputError);
+        done->Run();
+        return;
+    }else {
+        LOG(INFO, "user %s login successed with sid %s", request->name().c_str(),
+                sid.c_str());
+    }
+    response->set_status(kOk);
+    response->set_sid(sid);
+    done->Run();
+}
+
+void MasterImpl::AddUser(::google::protobuf::RpcController*,
+                         const AddUserRequest* request,
+                         AddUserResponse* response,
+                         ::google::protobuf::Closure* done) {
+    User user;
+    bool ok = user_manager_->Auth(request->sid(), &user);
+    if (!ok) {
+        response->set_status(kSessionTimeout);
+        done->Run();
+        return;
+    }
+    if (!user.super_user()) {
+        response->set_status(kPermissionDenied);
+        done->Run();
+        return;
+    }
+    ok = user_manager_->AddUser(request->user());
+    if (!ok) {
+        LOG(WARNING, "fail to add user %s", request->user().name().c_str());
+        response->set_status(kInputError);
+        done->Run();
+        return;
+    }
+    response->set_status(kOk);
+    done->Run();
+}
+
 
 }
 }
