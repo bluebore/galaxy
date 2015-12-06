@@ -22,6 +22,7 @@ public:
     int Init();
     int CreateTask(const TaskInfo& task);
     int DeleteTask(const std::string& task_id);
+    int MarkTaskError(const std::string& task_id);
     int QueryTask(TaskInfo* task);
     int ReloadTask(const TaskInfo& task);
 protected:

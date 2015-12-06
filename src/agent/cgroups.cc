@@ -103,6 +103,7 @@ int Write(const std::string& folder,
     FILE* fd = ::fopen(file_path.c_str(), "we");
     if (fd == NULL) {
         LOG(WARNING, "open %s failed", file_path.c_str());
+        assert(0);
         return -1;
     }
 
@@ -165,6 +166,21 @@ int Read(const std::string& cgroup,
 }
 
 
+int32_t CpuPixel2Share(int32_t p) {
+    return p;
+}
+
+int32_t CpuShare2Pixel(int32_t s) {
+    return s;
+}
+
+int32_t CpuPixel2Cfs(int32_t p) {
+    return p * 100;
+}
+
+int32_t CpuCfs2Pixel(int32_t c) {
+    return c / 100;
+}
 
 }   // ending namespace cgroups
 }   // ending namespace galaxy

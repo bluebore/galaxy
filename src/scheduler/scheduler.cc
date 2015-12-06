@@ -365,7 +365,7 @@ bool PodScaleUpCell::FeasibilityCheck(const AgentInfoExtend* agent_info_extend) 
             LOG(INFO, "agent %s fit batch job %s resource requirement", 
                 agent_info_extend->agent_info->endpoint().c_str(), job->jobid().c_str());
         } else {
-            LOG(INFO, "agent %s does not fit job %s resource requirement, agent unassigned cpu %d, mem %d M, resource require cpu %d, mem %d m",
+            LOG(INFO, "agent %s does not fit job %s resource requirement, agent unassigned cpu %d, mem %lld byte, resource require cpu %d, mem %lld byte",
               agent_info_extend->agent_info->endpoint().c_str(),
               job->jobid().c_str(),
               agent_info_extend->free.millicores(),
@@ -502,6 +502,8 @@ void AgentInfoExtend::CalcExtend() {
     }
     free.CopyFrom(agent_info->total());
     ret = ResourceUtils::Alloc(agent_info->used(), free);
+    // free
+
     if (!ret) {
          LOG(WARNING, "fail to calc agent %s free info extend", agent_info->endpoint().c_str());
          free.set_millicores(0);
@@ -570,9 +572,6 @@ void Scheduler::HandleJobUpdate(JobInfo* job_info,
         propose->push_back(sched_info);
     }
 }
-
-
-
 
 }// galaxy
 }// baidu
