@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+.status_ok {
+    color:green;
+}
+
+.status_err {
+    color:red;
+}
+.table>caption+thead>tr:first-child>td, .table>caption+thead>tr:first-child>th, .table>colgroup+thead>tr:first-child>td, .table>colgroup+thead>tr:first-child>th, .table>thead:first-child>tr:first-child>td, .table>thead:first-child>tr:first-child>th {
+    border-top: 0;
+}
+.table>thead>tr>th {
+    vertical-align: bottom;
+    border-bottom: 2px solid #ddd;
+}
+.table>tbody>tr>td, .table>tbody>tr>th, .table>tfoot>tr>td, .table>tfoot>tr>th, .table>thead>tr>td, .table>thead>tr>th {
+    padding: 8px;
+    line-height: 1.42857143;
+    vertical-align: top;
+    border-top: 1px solid #ddd;
+}
+th {
+    text-align: left;
+}
+td, th {
+    padding: 0;
+}
+</style>
+
+<head>
+<body>
+
+<div class="minions">
+    <h4>Lumia!</h4>
+    <table class="table" style="font-size:10px; width:100%" border="0"  cellspacing="0" cellpadding="0" >
+        <tr>
+            <th>#</th>
+            <th>主机名</th>
+            <th>IP</th>
+            <th>设备状态</th>
+            <th>挂载状态</th>
+            <th>更新日期</th>
+            <th>操作</th>
+        </tr>
+
+        {% for minion in minions %}
+            {% if minion.device_ok and minion.mount_ok%}
+            <tr class="status_ok">
+            {% else %}
+            <tr class="status_err">
+            {% endif %}
+             <td>{{forloop.counter}}</td>
+                <td> <a href="detail?ip={{minion.ip}}&lumia={{lumia_addr}}">{{minion.hostname}}</td>
+                <td> {{minion.ip}}</td>
+                {% if minion.device_ok%}
+                <td> kDeviceOk</td>
+                {% else %}
+                <td> kDeviceError</td>
+                {% endif %}
+                {% if minion.mount_ok%}
+                <td> kMountOk</td>
+                {% else %}
+                <td> kMountError </td>
+                {% endif %}
+                <td> {{minion.last_update}}</td>
+                <td> <a href="report?ip={{minion.ip}}&lumia={{lumia_addr}}">重新初始化</td>
+            </tr>
+        {% endfor %}
+    </table>
+</div>
+
+</body>
+</html>

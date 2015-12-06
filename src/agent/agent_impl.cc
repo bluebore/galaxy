@@ -125,7 +125,9 @@ void AgentImpl::CreatePodInfo(
         TaskInfo task_info;
         task_info.task_id = GenerateTaskId(pod_info->pod_id);
         task_info.pod_id = pod_info->pod_id;
+        task_info.job_id = pod_info->job_id;
         task_info.desc.CopyFrom(pod_info->pod_desc.tasks(i));
+        task_info.desc.add_env("POD_VERSION=" + pod_info->pod_desc.version());
         task_info.status.set_state(kTaskPending);
         task_info.initd_endpoint = "";
         task_info.stage = kTaskStagePENDING;

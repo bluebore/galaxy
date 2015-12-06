@@ -130,6 +130,11 @@ bool GalaxyImpl::FillJobDescriptor(const JobDescription& sdk_job,
         }
         task->set_cpu_isolation_type(cpu_isolation_type);
         task->set_mem_isolation_type(mem_isolation_type);
+        task->set_offset(sdk_job.pod.tasks[i].offset);
+        std::set<std::string>::iterator envs_it = sdk_job.pod.tasks[i].envs.begin();
+        for (;envs_it != sdk_job.pod.tasks[i].envs.end(); i++) {
+            task->add_env(*envs_it);
+        }
         Resource* task_res = task->mutable_requirement();
         const ResDescription& task_res_desc = sdk_job.pod.tasks[i].requirement;
         task_res->set_millicores(task_res_desc.millicores);

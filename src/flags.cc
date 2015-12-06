@@ -12,12 +12,15 @@ DEFINE_string(nexus_root_path, "/baidu/galaxy", "root path of galaxy cluster on 
 
 // sdk
 DEFINE_string(master_host, "localhost", "Master service hostname");
+DEFINE_string(data_center, "yq01", "the data center of galaxy");
 
 // master
 DEFINE_string(master_port, "7828", "Master service listen port");
 DEFINE_int32(master_agent_timeout, 40000, "Agent timeout");
 DEFINE_int32(master_agent_rpc_timeout, 10, "Agent RPC timeout (seconds)");
 DEFINE_int32(master_query_period, 30000, "Query period");
+DEFINE_int32(master_job_trace_interval, 60000, "the period of trace job state");
+DEFINE_int32(master_cluster_trace_interval, 60000, "the period of trace job state");
 DEFINE_string(master_lock_path, "/master_lock", "master lock name on nexus");
 DEFINE_string(master_path, "/master", "master path on nexus");
 DEFINE_string(safemode_store_path, "/safemode", "master safemode path on nexus");
@@ -82,3 +85,6 @@ DEFINE_string(gce_initd_dump_file, "initd_checkpoint_file", "Initd Checkpoint Fi
 DEFINE_string(gce_initd_port, "8765", "gce initd listen port");
 DEFINE_string(gce_bind_config, "", "gce mount bind config");
 DEFINE_int32(cli_server_port, 8775, "cli server listen port");
+
+DEFINE_string(trace_conf, "", "the conf of trace");
+DEFINE_bool(enable_trace, false, "open trace");

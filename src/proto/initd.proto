@@ -6,7 +6,11 @@ option cc_generic_services = true;
 
 enum ProcessStatus {
     kProcessRunning = 0;
+    // normal exit
     kProcessTerminate = 1;
+    // by kernel killed or signal killed
+    kProcessKilled = 2;
+    kProcessCoreDump = 3;
 }
 
 message ProcessInfoCheckpoint {

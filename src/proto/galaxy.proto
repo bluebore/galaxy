@@ -51,6 +51,7 @@ enum TaskState {
 enum SourceType {
     kSourceTypeBinary = 0;
     kSourceTypeFTP = 1;
+    kSourceTypeCommand = 2;
 }
 
 enum AgentState {

@@ -144,6 +144,8 @@ private:
     void HandleExpiredPod(std::vector<std::pair<PodStatus, PodStatus*> >& pods);
     void HandleReusePod(const PodStatus& report_pod,
                         PodStatus* pod);
+    void TraceJobStat(const std::string& jobid);
+    void TraceClusterStat();
 private:
     std::map<JobId, Job*> jobs_;
     // all jobs that need scale up
@@ -157,6 +159,7 @@ private:
     std::map<AgentAddr, int64_t> agent_timer_;
     ThreadPool death_checker_;
     ThreadPool thread_pool_;
+    ThreadPool trace_pool_;
     Mutex mutex_;   
     Mutex mutex_timer_;
     RpcClient rpc_client_;

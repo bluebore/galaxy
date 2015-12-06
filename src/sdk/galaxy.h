@@ -34,6 +34,7 @@ struct TaskDescription {
     std::string stop_cmd;
     ResDescription requirement;
     std::string mem_isolation_type;
+    std::set<std::string> envs;
     std::string cpu_isolation_type;
 };
 

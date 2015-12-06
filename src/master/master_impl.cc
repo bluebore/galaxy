@@ -5,6 +5,7 @@
 #include <gflags/gflags.h>
 #include "master_util.h"
 #include <logging.h>
+#include <sofa/pbrpc/pbrpc.h>
 
 DECLARE_string(nexus_servers);
 DECLARE_string(nexus_root_path);
@@ -217,7 +218,7 @@ void MasterImpl::SwitchSafeMode(::google::protobuf::RpcController* controller,
     done->Run();
 }
 
-void MasterImpl::GetPendingJobs(::google::protobuf::RpcController* /*controller*/,
+void MasterImpl::GetPendingJobs(::google::protobuf::RpcController* controller,
                                 const ::baidu::galaxy::GetPendingJobsRequest* request,
                                 ::baidu::galaxy::GetPendingJobsResponse* response,
                                 ::google::protobuf::Closure* done) {
@@ -236,7 +237,10 @@ void MasterImpl::GetPendingJobs(::google::protobuf::RpcController* /*controller*
         && request->max_need_update_job_size() > 0) {
         max_need_update_job_size = request->max_need_update_job_size();
     }
+
+    sofa::pbrpc::RpcController* sf_ctrl = (sofa::pbrpc::RpcController*) controller;
     response->set_status(kOk);
+    LOG(INFO, "sched request from %s", sf_ctrl->RemoteAddress().c_str());
     job_manager_.GetPendingPods(response->mutable_scale_up_jobs(),
                                 max_scale_up_size,
                                 response->mutable_scale_down_jobs(),

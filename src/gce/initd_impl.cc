@@ -46,13 +46,18 @@ void InitdImpl::ZombieCheck() {
             = process_infos_.begin();
         for (; it != process_infos_.end(); ++it) {
             if (it->second.pid() == pid) {
+                it->second.set_status(kProcessTerminate);
                 if (WIFEXITED(status)) {
-                    it->second.set_exit_code(WEXITSTATUS(status)); 
+                    it->second.set_exit_code(WEXITSTATUS(status));
                 } else if (WIFSIGNALED(status)) {
                     it->second.set_exit_code(128 + WTERMSIG(status));
+                    if (WCOREDUMP(status)) {
+                        it->second.set_status(kProcessCoreDump);
+                    }else {
+                        it->second.set_status(kProcessKilled);
+                    }
                 } 
                 LOG(WARNING, "process %d exit code %d", pid, it->second.exit_code());
-                it->second.set_status(kProcessTerminate);
                 break;
             } 
         }
