@@ -187,17 +187,6 @@ Status JobManager::Add(const JobId& job_id, const JobDescriptor& job_desc) {
     Job* job = new Job();
     job->state_ = kJobNormal;
     job->desc_.CopyFrom(job_desc);
-    for (int i = 0; i < job->desc_.pod().tasks_size(); i++) {
-        TaskDescriptor* task_desc = job->desc_.mutable_pod()->mutable_tasks(i);
-        if (!task_desc->has_cpu_isolation_type()) {
-            // add default value
-            task_desc->set_cpu_isolation_type(kCpuIsolationHard);
-        }
-        if (!task_desc->has_mem_isolation_type()) { 
-            // add default value
-            task_desc->set_mem_isolation_type(kMemIsolationCgroup);
-        }
-    }
     job->id_ = job_id;
     // add default version
     if (!job->desc_.pod().has_version()

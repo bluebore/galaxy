@@ -70,6 +70,7 @@ message Resource {
     repeated int32 ports = 3;
     repeated Volume disks = 4;
     repeated Volume ssds = 5; 
+    optional int32 nonprod_millicores = 6;
 }
 
 enum MemIsolationType {
@@ -80,6 +81,13 @@ enum MemIsolationType {
 enum CpuIsolationType {
     kCpuIsolationHard = 0;
     kCpuIsolationSoft = 1;
+}
+
+
+enum JobType {
+    kLongRun = 0;
+    kBatch = 1;
+    kSystem = 2;
 }
 
 message TaskDescriptor {
@@ -107,6 +115,7 @@ message PodDescriptor {
     optional bool pin_on_agent = 3 [default = false];
     repeated string labels = 4;
     optional string version = 5;
+    optional JobType job_type = 6;
 }
 
 message TaskStatus {
@@ -137,6 +146,5 @@ message AgentInfo {
     repeated PodStatus pods = 7;
     optional AgentState state = 8;
     optional int32 version = 9;
-
     repeated string tags = 10;
 }

@@ -52,6 +52,7 @@ public:
 
     void HandleMasterChange(const std::string& new_master_endpoint);
 private:
+   
     void KeepHeartBeat();
     
     bool RegistToMaster();
@@ -62,25 +63,36 @@ private:
     bool RestorePods();
     
     void LoopCheckPods();
+  
+
+    ResourceType GetResourceType(const PodDescriptor& pd);
     // ret ==  0 alloc success
     //        -1 alloc failed
-    int AllocResource(const Resource& requirement);
-    void ReleaseResource(const Resource& requirement);
+    int AllocResource(const Resource& requirement, ResourceType);
+    void ReleaseResource(const Resource& requirement, ResourceType type);
+
+    int32_t NonprodCpuTotal(int32_t total_shared, int32_t proc_used);
 
     void ConvertToPodPropertiy(const PodInfo& info, PodPropertiy* pod_propertiy);
 
     void CreatePodInfo(const ::baidu::galaxy::RunPodRequest* req, 
                        PodInfo* pod_info);
 
+    void ProcessNonProd();
+
     struct ResourceCapacity {
         int64_t millicores; 
         int64_t memory;
         // TODO initd port not included
         boost::unordered_set<int32_t> used_port;
+        int64_t nonprod_millicores;
+        int64_t nonprod_millicores_assigned;
         ResourceCapacity() 
             : millicores(0),
               memory(0),
-              used_port() {
+              used_port(),
+              nonprod_millicores(0),
+              nonprod_millicores_assigned(0) {
         }
     };
 private:

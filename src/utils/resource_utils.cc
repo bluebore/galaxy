@@ -33,6 +33,11 @@ bool ResourceUtils::Alloc(const Resource& require,
 
     target.set_millicores(target.millicores() - require.millicores());
     target.set_memory(target.memory() - require.memory());
+
+    if (require.has_nonprod_millicores() && target.has_nonprod_millicores()) {
+        target.set_nonprod_millicores(target.nonprod_millicores() - require.nonprod_millicores());
+    }
+
     VolumeAlloc(target.disks(), require.disks(), 
                 target.mutable_disks());
     VolumeAlloc(target.ssds(), require.ssds(),
@@ -78,6 +83,13 @@ bool ResourceUtils::HasDiff(const Resource& left,
     if (left.memory() != left.memory()) {
         return true;
     }
+
+    if (left.has_nonprod_millicores() && right.has_nonprod_millicores()) {
+        if (left.nonprod_millicores() != right.nonprod_millicores()) {
+            return true;
+        }
+    }
+
     std::vector<Volume> left_disks;
     for (int i = 0; i < left.disks_size(); i++) {
         left_disks.push_back(left.disks(i));
@@ -113,10 +125,19 @@ bool ResourceUtils::HasDiff(const Resource& left,
 int32_t ResourceUtils::Compare(const Resource& left,
                                const Resource& right) {
     int32_t cpu_check = 0;
+    
     if (left.millicores() > right.millicores()) {
         cpu_check = 1;
     }else if (left.millicores() < right.millicores()) {
         return -1;
+    }
+
+    if (left.has_nonprod_millicores() && right.has_nonprod_millicores()) {
+        if (left.nonprod_millicores() > right.nonprod_millicores()) {
+            return 1;
+        } else if (left.nonprod_millicores() > right.nonprod_millicores()) {
+            return -1;
+        }
     }
 
     int32_t mem_check = 0;

@@ -18,7 +18,13 @@
 namespace baidu {
 namespace galaxy {
 
-struct TaskInfo {
+    typedef enum {
+        kProd = 1,    // kLongRun & kSystem job
+        kNonProd = 2  // kBatch
+    } ResourceType;
+
+
+    struct TaskInfo {
     std::string task_id;    
     std::string pod_id;     // which pod belong to 
     std::string job_id;
@@ -43,6 +49,8 @@ struct TaskInfo {
     std::string gc_dir;
     Initd_Stub* initd_stub;
     CGroupResourceCollector* resource_collector; 
+    ResourceType resource_type; // kProd, kNonProd
+
     std::string ToString() {
         std::string pb_str;
         std::string str_format;     
@@ -125,6 +133,7 @@ struct TaskInfo {
         initd_check_failed = task.initd_check_failed;
         initd_stub = task.initd_stub;
         resource_collector = task.resource_collector;
+        resource_type = task.resource_type;
         gc_dir = task.gc_dir;
     }
 
