@@ -133,7 +133,11 @@ struct MasterStatus {
 
 class Galaxy {
 public:
-    static Galaxy* ConnectGalaxy(const std::string& master_addr);
+    // args:
+    //     nexus_servers : eg "xxxx:8787,aaaaa:8787"
+    //     master_key    : /baidu/galaxy/yq01-master
+    static Galaxy* ConnectGalaxy(const std::string& nexus_servers,
+                                 const std::string& master_key);
     //create a new job
     virtual bool SubmitJob(const JobDescription& job, std::string* job_id) = 0;
     //update job for example update the replicate_count
@@ -148,8 +152,11 @@ public:
                              const std::vector<std::string>& agents) = 0;
     virtual bool ShowPod(const std::string& jobid,
                          std::vector<PodInformation>* pods) = 0;
+    virtual bool GetPodsByName(const std::string& jobname, 
+                               std::vector<PodInformation>* pods) = 0;
     virtual bool GetStatus(MasterStatus* status) = 0;
     virtual bool SwitchSafeMode(bool mode) = 0;
+    virtual bool GetMasterAddr(std::string* master_addr) = 0;
 };
 
 } // namespace galaxy

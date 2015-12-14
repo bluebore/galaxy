@@ -1,5 +1,5 @@
 # Galaxy
-[![Build Status](https://travis-ci.org/baidu/galaxy.svg?branch=refactor)](https://travis-ci.org/baidu/galaxy)  
+[![Build Status](https://travis-ci.org/baidu/galaxy.svg?branch=master)](https://travis-ci.org/baidu/galaxy)  
 Copyright 2015, Baidu, Inc.  
 （当前分支refactor是重构版本，查找之前的代码、文档请切换到master分支）
 

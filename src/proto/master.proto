@@ -222,6 +222,7 @@ message LabelAgentResponse {
 
 message ShowPodRequest {
     optional string jobid = 1;
+    optional string name = 2;
 }
 
 message PodOverview {

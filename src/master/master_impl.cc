@@ -299,10 +299,24 @@ void MasterImpl::ShowPod(::google::protobuf::RpcController* /*controller*/,
                          const ::baidu::galaxy::ShowPodRequest* request,
                          ::baidu::galaxy::ShowPodResponse* response,
                          ::google::protobuf::Closure* done) {
-    Status ok = job_manager_.GetPods(request->jobid(), 
+    response->set_status(kInputError);
+    do {
+        std::string job_id;
+        if (request->has_jobid()) {
+            job_id = request->jobid();
+        } else if (request->has_name()) {
+            bool ok = job_manager_.GetJobIdByName(request->name(), &job_id);
+            if (!ok) {
+                break;
+            }
+        }
+        if (!job_id.empty()) {
+            Status ok = job_manager_.GetPods(job_id, 
                                      response->mutable_pods());
-    response->set_status(ok);
-    done->Run();
+            response->set_status(ok);
+        }
+    }while(0);
+    done->Run(); 
 }
 
 void MasterImpl::GetStatus(::google::protobuf::RpcController*,

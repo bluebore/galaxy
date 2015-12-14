@@ -8,16 +8,18 @@
 #include "proto/master.pb.h"
 #include "proto/galaxy.pb.h"
 #include "rpc/rpc_client.h"
-
+#include "logging.h"
+#include "ins_sdk.h"
+#include <boost/scoped_ptr.hpp>
 namespace baidu {
 namespace galaxy {
 
 class GalaxyImpl : public Galaxy {
 public:
-    GalaxyImpl(const std::string& master_addr)
-      : master_(NULL) {
+    GalaxyImpl(const std::string& nexus_servers, 
+               const std::string& master_key):master_key_(master_key){
         rpc_client_ = new RpcClient();
-        rpc_client_->GetStub(master_addr, &master_);
+        nexus_ = new ::galaxy::ins::sdk::InsSDK(nexus_servers);
     }
     virtual ~GalaxyImpl() {}
     bool SubmitJob(const JobDescription& job, std::string* job_id);
@@ -29,15 +31,47 @@ public:
                      const std::vector<std::string>& agents);
     bool ShowPod(const std::string& jobid,
                  std::vector<PodInformation>* pods);
+    bool GetPodsByName(const std::string& jobname,
+                 std::vector<PodInformation>* pods);
     bool GetStatus(MasterStatus* status);
     bool SwitchSafeMode(bool mode);
+    bool GetMasterAddr(std::string* master_addr);
 private:
     bool FillJobDescriptor(const JobDescription& sdk_job, JobDescriptor* job);
     void FillResource(const Resource& res, ResDescription* res_desc);
+    bool BuildMasterClient(Master_Stub** master);
 private:
     RpcClient* rpc_client_;
-    Master_Stub* master_;
+    std::string master_key_;
+    ::galaxy::ins::sdk::InsSDK* nexus_; 
 };
+
+bool GalaxyImpl::GetMasterAddr(std::string* master_addr) {
+    if (master_addr == NULL) {
+        return false;
+    }
+    ::galaxy::ins::sdk::SDKError err;
+    bool ok = nexus_->Get(master_key_, master_addr, &err);
+    if (ok && err == ::galaxy::ins::sdk::kOK) {
+        return true;
+    }
+    return false;
+}
+
+bool GalaxyImpl::BuildMasterClient(Master_Stub** master) {
+    std::string master_addr;
+    bool ok = GetMasterAddr(&master_addr);
+    if (!ok) {
+        return false;
+    }
+    ok = rpc_client_->GetStub(master_addr, master);
+    if (!ok) {
+        LOG(WARNING, "fail to ge master stub");
+        return false;
+    }
+    return true;
+}
+
 
 bool GalaxyImpl::LabelAgents(const std::string& label, 
                              const std::vector<std::string>& agents) {
@@ -47,13 +81,19 @@ bool GalaxyImpl::LabelAgents(const std::string& label,
     for (size_t i = 0; i < agents.size(); i++) {
         request.mutable_labels()->add_agents_endpoint(agents[i]);     
     }
-    bool ret = rpc_client_->SendRequest(master_, &Master_Stub::LabelAgents,
+    Master_Stub* master = NULL;
+    bool  ok = BuildMasterClient(&master);
+    if (!ok) {
+        return false;
+    }
+    boost::scoped_ptr<Master_Stub> scoped_master(master);
+    bool ret = rpc_client_->SendRequest(master, &Master_Stub::LabelAgents,
                                         &request, &response, 5, 1);
     if (!ret || 
-            (response.has_status() 
-                    && response.status() != kOk)) {
-        return false;     
-    }    
+        (response.has_status() 
+        && response.status() != kOk)) {
+        return false;
+    }
     return true;
 }
 
@@ -61,7 +101,13 @@ bool GalaxyImpl::TerminateJob(const std::string& job_id) {
     TerminateJobRequest request;
     TerminateJobResponse response;
     request.set_jobid(job_id);
-    rpc_client_->SendRequest(master_, &Master_Stub::TerminateJob,
+    Master_Stub* master = NULL;
+    bool  ok = BuildMasterClient(&master);
+    if (!ok) {
+        return false;
+    }
+    boost::scoped_ptr<Master_Stub> scoped_master(master);
+    rpc_client_->SendRequest(master, &Master_Stub::TerminateJob,
                              &request,&response,5,1);
     if (response.status() == kOk) {
         return true;
@@ -176,7 +222,13 @@ bool GalaxyImpl::SubmitJob(const JobDescription& job, std::string* job_id){
     if (!ok) {
         return false;
     }
-    rpc_client_->SendRequest(master_, &Master_Stub::SubmitJob,
+    Master_Stub* master = NULL;
+    ok = BuildMasterClient(&master);
+    if (!ok) {
+        return false;
+    }
+    boost::scoped_ptr<Master_Stub> scoped_master(master);
+    rpc_client_->SendRequest(master, &Master_Stub::SubmitJob,
                              &request,&response,5,1);
     if (response.status() != kOk) {
         return false;
@@ -193,7 +245,13 @@ bool GalaxyImpl::UpdateJob(const std::string& jobid, const JobDescription& job) 
     if (!ok) {
         return false;
     }
-    rpc_client_->SendRequest(master_, &Master_Stub::UpdateJob,
+    Master_Stub* master = NULL;
+    ok = BuildMasterClient(&master);
+    if (!ok) {
+        return false;
+    }
+    boost::scoped_ptr<Master_Stub> scoped_master(master);
+    rpc_client_->SendRequest(master, &Master_Stub::UpdateJob,
                              &request, &response, 5, 1);
     if (response.status() != kOk) {
         return false;
@@ -204,7 +262,13 @@ bool GalaxyImpl::UpdateJob(const std::string& jobid, const JobDescription& job) 
 bool GalaxyImpl::ListJobs(std::vector<JobInformation>* jobs) {
     ListJobsRequest request;
     ListJobsResponse response;
-    bool ret = rpc_client_->SendRequest(master_, &Master_Stub::ListJobs,
+    Master_Stub* master = NULL;
+    bool  ok = BuildMasterClient(&master);
+    if (!ok) {
+        return false;
+    }
+    boost::scoped_ptr<Master_Stub> scoped_master(master);
+    bool ret = rpc_client_->SendRequest(master, &Master_Stub::ListJobs,
                              &request,&response,5,1);
     if (!ret || response.status() != kOk) {
         return false;
@@ -233,7 +297,13 @@ bool GalaxyImpl::ShowPod(const std::string& jobid,
     ShowPodRequest request;
     request.set_jobid(jobid);
     ShowPodResponse response;
-    bool ok = rpc_client_->SendRequest(master_, &Master_Stub::ShowPod,
+    Master_Stub* master = NULL;
+    bool ok = BuildMasterClient(&master);
+    if (!ok) {
+        return false;
+    }
+    boost::scoped_ptr<Master_Stub> scoped_master(master);
+    ok = rpc_client_->SendRequest(master, &Master_Stub::ShowPod,
                              &request,&response, 5, 1);
     if (!ok || response.status() != kOk) {
         return false;
@@ -255,10 +325,48 @@ bool GalaxyImpl::ShowPod(const std::string& jobid,
 
 }
 
+bool GalaxyImpl::GetPodsByName(const std::string& jobname,
+                         std::vector<PodInformation>* pods){
+    ShowPodRequest request;
+    request.set_name(jobname);
+    ShowPodResponse response;
+    Master_Stub* master = NULL;
+    bool ok = BuildMasterClient(&master);
+    if (!ok) {
+        return false;
+    }
+    boost::scoped_ptr<Master_Stub> scoped_master(master);
+    ok = rpc_client_->SendRequest(master, &Master_Stub::ShowPod,
+                             &request,&response, 5, 1);
+    if (!ok || response.status() != kOk) {
+        return false;
+    }
+    for (int i = 0; i < response.pods_size(); i++) {
+        const PodOverview& pod_overview = response.pods(i);
+        PodInformation pod_info;
+        pod_info.jobid = pod_overview.jobid();
+        pod_info.podid = pod_overview.podid();
+        pod_info.stage = PodStage_Name(pod_overview.stage());
+        pod_info.state = PodState_Name(pod_overview.state());
+        pod_info.version = pod_overview.version();
+        pod_info.endpoint = pod_overview.endpoint();
+        FillResource(pod_overview.used(), &pod_info.used);
+        FillResource(pod_overview.assigned(), &pod_info.assigned);
+        pods->push_back(pod_info);
+    }
+    return true;
+
+}
 bool GalaxyImpl::GetStatus(MasterStatus* status) {
     GetMasterStatusRequest request;
     GetMasterStatusResponse response;
-    rpc_client_->SendRequest(master_, &Master_Stub::GetStatus,
+    Master_Stub* master = NULL;
+    bool  ok = BuildMasterClient(&master);
+    if (!ok) {
+        return false;
+    }
+    boost::scoped_ptr<Master_Stub> scoped_master(master);
+    rpc_client_->SendRequest(master, &Master_Stub::GetStatus,
                              &request, &response, 5, 1);
     if (response.status() != kOk) {
         return false;
@@ -288,7 +396,13 @@ bool GalaxyImpl::SwitchSafeMode(bool mode) {
     SwitchSafeModeRequest request;
     SwitchSafeModeResponse response;
     request.set_enter_or_leave(mode);
-    rpc_client_->SendRequest(master_, &Master_Stub::SwitchSafeMode, 
+    Master_Stub* master = NULL;
+    bool  ok = BuildMasterClient(&master);
+    if (!ok) {
+        return false;
+    }
+    boost::scoped_ptr<Master_Stub> scoped_master(master);
+    rpc_client_->SendRequest(master, &Master_Stub::SwitchSafeMode, 
                              &request, &response, 5, 1);
     if (response.status() != kOk) {
         return false;
@@ -299,7 +413,13 @@ bool GalaxyImpl::SwitchSafeMode(bool mode) {
 bool GalaxyImpl::ListAgents(std::vector<NodeDescription>* nodes) {
     ListAgentsRequest request;
     ListAgentsResponse response;
-    rpc_client_->SendRequest(master_, &Master_Stub::ListAgents,
+    Master_Stub* master = NULL;
+    bool  ok = BuildMasterClient(&master);
+    if (!ok) {
+        return false;
+    }
+    boost::scoped_ptr<Master_Stub> scoped_master(master);
+    rpc_client_->SendRequest(master, &Master_Stub::ListAgents,
                              &request,&response, 5, 1);
     int node_num = response.agents_size();
     for (int i = 0; i < node_num; i++) {
@@ -328,8 +448,8 @@ bool GalaxyImpl::ListAgents(std::vector<NodeDescription>* nodes) {
 
 }
 
-Galaxy* Galaxy::ConnectGalaxy(const std::string& master_addr) {
-    return new GalaxyImpl(master_addr);
+Galaxy* Galaxy::ConnectGalaxy(const std::string& nexus_servers, const std::string& master_key) {
+    return new GalaxyImpl(nexus_servers, master_key);
 }
 
 } // namespace galaxy

@@ -92,14 +92,14 @@ else
     cd ..
 fi
 
-if [ -f "zookeeper-3.4.6.tar.gz" ]
+if [ -f "zookeeper-3.4.7.tar.gz" ]
 then
-    echo "zookeeper-3.4.6.tar.gz exist"
+    echo "zookeeper-3.4.7.tar.gz exist"
 else
     # zookeeper
-    wget http://www.us.apache.org/dist/zookeeper/stable/zookeeper-3.4.6.tar.gz
-    tar zxf zookeeper-3.4.6.tar.gz
-    cd zookeeper-3.4.6/src/c
+    wget http://www.us.apache.org/dist/zookeeper/stable/zookeeper-3.4.7.tar.gz
+    tar zxf zookeeper-3.4.7.tar.gz
+    cd zookeeper-3.4.7/src/c
     ./configure ${DEPS_CONFIG}
     make -j4
     make install
@@ -219,15 +219,18 @@ else
     # ins
     git clone https://github.com/fxsjy/ins
     cd ins
-    set -i 's/^SNAPPY_PATH=.*/SNAPPY_PATH=..\/..\/thirdparty/' Makefile
-    set -i 's/^PROTOBUF_PATH=.*/PROTOBUF_PATH=..\/..\/thirdparty/' Makefile
-    set -i 's/^PROTOC_PATH=.*/PROTOC_PATH=..\/..\/thirdparty\/bin/' Makefile
-    set -i 's/^PROTOC=.*/PROTOC=..\/..\/thirdparty\/bin\/protoc/' Makefile
-    set -i 's/\./thirdparty\/sofa-pbrpc\/output\//\/..\/thirdparty/' Makefile
-    set -i 's/\./thirdparty\/boost\//..\/..\/thirdparty\/boost_1_57_0/' Makefile
-    sed -i "s|^PREFIX=.*|PREFIX=${DEPS_PREFIX}|" Makefile
-    sed -i "s|^PROTOC=.*|PROTOC=${DEPS_PREFIX}/bin/protoc|" Makefile
-    BOOST_PATH=${DEPS_PREFIX}/boost_1_57_0 make install_sdk
+    sed -i 's/^SNAPPY_PATH=.*/SNAPPY_PATH=..\/..\/thirdparty/' Makefile
+    sed -i 's/^PROTOBUF_PATH=.*/PROTOBUF_PATH=..\/..\/thirdparty/' Makefile
+    sed -i 's/^PROTOC_PATH=.*/PROTOC_PATH=..\/..\/thirdparty\/bin/' Makefile
+    sed -i 's/^PROTOC=.*/PROTOC=..\/..\/thirdparty\/bin\/protoc/' Makefile
+    sed -i 's|^PREFIX=.*|PREFIX=..\/..\/thirdparty|' Makefile
+    sed -i 's|^PROTOC=.*|PROTOC=${PREFIX}/bin/protoc|' Makefile
+    sed -i 's/^GFLAGS_PATH=.*/GFLAGS_PATH=..\/..\/thirdparty/' Makefile
+    sed -i 's/^LEVELDB_PATH=.*/LEVELDB_PATH=..\/..\/thirdparty/' Makefile
+    sed -i 's/^GTEST_PATH=.*/GTEST_PATH=..\/..\/thirdparty/' Makefile
+    export PATH=${DEPS_PREFIX}/bin:$PATH
+    export BOOST_PATH=${DEPS_PREFIX}/boost_1_57_0
+    export PBRPC_PATH=${DEPS_PREFIX}/
     make -j4 ins && make -j4 install_sdk && make python
     mkdir -p output/bin && cp ins output/bin
     cp -rf output/python ../../thirdparty/
