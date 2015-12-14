@@ -228,8 +228,9 @@ else
     sed -i "s|^PREFIX=.*|PREFIX=${DEPS_PREFIX}|" Makefile
     sed -i "s|^PROTOC=.*|PROTOC=${DEPS_PREFIX}/bin/protoc|" Makefile
     BOOST_PATH=${DEPS_PREFIX}/boost_1_57_0 make install_sdk
-    make -j4 ins && make -j4 install_sdk
+    make -j4 ins && make -j4 install_sdk && make python
     mkdir -p output/bin && cp ins output/bin
+    cp -rf output/python ../../thirdparty/
     cd -
 fi
 
