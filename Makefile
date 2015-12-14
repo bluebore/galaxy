@@ -5,25 +5,20 @@ OPT ?= -g2 -Wall -Werror  # (B) Debug mode, w/ full line-level debugging symbols
 # Thirdparty
 include depends.mk
 
+CC = gcc
+CXX = g++
+
+SHARED_CFLAGS = -fPIC
+SHARED_LDFLAGS = -shared -Wl,-soname -Wl,
+
+INCPATH += -I./src -I./include $(DEPS_INCPATH) 
+CFLAGS += -std=c99 $(OPT) $(SHARED_CFLAGS) $(INCPATH)
+CXXFLAGS += $(OPT) $(SHARED_CFLAGS) $(INCPATH)
+LDFLAGS += -rdynamic $(DEPS_LDPATH) $(DEPS_LDFLAGS) -lpthread -lrt -lz -ldl
+
+
 PREFIX=./output
-INCLUDE_PATH = -I./ -I./src -I$(PROTOBUF_PATH)/include \
-               -I$(PBRPC_PATH)/include \
-               -I$(SNAPPY_PATH)/include \
-               -I$(BOOST_PATH)/include \
-               -Icommon/include \
-               -I$(INS_PATH)/include \
-               -I$(GFLAGS_PATH)/include \
-               -I$(RAPIDJSON_PATH)/include
 
-LDFLAGS = -L$(PROTOBUF_PATH)/lib \
-          -L$(PBRPC_PATH)/lib -lins_sdk -lsofa-pbrpc -lprotobuf \
-          -L$(SNAPPY_PATH)/lib -lsnappy \
-          -L$(GFLAGS_PATH)/lib  \
-          -Lcommon/ -lcommon \
-          -L$(INS_PATH)/lib \
-          -lgflags -lleveldb -lpthread -lz
-
-CXXFLAGS += $(OPT)
 
 PROTO_FILE = $(wildcard src/proto/*.proto)
 PROTO_SRC = $(patsubst %.proto,%.pb.cc,$(PROTO_FILE))
@@ -53,7 +48,6 @@ INITD_CLI_OBJ = $(patsubst %.cc, %.o, $(INITD_CLI_SRC))
 
 TEST_INITD_SRC = src/gce/test_initd.cc
 TEST_INITD_OBJ = $(patsubst %.cc, %.o, $(TEST_INITD_SRC))
-#TEST_INITD_HEADER = $(wildcard src/gce/*.h) src/gce/utils.h
 
 SDK_SRC = $(wildcard src/sdk/*.cc)
 SDK_OBJ = $(patsubst %.cc, %.o, $(SDK_SRC))
@@ -70,6 +64,8 @@ WATCHER_SRC = $(wildcard src/master/master_watcher.cc)
 WATCHER_OBJ = $(patsubst %.cc, %.o, $(WATCHER_SRC))
 WATCHER_HEADER = $(wildcard src/master/master_watcher.h)
 
+TEST_TRACE_SRC=test_main.cc
+TEST_TRACE_OBJ=test_main.o
 
 CLIENT_OBJ = $(patsubst %.cc, %.o, $(wildcard src/client/*.cc))
 
@@ -77,7 +73,7 @@ FLAGS_OBJ = $(patsubst %.cc, %.o, $(wildcard src/*.cc))
 OBJS = $(FLAGS_OBJ) $(PROTO_OBJ)
 
 LIBS = libgalaxy.a
-BIN = master agent scheduler galaxy initd
+BIN = master agent scheduler galaxy initd 
 
 all: $(BIN) $(LIBS)
 
@@ -90,19 +86,22 @@ $(SCHEDULER_OBJ): $(UTILS_HEADER)
 
 # Targets
 master: $(MASTER_OBJ) $(UTILS_OBJ) $(OBJS)
-	$(CXX) $(MASTER_OBJ) $(UTILS_OBJ) $(OBJS) -o $@ $(LDFLAGS)
+	$(CXX) $(MASTER_OBJ) $(UTILS_OBJ) $(OBJS) -o $@  $(LDFLAGS)
 
 scheduler: $(SCHEDULER_OBJ) $(OBJS) $(WATCHER_OBJ) $(UTILS_OBJ) 
-	$(CXX) $(SCHEDULER_OBJ) $(UTILS_OBJ) $(WATCHER_OBJ) $(OBJS) -o $@ $(LDFLAGS)
+	$(CXX) $(SCHEDULER_OBJ) $(UTILS_OBJ) $(WATCHER_OBJ) $(OBJS) -o $@  $(LDFLAGS)
 
 agent: $(AGENT_OBJ) $(WATCHER_OBJ) $(OBJS)
-	$(CXX) $(AGENT_OBJ) $(WATCHER_OBJ) $(OBJS) -o $@ $(LDFLAGS)
+	$(CXX) $(UTILS_OBJ) $(AGENT_OBJ) $(WATCHER_OBJ) $(OBJS) -o $@ $(LDFLAGS)
 
 test_agent: $(TEST_AGENT_OBJ) $(LIBS) $(OBJS)
 	$(CXX) $(TEST_AGENT_OBJ) $(LIBS) -o $@ $(LDFLAGS)
 
 libgalaxy.a: $(SDK_OBJ) $(OBJS) $(PROTO_HEADER)
 	$(AR) -rs $@ $(SDK_OBJ) $(OBJS)
+
+test_main: $(TEST_TRACE_OBJ) 
+	$(CXX) $(TEST_TRACE_OBJ) -o $@ $(FTRACE_LIBDIR)/libftrace.a $(LDFLAGS)
 
 galaxy: $(CLIENT_OBJ) $(LIBS)
 	$(CXX) $(CLIENT_OBJ) $(LIBS) -o $@ $(LDFLAGS)
@@ -120,7 +119,7 @@ test_sched: $(SCHED_TEST_OBJ) $(LIBS) $(OBJS)
 	$(CXX) $(SCHED_TEST_OBJ) $(LIBS) -o $@ $(LDFLAGS)
 
 %.o: %.cc
-	$(CXX) $(CXXFLAGS) $(INCLUDE_PATH) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(INCLUDE) -c $< -o $@
 
 %.pb.h %.pb.cc: %.proto
 	$(PROTOC) --proto_path=./src/proto/ --proto_path=/usr/local/include --cpp_out=./src/proto/ $<
@@ -143,3 +142,4 @@ install: $(BIN) $(LIBS)
 .PHONY: test
 test:
 	echo done
+

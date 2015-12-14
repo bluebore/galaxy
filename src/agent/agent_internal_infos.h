@@ -21,6 +21,7 @@ namespace galaxy {
 struct TaskInfo {
     std::string task_id;    
     std::string pod_id;     // which pod belong to 
+    std::string job_id;
     TaskDescriptor desc;
     TaskStatus status;
     std::string initd_endpoint;
@@ -32,15 +33,16 @@ struct TaskInfo {
 
     std::string cgroup_path;
     std::string task_workspace;
+    int64_t ctime;
     std::map<std::string, std::string> cgroups;
     std::string task_chroot_path; // chroot path
     int fail_retry_times;
     int max_retry_times;
     int stop_timeout_point;
     int initd_check_failed;
+    std::string gc_dir;
     Initd_Stub* initd_stub;
     CGroupResourceCollector* resource_collector; 
-
     std::string ToString() {
         std::string pb_str;
         std::string str_format;     
@@ -106,6 +108,7 @@ struct TaskInfo {
     void CopyFrom(const TaskInfo& task) {
         task_id = task.task_id; 
         pod_id = task.pod_id;
+        job_id = task.job_id;
         desc.CopyFrom(task.desc);
         status.CopyFrom(task.status);
         initd_endpoint = task.initd_endpoint;
@@ -122,6 +125,7 @@ struct TaskInfo {
         initd_check_failed = task.initd_check_failed;
         initd_stub = task.initd_stub;
         resource_collector = task.resource_collector;
+        gc_dir = task.gc_dir;
     }
 
     TaskInfo& operator=(const TaskInfo& task) {

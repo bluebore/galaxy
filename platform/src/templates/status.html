@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+.status_ok {
+    color:green;
+}
+
+.status_err {
+    color:red;
+}
+.table>caption+thead>tr:first-child>td, .table>caption+thead>tr:first-child>th, .table>colgroup+thead>tr:first-child>td, .table>colgroup+thead>tr:first-child>th, .table>thead:first-child>tr:first-child>td, .table>thead:first-child>tr:first-child>th {
+    border-top: 0;
+}
+.table>thead>tr>th {
+    vertical-align: bottom;
+    border-bottom: 2px solid #ddd;
+}
+.table>tbody>tr>td, .table>tbody>tr>th, .table>tfoot>tr>td, .table>tfoot>tr>th, .table>thead>tr>td, .table>thead>tr>th {
+    padding: 8px;
+    line-height: 1.42857143;
+    vertical-align: top;
+    border-top: 1px solid #ddd;
+}
+th {
+    text-align: left;
+}
+td, th {
+    padding: 0;
+}
+</style>
+
+<head>
+<body>
+
+<div class="minions">
+    <h4>Dead Nodes!</h4>
+    <table class="table" style="font-size:10px; width:200" border="0"  cellspacing="0" cellpadding="0" >
+        <tr>
+            <th>#</th>
+            <th>agent_addr</th>
+        </tr>
+
+        {% for node in dead_nodes %}
+            <tr class="status_err">
+             <td>{{forloop.counter}}</td>
+             <td>{{node}}</td>
+            </tr>
+        {% endfor %}
+    </table>
+
+   <h4>Live Nodes!</h4>
+    <table class="table" style="font-size:10px; width:200" border="0"  cellspacing="0" cellpadding="0" >
+        <tr>
+            <th>#</th>
+            <th>agent_addr</th>
+        </tr>
+
+        {% for node in live_nodes %}
+            <tr >
+             <td>{{forloop.counter}}</td>
+             <td> {{node}}</td>
+            </tr>
+        {% endfor %}
+    </table>
+
+</div>
+
+</body>
+</html>

@@ -5,22 +5,7 @@ env:
 install:
     - sudo apt-get install libleveldb-dev
     - sudo apt-get install libboost-dev libsnappy-dev
-    - wget https://github.com/google/protobuf/releases/download/v$PROTOBUF_VERSION/protobuf-$PROTOBUF_VERSION.tar.gz
-    - tar xf protobuf-$PROTOBUF_VERSION.tar.gz
-    - ( cd protobuf-$PROTOBUF_VERSION && ./configure && make -j8 && sudo make install && sudo ldconfig )
-    - sudo apt-get install zlib1g-dev
-    - git clone https://github.com/bluebore/sofa-pbrpc ./thirdparty/sofa-pbrpc
-    - ( cd thirdparty/sofa-pbrpc && make -j8 && make install && cd python && sudo python setup.py install)
-    - wget https://github.com/gflags/gflags/archive/v2.1.2.tar.gz
-    - tar xf v2.1.2.tar.gz
-    - ( cd gflags-2.1.2 && cmake -DGFLAGS_NAMESPACE=google && make -j8 && sudo make install )
-    - git clone https://github.com/baidu/common
-    - ( cd common && make -j8 )
-    - git clone https://github.com/fxsjy/ins
-    - ( cd ins && PBRPC_PATH=../thirdparty/sofa-pbrpc/output/ make -j8 && make sdk )
-    - git clone https://github.com/miloyip/rapidjson.git ./thirdparty/rapidjson
-
-
+    - sudo apt-get install libreadline-dev
 script: 
-    - make -j8 && make install
+    - sh build.sh
     - cd sandbox && ./quick_test.sh

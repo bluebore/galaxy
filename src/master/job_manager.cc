@@ -15,6 +15,7 @@
 #include "utils/resource_utils.h"
 #include "timer.h"
 #include <logging.h>
+#include "utils/trace.h"
 
 DECLARE_int32(master_agent_timeout);
 DECLARE_int32(master_agent_rpc_timeout);
@@ -25,7 +26,10 @@ DECLARE_string(safemode_store_path);
 DECLARE_string(safemode_store_key);
 DECLARE_string(labels_store_path);
 DECLARE_string(jobs_store_path);
+DECLARE_string(data_center);
 DECLARE_int32(master_pending_job_wait_timeout);
+DECLARE_int32(master_job_trace_interval);
+DECLARE_int32(master_cluster_trace_interval);
 
 namespace baidu {
 namespace galaxy {
@@ -50,6 +54,8 @@ JobManager::JobManager()
     else {
         safe_mode_ = kSafeModeAutomatic;
     }
+    trace_pool_.DelayTask(FLAGS_master_cluster_trace_interval, 
+               boost::bind(&JobManager::TraceClusterStat, this));
 }
 
 JobManager::~JobManager() {
@@ -217,6 +223,7 @@ Status JobManager::Add(const JobId& job_id, const JobDescriptor& job_desc) {
       job_desc.deploy_step(),
       job_desc.replica(),
       job->latest_version.c_str());
+    trace_pool_.DelayTask(FLAGS_master_job_trace_interval, boost::bind(&JobManager::TraceJobStat, this, job_id));
     return kOk;
 }
 
@@ -382,6 +389,8 @@ void JobManager::ReloadJobInfo(const JobInfo& job_info) {
     }
     MutexLock lock(&mutex_);
     jobs_[job_id] = job;
+    trace_pool_.DelayTask(FLAGS_master_job_trace_interval, 
+               boost::bind(&JobManager::TraceJobStat, this, job_id));
 }
 
 
@@ -792,6 +801,12 @@ void JobManager::HandleAgentOffline(const std::string agent_addr) {
         agent_timer_[agent_addr] = timer_id;
         return;
     }
+    AgentEvent e;
+    e.set_addr(agent_addr);
+    e.set_data_center(FLAGS_data_center);
+    e.set_time(::baidu::common::timer::get_micros());
+    e.set_action("offline");
+    Trace::TraceAgentEvent(e);
     PodMap& agent_pods = pods_on_agent_[agent_addr];
     PodMap::iterator it = agent_pods.begin();
     std::vector<std::pair<Job*, PodStatus*> > wait_to_pending;
@@ -803,8 +818,7 @@ void JobManager::HandleAgentOffline(const std::string agent_addr) {
             if (job_it ==  jobs_.end()) {
                 continue;
             }
-            wait_to_pending.push_back(std::make_pair(job_it->second, pod));
-                    
+            wait_to_pending.push_back(std::make_pair(job_it->second, pod)); 
         }
     }
     std::vector<std::pair<Job*, PodStatus*> >::iterator pending_it = wait_to_pending.begin();
@@ -1577,6 +1591,60 @@ Status JobManager::GetStatus(::baidu::galaxy::GetMasterStatusResponse* response)
     return kOk;
 }
 
+void JobManager::TraceClusterStat() {
+    MutexLock lock(&mutex_);
+    int32_t agent_live_count = 0;
+    int32_t agent_dead_count = 0;
+    
+    int64_t cpu_total = 0;
+    int64_t cpu_used = 0;
+    int64_t cpu_assigned = 0;
+
+    int64_t mem_total = 0;
+    int64_t mem_used = 0;
+    int64_t mem_assigned = 0;
+
+    std::map<AgentAddr, AgentInfo*>::iterator a_it = agents_.begin();
+    for (; a_it != agents_.end(); ++a_it) {
+        if (a_it->second->state() == kDead) {
+            agent_dead_count++;
+        } else {
+            agent_live_count++;
+            cpu_total += a_it->second->total().millicores();
+            mem_total += a_it->second->total().memory();
+            
+            cpu_used += a_it->second->used().millicores();
+            mem_used += a_it->second->used().memory();
+
+            cpu_assigned += a_it->second->assigned().millicores();
+            mem_assigned += a_it->second->assigned().memory();
+        }
+    }
+    int64_t pod_count = 0;
+    std::map<JobId, Job*>::iterator j_it = jobs_.begin();
+    for (; j_it != jobs_.end(); ++j_it) {
+        pod_count += j_it->second->pods_.size();
+    }
+    ClusterStat stat;
+    stat.set_data_center(FLAGS_data_center);
+    stat.set_total_node_count(agent_dead_count + agent_live_count);
+    stat.set_alive_node_count(agent_live_count);
+    stat.set_dead_node_count(agent_dead_count);
+    stat.set_total_cpu_millicores(cpu_total);
+    stat.set_total_cpu_used_millicores(cpu_used);
+    stat.set_total_cpu_assigned(cpu_assigned);
+    //TODO add quota
+    stat.set_total_memory(mem_total);
+    stat.set_total_memory_used(mem_used);
+    stat.set_total_memory_assigned(mem_assigned);
+    stat.set_total_pod_count(pod_count);
+    stat.set_time(::baidu::common::timer::get_micros());
+    Trace::TraceClusterStat(stat);
+    trace_pool_.DelayTask(FLAGS_master_cluster_trace_interval, 
+               boost::bind(&JobManager::TraceClusterStat, this));
+
+}
+
 void JobManager::HandleLostPod(const AgentAddr& addr, const PodMap& pods_not_on_agent) {
     mutex_.AssertHeld();
     PodMap::const_iterator j_it = pods_not_on_agent.begin();
@@ -1630,6 +1698,23 @@ void JobManager::HandleReusePod(const PodStatus& report_pod,
     pod->set_endpoint(report_pod.endpoint());
     pod->set_stage(kStageRunning);
     pods_on_agent_[report_pod.endpoint()][pod->jobid()][pod->podid()] = pod;
+}
+
+void JobManager::TraceJobStat(const std::string& jobid) {
+    MutexLock lock(&mutex_);
+    if (safe_mode_ != kSafeModeOff) {
+        trace_pool_.DelayTask(FLAGS_master_job_trace_interval, 
+               boost::bind(&JobManager::TraceJobStat, this, jobid));
+        return;
+    }
+    std::map<JobId, Job*>::iterator it = jobs_.find(jobid);
+    if (it == jobs_.end()) {
+        LOG(INFO, "stop trace job %s stat", jobid.c_str());
+        return;
+    }
+    Trace::TraceJobStat(it->second);
+    trace_pool_.DelayTask(FLAGS_master_job_trace_interval, 
+               boost::bind(&JobManager::TraceJobStat, this, jobid));
 }
 
 }

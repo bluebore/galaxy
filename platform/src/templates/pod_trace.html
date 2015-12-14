@@ -1,0 +1,191 @@
+{%extends "base.html"%}
+{%block custom-css%}
+ <style type="text/css">
+    body > .ui.container {
+      margin-top: 3em;
+    }
+    .ui.container > h1 {
+      font-size: 3em;
+      text-align: center;
+      font-weight: normal;
+    }
+    .ui.container > h2.dividing.header {
+      font-size: 2em;
+      font-weight: normal;
+      margin: 4em 0em 3em;
+    }
+
+
+    .ui.table {
+      table-layout: fixed;
+    }
+  </style>
+
+
+{%endblock%}
+{%block main%}
+<div class="ui container">
+
+<div id="cpuused" style="height: 400px; min-width: 310px">
+</div>
+
+<div id="memused" style="height: 400px; min-width: 310px">
+</div>
+<h4 class="ui header">pod events</h4>
+<table class="ui blue table">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>id</th>
+      <th>from</th>
+      <th>stage</th>
+      <th>state</th>
+      <th>reason</th>
+      <th>gc_dir</th>
+      <th>endpoint</th>
+      <th>version</th>
+      <th>date</th>
+    </tr>
+  </thead>
+  <tbody>
+      {% for event in pod_events %}
+    <tr>
+        <td>{{forloop.counter}}</td>
+        <td>{{event.id}}</td>
+        <td>{{event.from}}</td>
+        <td>{{event.stage}}</td>
+        <td>{{event.state}}</td>
+        <td>{{event.reason}}</td>
+        <td>{{event.gc_dir}}</td>
+        <td>{{event.endpoint}}</td>
+        <td>{{event.version}}</td>
+        <td>{{event.time}}</td>
+    </tr>
+    {%endfor%}
+</tbody>
+</table>
+
+<h4 class="ui header">task events</h4>
+<table class="ui blue table">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>cmd</th>
+      <th>agent_addr</th>
+      <th>initd_port</th>
+      <th>state</th>
+      <th>ctime</th>
+      <th>ttime</th>
+      <th>error</th>
+      <th>exit_code</th>
+    </tr>
+  </thead>
+  <tbody>
+      {% for event in task_events %}
+    <tr>
+        <td>{{forloop.counter}}</td>
+        <td>{{event.cmd}}</td>
+        <td>{{event.agent_addr}}</td>
+        <td>{{event.initd_port}}</td>
+        <td>{{event.state}}</td>
+        <td>{{event.ctime}}</td>
+        <td>{{event.ttime}}</td>
+        <td>{{event.error}}</td>
+        <td>{{event.exit_code}}</td>
+    </tr>
+    {%endfor%}
+</tbody>
+</table>
+
+
+
+</div>
+{%endblock%}
+
+{%block custom-js%}
+<script src="{{media_url}}/js/highstock.js"></script>
+<script> 
+$(function () {
+    $.getJSON('{{root_url}}trace/pod/stat?podid={{podid}}', function (data) {
+        var cpu_used = new Array;
+        var cpu_quota = new Array;
+        var mem_used = new Array;
+        var mem_quota = new Array;
+        for (var index in data.data.stats) {
+            var item = data.data.stats[index];
+            cpu_used.push([item.time, item.cpu_used]);
+            cpu_quota.push([item.time, item.cpu_quota]);
+            mem_used.push([item.time, item.mem_used]);
+            mem_quota.push([item.time, item.mem_quota]);
+        }
+        var cpu_stock = [];
+        cpu_stock.push({name:"cpu_used", data:cpu_used, type:"area"});
+        cpu_stock.push({name:"cpu_quota", data:cpu_quota});
+        var mem_stock = [];
+        mem_stock.push({name:"mem_used", data:mem_used});
+        mem_stock.push({name:"mem_quota", data:mem_quota});
+        $('#cpuused').highcharts('StockChart', {
+            title: {
+                text: 'pod cpu used in minutes'
+            },
+            yAxis: {
+                   plotLines: [{
+                        value: 0,
+                        width: 2,
+                        color: 'silver'
+                    }] 
+            },
+            rangeSelector : {
+                buttons : [{
+                    type : 'hour',
+                    count : 1,
+                    text : '1h'
+                }, {
+                    type : 'day',
+                    count : 1,
+                    text : '1D'
+                }, {
+                    type : 'all',
+                    count : 1,
+                    text : 'All'
+                }],
+                selected : 1,
+                inputEnabled : false
+            },
+            series :cpu_stock 
+        });
+
+       $('#memused').highcharts('StockChart', {
+            title: {
+                text: 'pod mem used in minutes'
+            },
+            yAxis: {
+                   plotLines: [{
+                        value: 0,
+                        width: 2,
+                        color: 'silver'
+                    }] 
+            },
+            rangeSelector : {
+                buttons : [{
+                    type : 'hour',
+                    count : 1,
+                    text : '1h'
+                }, {
+                    type : 'day',
+                    count : 1,
+                    text : '1D'
+                }, {
+                    type : 'all',
+                    count : 1,
+                    text : 'All'
+                }],
+                selected : 1,
+                inputEnabled : false
+            },
+            series :mem_stock 
+        });
+    });
+});
+</script>
+{%endblock%}

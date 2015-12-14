@@ -441,6 +441,7 @@ int PodManager::AddPod(const PodInfo& info) {
         internal_info.tasks.begin();
     for (; task_it != internal_info.tasks.end(); ++task_it) {
         task_it->second.initd_endpoint = "127.0.0.1:";
+        task_it->second.gc_dir = gc_dir;
         task_it->second.initd_endpoint.append(
                 boost::lexical_cast<std::string>(
                     internal_info.initd_port));
@@ -490,8 +491,10 @@ int PodManager::ReloadPod(const PodInfo& info) {
     std::map<std::string, TaskInfo>::iterator task_it =
         internal_info.tasks.begin();
     for (; task_it != internal_info.tasks.end(); ++task_it) {
-        task_it->second.pod_id = info.pod_id;     
+        task_it->second.pod_id = info.pod_id; 
         task_it->second.initd_endpoint = "127.0.0.1:";
+        task_it->second.job_id = internal_info.job_id;
+        task_it->second.gc_dir = gc_dir;
         task_it->second.initd_endpoint.append(
                 boost::lexical_cast<std::string>(
                     internal_info.initd_port));

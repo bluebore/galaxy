@@ -329,7 +329,6 @@ int BuildJobFromConfig(const std::string& config, ::baidu::galaxy::JobDescriptio
  
 }
 
-
 int AddJob() {
     std::string master_endpoint;
     bool ok = GetMasterAddr(&master_endpoint);
