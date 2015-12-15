@@ -368,6 +368,25 @@ int PodManager::ShowPods(std::vector<PodInfo>* pods) {
     return 0;
 }
 
+int PodManager::MarkPodError(const std::string& pod_id) {
+    std::map<std::string, PodInfo>::iterator pod_it = 
+        pods_.find(pod_id);
+    int ret = -1;
+    if (pod_it == pods_.end()) {
+        return ret; 
+    }
+
+    PodInfo& pod_info = pod_it->second;
+    std::map<std::string, TaskInfo>::iterator task_it = 
+        pod_info.tasks.begin();
+
+
+    for (; task_it != pod_info.tasks.end(); ++task_it) {
+        ret = task_manager_->MarkTaskError(task_it->first);
+    }
+    return ret;
+}
+
 int PodManager::DeletePod(const std::string& pod_id) {
     // async delete, only do delete to task_manager
     // pods_ erase by show pods
@@ -415,6 +434,7 @@ int PodManager::AddPod(const PodInfo& info) {
     std::string time_str;
     GetStrFTime(&time_str);
     PodInfo& internal_info = pods_[info.pod_id];
+
     std::string gc_dir = FLAGS_agent_gc_dir + "/" 
         + internal_info.pod_id + "_" + time_str;
     internal_info.pod_status.set_pod_gc_path(gc_dir);
