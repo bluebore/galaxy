@@ -5,6 +5,7 @@
 #include "master/user_manager.h"
 #include <gflags/gflags.h>
 #include <boost/bind.hpp>
+#include "master/master_util.h"
 #include "logging.h"
 #include "timer.h"
 
@@ -92,7 +93,7 @@ void UserManager::ReloadUser(const User& user) {
     user_index.user.CopyFrom(user);
     user_set_->insert(user_index);
     if (user.super_user()) {
-        supers_.insert(user.uid());
+        super_uid_ = user.uid();
     }
 }
 
@@ -117,7 +118,7 @@ bool UserManager::Auth(const std::string& sid, User* user) {
 
 bool UserManager::AddUser(const User& user) {
     UserIndex user_index;
-    user_index.uid = GenUuid(); 
+    user_index.uid = MasterUtil::UUID(); 
     user_index.name = user.name();
     user_index.user.CopyFrom(user); 
     user_index.user.set_create_time(::baidu::common::timer::get_micros());
@@ -199,7 +200,7 @@ bool UserManager::Login(const std::string& name,
     //TODO md5sum
     if (it->user.password() == password) {
         user->CopyFrom(it->user);
-        *sid = GenUuid();
+        *sid = MasterUtil::UUID();
         Session session;
         session.sid = *sid;
         session.last_update_time = ::baidu::common::timer::get_micros();
@@ -210,10 +211,6 @@ bool UserManager::Login(const std::string& name,
     return false;
 }
 
-std::string UserManager::GenUuid() {
-    boost::uuids::uuid uuid = boost::uuids::random_generator()();
-    return boost::lexical_cast<std::string>(uuid); 
-}
 
 bool UserManager::GetQuotaByIndex(const std::string& sid, Quota* quota) {
     mutex_.AssertHeld();
@@ -229,20 +226,103 @@ bool UserManager::GetQuotaByIndex(const std::string& sid, Quota* quota) {
     return true;
 }
 
-bool UserManager::GetQuota(const std::string& sid, Quota* quota) { 
+bool UserManager::GetQuota(const std::string& uid, Quota* quota) { 
     MutexLock lock(&mutex_);
-    return GetQuotaByIndex(sid, quota);
+    return GetQuotaByIndex(uid, quota);
 }
 
-bool UserManager::AcquireQuota(const std::string& sid, 
+bool UserManager::AcquireQuota(const std::string& uid, 
                                int64_t millicores,
                                int64_t memory) {
     MutexLock lock(&mutex_);
-    Quota quota;
-    bool ok = GetQuotaByIndex(sid, &quota);
-    if (!ok) {
-        LOG(WARNING, "fail to get sid %s quota", sid.c_str());
+    QuotaTargetIndex& target_index = quota_set_->get<target_tag>();
+    QuotaTargetIndex::iterator target_it = target_index.find(uid);
+    if (target_it == target_index.end()) {
         return false;
+    }
+    int64_t cpu_free = target_it->quota.cpu_quota() - target_it->quota.cpu_assigned();
+    int64_t mem_free = target_it->quota.memory_quota() - target_it->quota.memory_assigned(); 
+    if (cpu_free > millicores && 
+        mem_free > memory) {
+        LOG(INFO, "account %s assigned millicores %ld memory %ld",
+                uid.c_str(), millicores, memory);
+        QuotaIndex copied = *target_it;
+        copied.quota.set_cpu_quota(copied.quota.cpu_quota() - millicores);
+        copied.quota.set_memory_quota(copied.quota.memory_quota() - memory);
+        copied.quota.set_cpu_assigned(copied.quota.cpu_assigned() + millicores);
+        copied.quota.set_memory_assigned(copied.quota.memory_quota() + memory);
+        target_index.replace(target_it, copied);
+        return true;
+    }
+    return false;
+}
+
+bool UserManager::AssignExistQuota(const std::string& uid, const Quota& quota) {
+    mutex_.AssertHeld();
+    QuotaTargetIndex& target_index = quota_set_->get<target_tag>();
+    QuotaTargetIndex::iterator super_target_it = target_index.find(super_uid_);
+    if (super_target_it == target_index.end()) {
+        LOG(INFO, "super %s quota is missing", super_uid_.c_str());
+        return false;
+    }
+    QuotaIndex super_quota_index = *super_target_it;
+    QuotaTargetIndex::const_iterator quota_target_it = target_index.find(uid);
+    QuotaIndex user_quota_index = *quota_target_it;
+    int64_t cpu_free = super_quota_index.quota.cpu_quota() - super_quota_index.quota.cpu_assigned() 
+        +  user_quota_index.quota.cpu_quota();
+    int64_t mem_free = super_quota_index.quota.memory_quota() - super_quota_index.quota.memory_assigned()
+        + super_quota_index.quota.memory_quota();
+    if (cpu_free >= quota.cpu_quota()
+        && mem_free >= quota.memory_quota()) {
+        super_quota_index.quota.set_cpu_assigned(super_quota_index.quota.cpu_quota() - cpu_free);
+        super_quota_index.quota.set_memory_assigned(super_quota_index.quota.memory_quota() - mem_free);
+        target_index.replace(super_target_it, super_quota_index);
+        user_quota_index.quota.CopyFrom(quota);
+        target_index.replace(quota_target_it, user_quota_index);
+        return true;
+    }
+    return false;
+}
+
+bool UserManager::AssignNoneExistQuota(const std::string& uid, const Quota& quota) {
+    mutex_.AssertHeld();
+    QuotaTargetIndex& target_index = quota_set_->get<target_tag>();
+    QuotaTargetIndex::iterator target_it = target_index.find(super_uid_);
+    if (target_it == target_index.end()) {
+        LOG(INFO, "super %s quota is missing", super_uid_.c_str());
+        return false;
+    }
+    Quota super_quota = target_it->quota;
+    int64_t cpu_free = super_quota.cpu_quota() - super_quota.cpu_assigned();
+    int64_t mem_free = super_quota.memory_quota() - super_quota.memory_assigned();
+    if (cpu_free > quota.cpu_quota()
+        && mem_free > quota.memory_quota()) {
+        QuotaIndex super_index = *target_it;
+        super_index.quota.set_memory_assigned(super_index.quota.memory_assigned() 
+                + quota.memory_quota());
+        super_index.quota.set_cpu_assigned(super_index.quota.cpu_assigned() 
+                + quota.cpu_quota());
+        target_index.replace(target_it, super_index);
+        QuotaIndex index;
+        index.quota = quota;
+        index.qid = MasterUtil::UUID();
+        index.name = uid;
+        index.target = uid;
+        quota_set_->insert(index);
+        return true;
+    }
+    return false;
+}
+
+bool UserManager::AssignQuota(const std::string& uid, const std::string& op, const Quota& quota) {
+    MutexLock lock(&mutex_);
+    // check if uid has quota
+    const QuotaTargetIndex& target_index = quota_set_->get<target_tag>();
+    QuotaTargetIndex::const_iterator target_it = target_index.find(uid);
+    if (target_it == target_index.end()) {
+        return AssignExistQuota(uid, quota);
+    }else {
+        return AssignNoneExistQuota(uid, quota);
     }
 }
 

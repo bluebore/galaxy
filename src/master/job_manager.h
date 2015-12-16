@@ -18,7 +18,7 @@
 #include "proto/master.pb.h"
 #include "proto/galaxy.pb.h"
 #include "rpc/rpc_client.h"
-
+#include "master/user_manager.h"
 namespace baidu {
 namespace galaxy {
 
@@ -34,8 +34,6 @@ typedef std::string Version;
 typedef google::protobuf::RepeatedPtrField<baidu::galaxy::PodOverview> PodOverviewList;
 typedef std::map<JobId, std::map<PodId, PodStatus*> > PodMap;
 
-struct id_tag{};
-struct name_tag{};
 
 // the index of job, uid index will be added latter 
 // so multi index is needed

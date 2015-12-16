@@ -98,10 +98,10 @@ public:
                User* user,
                std::string* sid);
     bool Auth(const std::string& sid, User* user);
-    bool GetQuota(const std::string& sid, Quota* quota);
+    bool GetQuota(const std::string& uid, Quota* quota);
     // assign quota from root
-    bool AssignQuota(const std::string& sid, const Quota& quota);
-    bool AcquireQuota(const std::string& sid, int64_t millicores, int64_t memory);
+    bool AssignQuota(const std::string& uid, const std::string& op, const Quota& quota);
+    bool AcquireQuota(const std::string& uid, int64_t millicores, int64_t memory);
 private:
     std::string GenUuid();
     bool SaveUser(const User& user);
@@ -109,6 +109,8 @@ private:
     void ReloadUser(const User& user);
     void ReloadQuota(const Quota& quota);
     bool GetQuotaByIndex(const std::string& sid, Quota* quota);
+    bool AssignExistQuota(const std::string& uid, const Quota& quota);
+    bool AssignNoneExistQuota(const std::string& uid, const Quota& quota);
 private:
     ::baidu::common::Mutex mutex_;
     UserSet* user_set_;
@@ -117,7 +119,7 @@ private:
     typedef boost::unordered_map<std::string, Session> Sessions;
     Sessions* sessions_;
     ::baidu::common::ThreadPool* worker_;
-    std::set<std::string> supers_;
+    std::string super_uid_;
 };
 
 }
