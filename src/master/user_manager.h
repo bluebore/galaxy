@@ -17,16 +17,11 @@
 #include "mutex.h"
 #include "ins_sdk.h"
 #include "thread_pool.h"
+#include "master/idx_tag.h"
 
 using ::galaxy::ins::sdk::InsSDK;
 namespace baidu {
 namespace galaxy {
-
-struct id_tag{};
-
-struct name_tag{};
-
-struct target_tag{};
 
 struct UserIndex {
     std::string uid;
