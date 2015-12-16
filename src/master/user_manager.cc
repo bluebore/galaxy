@@ -119,7 +119,6 @@ bool UserManager::AddUser(const User& user) {
     UserIndex user_index;
     user_index.uid = GenUuid(); 
     user_index.name = user.name();
-    //TODO md5sum password
     user_index.user.CopyFrom(user); 
     user_index.user.set_create_time(::baidu::common::timer::get_micros());
     user_index.user.set_last_login_time(::baidu::common::timer::get_micros());
@@ -214,6 +213,37 @@ bool UserManager::Login(const std::string& name,
 std::string UserManager::GenUuid() {
     boost::uuids::uuid uuid = boost::uuids::random_generator()();
     return boost::lexical_cast<std::string>(uuid); 
+}
+
+bool UserManager::GetQuotaByIndex(const std::string& sid, Quota* quota) {
+    mutex_.AssertHeld();
+    if (quota == NULL) {
+        return false;
+    }
+    const QuotaTargetIndex& target_index = quota_set_->get<target_tag>();
+    QuotaTargetIndex::const_iterator target_it = target_index.find(sid);
+    if (target_it == target_index.end()) {
+        return false;
+    }
+    quota->CopyFrom(target_it->quota);
+    return true;
+}
+
+bool UserManager::GetQuota(const std::string& sid, Quota* quota) { 
+    MutexLock lock(&mutex_);
+    return GetQuotaByIndex(sid, quota);
+}
+
+bool UserManager::AcquireQuota(const std::string& sid, 
+                               int64_t millicores,
+                               int64_t memory) {
+    MutexLock lock(&mutex_);
+    Quota quota;
+    bool ok = GetQuotaByIndex(sid, &quota);
+    if (!ok) {
+        LOG(WARNING, "fail to get sid %s quota", sid.c_str());
+        return false;
+    }
 }
 
 }

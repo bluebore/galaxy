@@ -82,6 +82,10 @@ typedef boost::multi_index_container<
     >
 > QuotaSet;
 
+typedef boost::multi_index::index<QuotaSet, id_tag>::type QuotaIdIndex;
+typedef boost::multi_index::index<QuotaSet, name_tag>::type QuotaNameIndex;
+typedef boost::multi_index::index<QuotaSet, target_tag>::type QuotaTargetIndex;
+
 class UserManager {
 
 public:
@@ -94,12 +98,17 @@ public:
                User* user,
                std::string* sid);
     bool Auth(const std::string& sid, User* user);
+    bool GetQuota(const std::string& sid, Quota* quota);
+    // assign quota from root
+    bool AssignQuota(const std::string& sid, const Quota& quota);
+    bool AcquireQuota(const std::string& sid, int64_t millicores, int64_t memory);
 private:
     std::string GenUuid();
     bool SaveUser(const User& user);
     void CleanSession();
     void ReloadUser(const User& user);
     void ReloadQuota(const Quota& quota);
+    bool GetQuotaByIndex(const std::string& sid, Quota* quota);
 private:
     ::baidu::common::Mutex mutex_;
     UserSet* user_set_;
