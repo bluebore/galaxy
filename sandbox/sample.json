@@ -13,8 +13,8 @@
         },
         "tasks":[
                  {
-                     "binary":"longrun.tar.gz",
-                     "source_type":"kSourceTypeBinary",
+                     "binary":"http://127.0.0.1:8181/longrun.tar.gz",
+                     "source_type":"kSourceTypeFTP",
                      "start_command":"sh longrun.sh",
                      "requirement":{
                          "millicores":500,

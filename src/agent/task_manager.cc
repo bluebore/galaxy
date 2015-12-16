@@ -107,6 +107,7 @@ int TaskManager::Init() {
             LOG(WARNING, "mkdir global cgroup path failed"); 
             return -1;
         }
+
         LOG(INFO, "support cgroups hierarchy %s", hierarchy.c_str());
         hierarchies_[sub_systems[i]] = hierarchy;
     }
@@ -1234,6 +1235,15 @@ void TaskManager::SetResourceUsage(TaskInfo* task_info) {
 
 int TaskManager::InitTcpthrotEnv() {
     std::string hierarchy = FLAGS_gce_cgroup_root + "/tcp_throt";
+    if (!file::IsExists(hierarchy)) {
+        LOG(WARNING, "hierarchy %s not exists", hierarchy.c_str());
+        return -1;
+    }
+    if (!file::Mkdir(hierarchy + "/" + FLAGS_agent_global_cgroup_path)) {
+        LOG(WARNING, "mkdir global cgroup path failed");
+        return -1;
+    }
+    
     if (cgroups::Write(hierarchy,
                        FLAGS_agent_global_cgroup_path,
                        "tcp_throt.send_bps_limit",

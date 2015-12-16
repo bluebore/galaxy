@@ -129,6 +129,7 @@ message PodStatus {
     optional PodStage stage = 8;
     optional string pod_gc_path = 9;
     optional string version = 10;
+    optional int32 priority = 11;
 }
 
 message AgentInfo {

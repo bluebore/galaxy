@@ -96,4 +96,22 @@ kill一个job 很简单
 ```
 ./galaxy kill -j 33b9c1e8-b074-4838-8a88-71437978d286
 ```
+### 抢占调度手动档
+目前galaxy只支持kLongRun对kBatch任务抢占，其他任务需要用户自己输入配置文件
+配置文件preempt.json
+```
+{
+    "pending_pod":{
+        "jobid":"b38cf3b9-9885-4dff-bc43-2dea05decd94",
+        "podid":"1fcf103b-e546-49a7-b5b2-74c215555a42"
+    },
+    "preempted_pods":[
+        {"jobid":"72c42b5c-3360-41ca-9d02-8f022c118e55",
+         "podid":"b64131a5-d430-4670-8726-3bcc58c4b522"}
+    ],
+    "addr":"127.0.0.1:7182"
+}
+```
+./galaxy preempt -f preempt.json
+
 

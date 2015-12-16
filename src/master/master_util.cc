@@ -20,9 +20,9 @@ DECLARE_string(master_port);
 
 namespace baidu {
 namespace galaxy {
-
+static boost::uuids::random_generator gen;
 std::string MasterUtil::UUID() {
-    boost::uuids::uuid uuid = boost::uuids::random_generator()();
+    boost::uuids::uuid uuid = gen();
     return boost::lexical_cast<std::string>(uuid); 
 }
 

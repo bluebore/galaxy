@@ -23,6 +23,122 @@ bool ResourceUtils::GtOrEq(const Resource& left,
     return Compare(left, right) == -1 ? false : true;
 }
 
+bool ResourceUtils::AllocResource(const Resource& require,
+                                 const std::vector<Resource>& alloc,
+                          AgentInfo* agent) {
+    Resource unassigned;
+    Resource used_ports;
+    unassigned.CopyFrom(agent->total());
+    // assign cpu memory
+    bool ok = ResourceUtils::Alloc(agent->assigned(), unassigned);
+    if (!ok) {
+        return false;
+    }
+    ok = ResourceUtils::AllocPort(agent->assigned(), used_ports);
+    if (!ok) {
+        LOG(INFO, "port alloc fails on agent %s", agent->endpoint().c_str());
+        return false;
+    }
+    for (size_t i = 0; i < alloc.size(); i++) {
+        ok = ResourceUtils::Alloc(alloc[i], unassigned);
+        if (!ok) {
+            LOG(INFO, "cpu mem alloc fails on agent %s", agent->endpoint().c_str());
+            return false;
+        }
+        ok = ResourceUtils::AllocPort(alloc[i], used_ports);
+        if (!ok) {
+            LOG(INFO, "port alloc fails on agent %s", agent->endpoint().c_str());
+            return false;
+        }
+    }
+    ok = ResourceUtils::Alloc(require, unassigned);
+    if (!ok) {
+        LOG(WARNING, "cpu mem alloc fails on agent %s :mem_unassigned %ld, cpu_unassigned %d ,mem_require %ld, cpu_require %d",
+                  agent->endpoint().c_str(), unassigned.memory(), unassigned.millicores(),
+                  require.memory(),
+                  require.millicores());
+        return false;
+    }
+    ok = ResourceUtils::AllocPort(require, used_ports);
+    if (!ok) {
+        std::stringstream ss;
+        for (int i = 0; i < require.ports_size(); i++) {
+            if(i == 0) {
+                ss << "require ports:";
+            }
+            ss << require.ports(i) << " ";
+        }
+        for (int i = 0; i < used_ports.ports_size(); i++) {
+            if (i == 0) {
+                ss << " used ports:";
+            }
+            ss << used_ports.ports(i) << " "; 
+        }
+        LOG(WARNING, "port alloc fails on agent %s log %s", 
+                    agent->endpoint().c_str(),
+                    ss.str().c_str());
+        return false;
+    }
+    Resource assigned;
+    assigned.CopyFrom(agent->total());
+    ok = ResourceUtils::Alloc(unassigned, assigned);
+    if (!ok) {
+        return false;
+    }
+    assigned.mutable_ports()->CopyFrom(used_ports.ports());
+    agent->mutable_assigned()->CopyFrom(assigned);
+    return true;
+}
+
+bool ResourceUtils::AllocPort(const Resource& require,
+                              Resource& used) {
+    std::set<int32_t> used_ports;
+    for (int i = 0; i < used.ports_size(); i++) {
+        used_ports.insert(used.ports(i));
+    }
+
+    for (int i = 0; i < require.ports_size(); i++) {
+        if (used_ports.find(require.ports(i)) != used_ports.end()) {
+            LOG(WARNING, "port %d is used", require.ports(i));
+            return false;
+        }
+    }
+
+    for (int i = 0; i < require.ports_size(); i++) {
+        used.add_ports(require.ports(i));
+    }
+    return true;
+}
+
+void ResourceUtils::DeallocResource(const Resource& to_be_free,
+                                    AgentInfo* agent) {
+    if (agent == NULL) {
+        return;
+    }
+    Resource* assigned = agent->mutable_assigned();
+    assigned->set_memory(assigned->memory() - to_be_free.memory());
+    assigned->set_millicores(assigned->millicores() - to_be_free.millicores());
+    DeallocPort(to_be_free, assigned);
+}
+
+void ResourceUtils::DeallocPort(const Resource& to_be_free,
+                                Resource* used) {
+    if (used == NULL) {
+        return ;
+    }
+    std::set<int32_t> used_ports;
+    for (int i = 0; i < used->ports_size(); i++) {
+        used_ports.insert(used->ports(i));
+    }
+    for (int i = 0; i < to_be_free.ports_size(); i++) {
+        used_ports.erase(to_be_free.ports(i));
+    }
+    used->clear_ports();
+    std::set<int32_t>::iterator port_it = used_ports.begin();
+    for (; port_it != used_ports.end(); ++port_it) {
+        used->add_ports(*port_it);
+    }
+}
 
 bool ResourceUtils::Alloc(const Resource& require, 
                           Resource& target) {
