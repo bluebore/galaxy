@@ -3,6 +3,8 @@ import galaxy_pb2
 import ins_sdk
 import uuid
 import time
+
+
 nexus_servers = raw_input("Enter nexus servers:")
 if not nexus_servers:
     print "nexus is required"

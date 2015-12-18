@@ -181,6 +181,7 @@ enum QuotaType {
     kGroupQuota = 1;
 }
 
+
 message Quota {
     optional string qid = 1;
     optional string name = 2;

@@ -233,7 +233,7 @@ else
     export PBRPC_PATH=${DEPS_PREFIX}/
     make -j4 ins && make -j4 install_sdk && make python
     mkdir -p output/bin && cp ins output/bin
-    cp -rf output/python ../../thirdparty/
+    cp -rf output/python/ ../../optools/
     cd -
 fi
 

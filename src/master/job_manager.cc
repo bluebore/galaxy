@@ -544,7 +544,7 @@ void JobManager::ProcessScaleDown(JobInfoList* scale_down_pods,
                 should_rm_from_scale_down.insert(*jobid_it);
             }
             continue;
-        } 
+        }
         int32_t scale_down_count = job->pods_.size() - job->desc_.replica();
         std::vector<PodStatus*> pods_will_been_removed;
         std::map<PodId, PodStatus*>::iterator pod_it = job->pods_.begin();
