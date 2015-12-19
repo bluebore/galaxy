@@ -77,10 +77,13 @@ protected:
     bool HandleInitTaskComCgroup(std::string& subsystem, TaskInfo* task);
     bool HandleInitTaskTcpCgroup(std::string& subsystem, TaskInfo* task);
     int InitTcpthrotEnv();
+    bool KillTask(TaskInfo* task_info);
+    void MemoryCheck(const std::string& task_id);
 protected:
     Mutex tasks_mutex_;
     std::map<std::string, TaskInfo*> tasks_;
     ThreadPool background_thread_;
+    ThreadPool killer_pool_;
     std::string cgroup_root_;
     typedef boost::function<bool (TaskInfo* task)> CgroupFunc;
     std::map<std::string, CgroupFunc> cgroup_funcs_;
