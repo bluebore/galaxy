@@ -77,8 +77,8 @@ DEFINE_int32(agent_task_oom_delay_restart_time, 30000, "agent task oom delay res
 DEFINE_string(agent_default_user, "galaxy", "agent default run task user");
 DEFINE_int32(send_bps_quota, 200000000, "galaxy net send limit");
 DEFINE_int32(recv_bps_quota, 200000000, "galaxy new recv limit");
-
-// gce
+DEFINE_string(agent_oom_killer, "galaxy_oom_killer", "cgroup_oom_killer or galaxy_oom_killer"); 
+DEFINE_int32(agent_memory_check_interval, 200, "the interval of check task memory");
 DEFINE_string(gce_cgroup_root, "/cgroups/", "Cgroup root mount path");
 DEFINE_string(gce_support_subsystems, "", "Cgroup default support subsystems");
 DEFINE_int64(gce_initd_zombie_check_interval, 100, "Initd Zombie Check Interval");
