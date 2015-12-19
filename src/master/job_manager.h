@@ -33,8 +33,12 @@ typedef google::protobuf::RepeatedPtrField<std::string> StringList;
 typedef std::string Version;
 typedef google::protobuf::RepeatedPtrField<baidu::galaxy::PodOverview> PodOverviewList;
 typedef std::map<JobId, std::map<PodId, PodStatus*> > PodMap;
+typedef google::protobuf::RepeatedPtrField<baidu::galaxy::JobIdDiff> JobIdDiffList;
+typedef google::protobuf::RepeatedPtrField<baidu::galaxy::JobEntity> JobEntityList;
 
-struct id_tag{};
+struct id_tag {};
+struct addr_tag {};
+struct pod_id_tag {};
 struct name_tag{};
 
 // the index of job, uid index will be added latter 
@@ -72,6 +76,41 @@ struct Job {
     Version latest_version;
 };
 
+struct PreemptTask {
+    std::string id_;
+    std::string pod_id_;
+    PreemptEntity pending_pod_;
+    std::vector<PreemptEntity> preempted_pods_;
+    std::string addr_;
+    Resource resource_;
+    bool running_;
+
+};
+
+
+typedef boost::multi_index_container<
+     PreemptTask,
+     boost::multi_index::indexed_by<
+          boost::multi_index::hashed_unique<
+             boost::multi_index::tag<id_tag>,
+             BOOST_MULTI_INDEX_MEMBER(PreemptTask, std::string, id_)
+         >,
+         boost::multi_index::hashed_unique<
+             boost::multi_index::tag<pod_id_tag>,
+             BOOST_MULTI_INDEX_MEMBER(PreemptTask, std::string, pod_id_)
+         >,
+         boost::multi_index::ordered_non_unique<
+             boost::multi_index::tag<addr_tag>,
+             BOOST_MULTI_INDEX_MEMBER(PreemptTask, std::string, addr_)
+        >
+    >
+> PreemptTaskSet;
+
+typedef boost::multi_index::index<PreemptTaskSet, id_tag>::type PreemptTaskIdIndex;
+typedef boost::multi_index::index<PreemptTaskSet, pod_id_tag>::type PreemptTaskPodIdIndex;
+typedef boost::multi_index::index<PreemptTaskSet, addr_tag>::type PreemptTaskAddrIndex;
+
+
 class JobManager {
 public:
     Status Add(const JobId& job_id, const JobDescriptor& job_desc);
@@ -95,6 +134,9 @@ public:
                               AgentInfoList* agents_info,
                               StringList* deleted_agents,
                               ::google::protobuf::Closure* done);
+    void GetJobDescByDiff(const JobIdDiffList& jobids,
+                         JobEntityList* jobs,
+                         StringList* deleted_jobs);
     void GetJobsOverview(JobOverviewList* jobs_overview);
     Status GetJobInfo(const JobId& jobid, JobInfo* job_info);
     void KeepAlive(const std::string& agent_addr);
@@ -105,12 +147,14 @@ public:
     bool GetJobIdByName(const std::string& job_name, std::string* jobid);
     Status GetPods(const std::string& jobid, PodOverviewList* pods);
     Status GetStatus(::baidu::galaxy::GetMasterStatusResponse* response);
+    bool Preempt(const PreemptEntity& pending_pod,
+                 const std::vector<PreemptEntity>& preempted_pods,
+                 const std::string& addr);
 private:
     void SuspendPod(PodStatus* pod);
     void ResumePod(PodStatus* pod);
-    Status AcquireResource(const PodStatus& pod, AgentInfo* agent);
-    void ReclaimResource(const PodStatus& pod, AgentInfo* agent);
-    void GetPodRequirement(const PodStatus& pod, Resource* requirement);
+    Status AcquireResource(const PodStatus* pod, AgentInfo* agent);
+    void GetPodRequirement(const PodStatus* pod, Resource* requirement);
     void CalculatePodRequirement(const PodDescriptor& pod_desc, Resource* pod_requirement);
     void HandleAgentOffline(const std::string agent_addr);
     void ReschedulePod(PodStatus* pod_status);
@@ -178,6 +222,7 @@ private:
                         PodStatus* pod);
     void TraceJobStat(const std::string& jobid);
     void TraceClusterStat();
+    void ProcessPreemptTask(const std::string& task_id);
 private:
     std::map<JobId, Job*> jobs_;
     JobSet* job_index_;
@@ -193,6 +238,7 @@ private:
     ThreadPool death_checker_;
     ThreadPool thread_pool_;
     ThreadPool trace_pool_;
+    ThreadPool preempt_pool_;
     Mutex mutex_;   
     Mutex mutex_timer_;
     RpcClient rpc_client_;
@@ -201,6 +247,7 @@ private:
     enum SafeModeStatus {kSafeModeOff, kSafeModeManual, kSafeModeAutomatic};
     SafeModeStatus safe_mode_;
 
+    PreemptTaskSet* preempt_task_set_;
     // for label on agent 
     typedef std::string LabelName;
     typedef std::set<std::string> AgentSet;

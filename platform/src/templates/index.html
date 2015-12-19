@@ -11,9 +11,11 @@
         </div>
         <div id="navbar" class="navbar-collapse collapse">
           <ul class="nav navbar-nav">
-              <li><a href="{{root_url}}trace/cluster">Cluster</a></li>
-              <li class="active"><a href="{{root_url}}trace/job">Jobs</a></li>
-              <li><a href="{{root_url}}trace/sql">Trace</a></li>
+
+              <li><a href="{{root_url}}dc">DataCenter</a></li>
+              <li><a href="{{root_url}}trace/cluster?master={{master}}&dc={{dc}}&trace={{trace}}">Cluster</a></li>
+              <li class="active"><a href="{{root_url}}trace/job?master={{master}}&dc={{dc}}&trace={{trace}}">Jobs</a></li>
+              <li><a href="{{root_url}}trace/sql?master={{master}}&dc={{dc}}&trace={{trace}}">Trace</a></li>
          </ul>
        </div><!--/.nav-collapse -->
       </div>
@@ -37,7 +39,7 @@
         {% for job in jobs%}
            <tr>
                <td>{{forloop.counter}}</td>
-               <td><a href="{{root_url}}trace/job/detail?jobid={{job.jobid}}">{{job.jobid}}</a></td>
+               <td><a href="{{root_url}}trace/job/detail?master={{master}}&dc={{dc}}&trace={{trace}}&jobid={{job.jobid}}">{{job.jobid}}</a></td>
                <td>{{job.desc.name}}</td>
                <td>{{job.state}}</td>
                <td>{{job.running_num}}/{{job.pending_num}}/{{job.deploying_num}}</td>
@@ -58,8 +60,7 @@ Number.prototype.padLeft = function(base,chr){
    var  len = (String(base || 10).length - String(this).length)+1;
    return len > 0? new Array(len).join(chr || '0')+this : this;
 }
-var ROOT_URL="{{root_url}}";
-var MEDIA_URL="{{media_url}}";
+
 $(function(){
     var today = new Date();
     var last = new Date(today.getTime() - (3 * 24 * 60 * 60 * 1000));
@@ -67,7 +68,7 @@ $(function(){
     var end_time = today * 1000;
     $("#query_btn").bind("click",function(e){
         var sql = encodeURIComponent($("#sql_content").val());
-        $.getJSON(ROOT_URL+"trace/squery?db=baidu.galaxy&sql="+sql, function(data){
+        $.getJSON(ROOT_URL+"trace/squery?dc={{dc}}&master={{master}}&trace={{trace}}&db=baidu.galaxy&sql="+sql, function(data){
            var tables = Mustache.render(data.data.tpl,{datas:data.data.datas});
            $("#datas").html(tables);
         });

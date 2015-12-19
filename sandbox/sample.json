@@ -2,7 +2,7 @@
     "name":"sample",
     "replica":2,
     "type":"kLongRun",
-    "priority":"kOnline",
+    "priority":50,
     "deploy_step":3,
     "pod":{
         "version":"2.0.0",
@@ -13,8 +13,8 @@
         },
         "tasks":[
                  {
-                     "binary":"longrun.tar.gz",
-                     "source_type":"kSourceTypeBinary",
+                     "binary":"http://127.0.0.1:8181/longrun.tar.gz",
+                     "source_type":"kSourceTypeFTP",
                      "start_command":"sh longrun.sh",
                      "requirement":{
                          "millicores":500,

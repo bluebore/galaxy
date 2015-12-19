@@ -108,6 +108,17 @@ void MasterImpl::ReloadJobInfo() {
     LOG(INFO, "reload all job desc finish, total#: %d", job_amount);
 }
 
+void MasterImpl::GetJobDescriptor(::google::protobuf::RpcController* controller,
+                                    const ::baidu::galaxy::GetJobDescriptorRequest* request,
+                                    ::baidu::galaxy::GetJobDescriptorResponse* response,
+                                    ::google::protobuf::Closure* done) {
+    job_manager_.GetJobDescByDiff(request->jobs(),
+                                  response->mutable_jobs(),
+                                  response->mutable_deleted_jobs());
+    response->set_status(kOk);
+    done->Run();
+}
+
 void MasterImpl::AcquireMasterLock() {
     std::string master_lock = FLAGS_nexus_root_path + FLAGS_master_lock_path;
     ::galaxy::ins::sdk::SDKError err;
@@ -323,6 +334,24 @@ void MasterImpl::GetStatus(::google::protobuf::RpcController*,
                            ::google::protobuf::Closure* done) {
     Status ok = job_manager_.GetStatus(response);
     response->set_status(ok);
+    done->Run();
+}
+void MasterImpl::Preempt(::google::protobuf::RpcController* controller,
+                           const ::baidu::galaxy::PreemptRequest* request,
+                           ::baidu::galaxy::PreemptResponse* response,
+                           ::google::protobuf::Closure* done) {
+    std::vector<PreemptEntity> preempted_pods;
+    for (int i = 0; i < request->preempted_pods_size(); i++) {
+        preempted_pods.push_back(request->preempted_pods(i));
+    }
+    bool ok = job_manager_.Preempt(request->pending_pod(),
+                                   preempted_pods,
+                                   request->addr());
+    if (ok) {
+        response->set_status(kOk);
+    }else {
+        response->set_status(kInputError);
+    }
     done->Run();
 }
 

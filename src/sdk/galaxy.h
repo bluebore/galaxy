@@ -47,7 +47,7 @@ struct PodDescription {
 struct JobDescription {
     std::string job_name;
     std::string type;
-    std::string priority;
+    int32_t priority;
     int32_t replica;
     int32_t deploy_step;
     std::string label;
@@ -131,6 +131,12 @@ struct MasterStatus {
     need_update_job_count(0){}
 };
 
+struct PreemptPropose {
+    std::pair<std::string, std::string> pending_pod;
+    std::vector<std::pair<std::string, std::string> > preempted_pods;
+    std::string addr;
+};
+
 class Galaxy {
 public:
     // args:
@@ -156,6 +162,7 @@ public:
                                std::vector<PodInformation>* pods) = 0;
     virtual bool GetStatus(MasterStatus* status) = 0;
     virtual bool SwitchSafeMode(bool mode) = 0;
+    virtual bool Preempt(const PreemptPropose& propose) = 0;
     virtual bool GetMasterAddr(std::string* master_addr) = 0;
 };
 

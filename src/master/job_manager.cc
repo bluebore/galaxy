@@ -30,7 +30,7 @@ DECLARE_string(data_center);
 DECLARE_int32(master_pending_job_wait_timeout);
 DECLARE_int32(master_job_trace_interval);
 DECLARE_int32(master_cluster_trace_interval);
-
+DECLARE_int32(master_preempt_interval);
 namespace baidu {
 namespace galaxy {
 JobManager::JobManager()
@@ -44,6 +44,7 @@ JobManager::JobManager()
     state_to_stage_[kPodError] = kStageDeath;
     BuildPodFsm();
     nexus_ = new ::galaxy::ins::sdk::InsSDK(FLAGS_nexus_servers);
+    preempt_task_set_ = new PreemptTaskSet();
     job_index_ = new JobSet();
     bool safe_mode_manual = false;
     if (!CheckSafeModeManual(safe_mode_manual)) {
@@ -333,6 +334,8 @@ Status JobManager::Terminte(const JobId& jobid) {
     if (it == jobs_.end()) {
         return kJobNotFound;
     }
+    scale_up_jobs_.erase(it->second->id_);
+    need_update_jobs_.erase(it->second->id_);
     it->second->desc_.set_replica(0);
     scale_down_jobs_.insert(it->second->id_);
     it->second->state_ = kJobTerminated;
@@ -543,17 +546,12 @@ void JobManager::ProcessScaleDown(JobInfoList* scale_down_pods,
             continue;
         } 
         int32_t scale_down_count = job->pods_.size() - job->desc_.replica();
-        std::set<JobId>::iterator su_jobid_it  = scale_up_jobs_.find(*jobid_it);
-        // scale down pods with pending stage 
         std::vector<PodStatus*> pods_will_been_removed;
-        if (su_jobid_it != scale_up_jobs_.end()) {
-            std::map<PodId, PodStatus*>::iterator pod_it = job->pods_.begin();
-            for (; pod_it != job->pods_.end() && scale_down_count > 0;
+        std::map<PodId, PodStatus*>::iterator pod_it = job->pods_.begin();
+        for (; pod_it != job->pods_.end() && scale_down_count > 0;
               ++pod_it) {
-                if (pod_it->second->stage() != kStagePending &&
-                        pod_it->second->stage() != kStageFinished) {
-                    continue;
-                }
+            if (pod_it->second->stage() == kStagePending ||
+                pod_it->second->stage() == kStageFinished) {
                 --scale_down_count;
                 pods_will_been_removed.push_back(pod_it->second);
             }
@@ -701,7 +699,7 @@ Status JobManager::Propose(const ScheduleInfo& sche_info) {
             return kInputError;
 
         }
-        Status feasible_status = AcquireResource(*pod, agent);
+        Status feasible_status = AcquireResource(pod, agent);
         if (feasible_status != kOk) {
             LOG(INFO, "propose fail, no resource, error code:[%d]", feasible_status);
             return feasible_status;
@@ -725,44 +723,48 @@ Status JobManager::Propose(const ScheduleInfo& sche_info) {
     return kInputError;
 }
 
-Status JobManager::AcquireResource(const PodStatus& pod, AgentInfo* agent) {
+Status JobManager::AcquireResource(const PodStatus* pod, AgentInfo* agent) {
     mutex_.AssertHeld();
     Resource pod_requirement;
     GetPodRequirement(pod, &pod_requirement);
-    // calc agent unassigned resource 
-    Resource unassigned;
-    unassigned.CopyFrom(agent->total());
-    bool ret = ResourceUtils::Alloc(agent->assigned(), unassigned);
-    if (!ret) {
-        return kQuota;
+    const PreemptTaskAddrIndex& addr_index = preempt_task_set_->get<addr_tag>();
+    PreemptTaskAddrIndex::const_iterator addr_it = addr_index.find(agent->endpoint());
+    std::vector<Resource> alloc_set;
+    for (; addr_it != addr_index.end(); ++addr_it) {
+        if (addr_it->pod_id_ == pod->podid()) {
+            continue;
+        }
+        alloc_set.push_back(addr_it->resource_);
     }
 
-    ret = ResourceUtils::Alloc(pod_requirement, unassigned);
-    if (!ret) {
+    // calc agent unassigned resource 
+    bool ok = ResourceUtils::AllocResource(pod_requirement, alloc_set, agent);
+    if (!ok) {
         return kQuota;
     }
-    
-    Resource assigned;
-    assigned.CopyFrom(agent->total());
-    ret = ResourceUtils::Alloc(unassigned, assigned);
-    if (!ret) {
-        return kQuota;
-    }
-    agent->mutable_assigned()->CopyFrom(assigned);
     return kOk;
 }
 
 
-void JobManager::ReclaimResource(const PodStatus& pod, AgentInfo* agent) {
+void JobManager::GetPodRequirement(const PodStatus* pod, Resource* requirement) {
     mutex_.AssertHeld();
-    Resource pod_requirement;
-    GetPodRequirement(pod, &pod_requirement);
-    MasterUtil::SubstractResource(pod_requirement, agent->mutable_assigned());
-}
-
-void JobManager::GetPodRequirement(const PodStatus& pod, Resource* requirement) {
-    Job* job = jobs_[pod.jobid()];
-    const PodDescriptor& pod_desc = job->desc_.pod();
+    if (requirement == NULL) {
+        LOG(WARNING, "requirement is NULL");
+        return;
+    }
+    std::map<JobId, Job*>::iterator job_it = jobs_.find(pod->jobid());
+    if (job_it == jobs_.end()) {
+        LOG(WARNING, "job %s does not exist in master");
+        return;
+    }
+    Job* job = job_it->second;
+    std::map<Version, PodDescriptor>::iterator pod_it = job->pod_desc_.find(pod->version());
+    if (pod_it == job->pod_desc_.end()) {
+        LOG(WARNING, "pod %s of job %s has no desc with version %s", 
+                pod->podid().c_str(), pod->jobid().c_str(), pod->version().c_str());
+        return;
+    }
+    const PodDescriptor& pod_desc = pod_it->second;
     requirement->CopyFrom(pod_desc.requirement());
 }
 
@@ -1135,6 +1137,9 @@ void JobManager::UpdateAgent(const AgentInfo& agent,
             }
             agent_in_master->set_version(old_version + 1);
             break;
+        }
+        if (agent_in_master->pods_size() != agent.pods_size()) {
+            agent_in_master->set_version(old_version + 1);
         }
     } while(0);
     agent_in_master->mutable_total()->CopyFrom(agent.total()); 
@@ -1749,6 +1754,238 @@ void JobManager::TraceJobStat(const std::string& jobid) {
     Trace::TraceJobStat(it->second);
     trace_pool_.DelayTask(FLAGS_master_job_trace_interval, 
                boost::bind(&JobManager::TraceJobStat, this, jobid));
+}
+
+void JobManager::ProcessPreemptTask(const std::string& task_id){
+    MutexLock lock(&mutex_);
+    const PreemptTaskIdIndex& id_index = preempt_task_set_->get<id_tag>();
+    PreemptTaskIdIndex::const_iterator id_index_it = id_index.find(task_id);
+    if (id_index_it == id_index.end()) {
+        LOG(INFO, "preempt task %s has been gone", task_id.c_str());
+        return;
+    }
+    PreemptEntity pending_pod = id_index_it->pending_pod_;
+    std::string addr = id_index_it->addr_;
+    std::map<JobId, Job*>::iterator job_it = jobs_.find(pending_pod.jobid());
+    if (job_it ==  jobs_.end()) {
+        LOG(WARNING, "job %s does not exist in master", pending_pod.jobid().c_str());
+        preempt_task_set_->erase(id_index_it);
+        return;
+    }
+    Job* job = job_it->second;
+    std::map<PodId, PodStatus*>::iterator pod_it = job->pods_.find(pending_pod.podid());
+    if (pod_it == job->pods_.end()) {
+        LOG(WARNING, "pod %s does not exist in job %s", pending_pod.podid().c_str(), 
+                pending_pod.jobid().c_str());
+        preempt_task_set_->erase(id_index_it);
+        return;
+    }
+    PodStatus* pod = pod_it->second;
+    if (pod->stage() != kStagePending) {
+        LOG(WARNING, "pod %s does not being kStagePending", pending_pod.podid().c_str());
+        preempt_task_set_->erase(id_index_it);
+        return;
+    }
+
+    std::map<AgentAddr, AgentInfo*>::iterator agent_it = agents_.find(addr);
+    if (agent_it == agents_.end()) {
+        LOG(WARNING, "agent %s does not exist in master", addr.c_str());
+        preempt_task_set_->erase(id_index_it);
+        return;
+    }
+    AgentInfo* agent = agent_it->second;
+    if (agent->state() == kDead) {
+        LOG(WARNING, "agent %s is dead remove preempt task", addr.c_str());
+        preempt_task_set_->erase(id_index_it);
+        return;
+    }
+    // check resource 
+    if (!id_index_it->running_) {
+        PreemptTask task = *id_index_it;
+        task.running_ = true;
+        preempt_task_set_->replace(id_index_it, task);
+        std::map<AgentAddr, PodMap>::iterator agent_pod_it = pods_on_agent_.find(addr.c_str());
+        if (agent_pod_it ==  pods_on_agent_.end()) {
+            LOG(WARNING, "agent %s has no pods", addr.c_str());
+            preempt_task_set_->erase(id_index_it);
+            return;
+        }
+        std::vector<std::pair<Job*, PodStatus*> > to_be_preempted_pods;
+        PodMap& pod_map = agent_pod_it->second;
+        for (size_t i = 0; i < id_index_it->preempted_pods_.size(); i++) {
+            const PreemptEntity& preempted_pod = id_index_it->preempted_pods_[i];
+            job_it = jobs_.find(preempted_pod.jobid());
+            if (job_it == jobs_.end()) {
+                LOG(WARNING, "job %s does not exist in master for preempt", 
+                        preempted_pod.jobid().c_str());
+                preempt_task_set_->erase(id_index_it);
+                return;
+            }
+            PodMap::iterator job_pod_it = pod_map.find(preempted_pod.jobid());
+            if (job_pod_it == pod_map.end()) {
+                LOG(WARNING, "job %s does not exist on agent %s for preempt", 
+                        preempted_pod.jobid().c_str(),
+                        addr.c_str());
+                preempt_task_set_->erase(id_index_it);
+                return;
+            }
+            pod_it = job_pod_it->second.find(preempted_pod.podid());
+            if (pod_it == job_pod_it->second.end()) {
+                LOG(WARNING, "pod %s does not exist on agent %s for preempt",
+                    preempted_pod.podid().c_str(),
+                    addr.c_str());
+                preempt_task_set_->erase(id_index_it);
+                return;
+            }
+            to_be_preempted_pods.push_back(std::make_pair(job_it->second, pod_it->second));
+        } 
+        std::vector<std::pair<Job*, PodStatus*> >::iterator preempt_it = to_be_preempted_pods.begin();
+        for (; preempt_it !=  to_be_preempted_pods.end(); ++preempt_it) { 
+            ChangeStage("kill for preempting", kStageDeath, preempt_it->second, preempt_it->first);
+        }
+        preempt_pool_.DelayTask(FLAGS_master_preempt_interval,
+                    boost::bind(&JobManager::ProcessPreemptTask, this, task_id));
+    } else {
+        Status status = AcquireResource(pod, agent);
+        if (status == kOk) {
+            LOG(INFO, "preempt for pod %s successfully ", pod->podid().c_str());
+            agent->set_version(agent->version() + 1);
+            pod->set_endpoint(agent->endpoint());
+            ChangeStage("preempt pod",kStageRunning, pod, job);
+            preempt_task_set_->erase(id_index_it);
+        } else {
+            LOG(INFO, "wait to agent %s relase source to deploy pod  %s of job %s preempt",
+                    agent->endpoint().c_str(), pod->podid().c_str(),
+                    pod->jobid().c_str());
+            preempt_pool_.DelayTask(FLAGS_master_preempt_interval,
+                    boost::bind(&JobManager::ProcessPreemptTask, this, task_id));
+        }
+    }
+}
+
+bool JobManager::Preempt(const PreemptEntity& pending_pod,
+                 const std::vector<PreemptEntity>& preempted_pods,
+                 const std::string& addr) {
+    MutexLock lock(&mutex_);
+    LOG(INFO, "make a preempt");
+    const PreemptTaskPodIdIndex& pod_id_index = preempt_task_set_->get<pod_id_tag>();
+    std::string log = "";
+    if (pod_id_index.find(pending_pod.podid()) != pod_id_index.end()) {
+        LOG(WARNING, "pod %s of job %s has beng preempt task queue ",
+                pending_pod.podid().c_str(),
+                pending_pod.jobid().c_str());
+        return false;
+    }
+    std::map<JobId, Job*>::iterator job_it = jobs_.find(pending_pod.jobid());
+    if (job_it ==  jobs_.end()) {
+        LOG(WARNING, "job %s does not exist in master", pending_pod.jobid().c_str());
+        return false;
+    }
+    Job* job = job_it->second;
+    std::map<PodId, PodStatus*>::iterator pod_it = job->pods_.find(pending_pod.podid());
+    if (pod_it == job->pods_.end()) {
+        LOG(WARNING, "pod %s does not exist in job %s", pending_pod.podid().c_str(), 
+                pending_pod.jobid().c_str());
+        return false;
+    }
+    PodStatus* pod = pod_it->second;
+    if (pod->stage() != kStagePending) {
+        LOG(WARNING, "pod %s does not being kStagePending", pending_pod.podid().c_str());
+        return false;
+    }
+    std::map<AgentAddr, AgentInfo*>::iterator agent_it = agents_.find(addr);
+    if (agent_it == agents_.end()) {
+        LOG(WARNING, "agent %s does not exist in master", addr.c_str());
+        return false;
+    }
+    AgentInfo* agent = agent_it->second;
+    if (agent->state() == kDead) {
+        LOG(WARNING, "agent %s is dead", addr.c_str());
+        return false;
+    }
+    std::map<AgentAddr, PodMap>::iterator agent_pod_it = pods_on_agent_.find(addr.c_str());
+    if (agent_pod_it ==  pods_on_agent_.end()) {
+        LOG(WARNING, "agent %s has no pods", addr.c_str());
+        return false;
+    }
+    AgentInfo copied_agent = *agent;
+    PodMap& pod_map = agent_pod_it->second;
+    Resource pod_requirement;
+    for (size_t i = 0; i < preempted_pods.size(); i++) {
+        const PreemptEntity& preempted_pod = preempted_pods[i];
+        PodMap::iterator job_pod_it = pod_map.find(preempted_pod.jobid());
+        if (job_pod_it == pod_map.end()) {
+            LOG(WARNING, "job %s does not exist on agent %s", 
+                    preempted_pod.jobid().c_str(),
+                    addr.c_str());
+            return false;
+        }
+        pod_it = job_pod_it->second.find(preempted_pod.podid());
+        if (pod_it == job_pod_it->second.end()) {
+            LOG(WARNING, "pod %s does not exist on agent %s",
+                    preempted_pod.podid().c_str(),
+                    addr.c_str());
+            return false;
+        }
+        log += "pod " + preempted_pod.podid() + " of job " + preempted_pod.jobid()+ ",";
+        GetPodRequirement(pod_it->second, &pod_requirement);
+        ResourceUtils::DeallocResource(pod_requirement, &copied_agent);
+    }
+    log += " will be preempted by pod "+ pod->podid() + " of job " + pod->jobid(); 
+    GetPodRequirement(pod, &pod_requirement);
+    Status ok = AcquireResource(pod, &copied_agent);
+    if (ok != kOk) {
+        LOG(WARNING, "fail to alloc resource for pod %s with preempting", pending_pod.podid().c_str());
+        return false;
+    }
+    LOG(INFO,"%s", log.c_str());
+    PreemptTask task;
+    task.id_ = MasterUtil::UUID();
+    task.pod_id_ = pending_pod.podid();
+    task.pending_pod_ = pending_pod;
+    task.preempted_pods_ = preempted_pods;
+    task.addr_ = addr;
+    task.running_ = false;
+    task.resource_.CopyFrom(pod_requirement);
+    preempt_task_set_->insert(task);
+    preempt_pool_.AddTask(boost::bind(&JobManager::ProcessPreemptTask, this, task.id_));
+    return true;
+}
+
+void JobManager::GetJobDescByDiff(const JobIdDiffList& jobids,
+                                  JobEntityList* jobs,
+                                  StringList* deleted_jobs) {
+    MutexLock lock(&mutex_);
+    if (safe_mode_ != kSafeModeOff) { 
+        return;
+    }
+    std::map<std::string, std::string> jobid_version;
+    for (int i = 0; i < jobids.size(); i++) {
+        jobid_version.insert(std::make_pair(jobids.Get(i).jobid(), jobids.Get(i).version()));
+    }
+    std::map<JobId, Job*>::iterator job_it = jobs_.begin();
+    for (; job_it !=  jobs_.end(); ++ job_it) {
+        Job* job = job_it->second;
+        if (job->state_ == kJobTerminated) {
+            LOG(INFO, "delete job %s in scheduler", job->id_.c_str());
+            deleted_jobs->Add()->assign(job->id_);
+            continue;
+        }
+        std::map<Version, PodDescriptor>::iterator pod_it = job->pod_desc_.find(job->latest_version);
+        if (pod_it == job->pod_desc_.end()) {
+            LOG(WARNING, "job %s has no pod desc with version %s", job->id_.c_str(), job->latest_version.c_str());
+            continue;
+        }
+        std::map<std::string, std::string>::iterator jobid_it = jobid_version.find(job->id_);
+        if (jobid_it == jobid_version.end() 
+            || jobid_it->second != job->latest_version) {
+            LOG(INFO, "sync job %s description", job->id_.c_str());
+            JobEntity* job_entity = jobs->Add();
+            job_entity->mutable_desc()->CopyFrom(job->desc_);
+            job_entity->set_jobid(job->id_);
+            job_entity->mutable_desc()->mutable_pod()->CopyFrom(pod_it->second);
+        }
+    }
 }
 
 }

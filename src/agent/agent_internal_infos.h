@@ -43,6 +43,7 @@ struct TaskInfo {
     std::string gc_dir;
     Initd_Stub* initd_stub;
     CGroupResourceCollector* resource_collector; 
+    bool delay_restarted;
     std::string ToString() {
         std::string pb_str;
         std::string str_format;     
@@ -102,7 +103,8 @@ struct TaskInfo {
           stop_timeout_point(0),
           initd_check_failed(0),
           initd_stub(NULL),
-          resource_collector(NULL) {
+          resource_collector(NULL),
+          delay_restarted(false){
     }
 
     void CopyFrom(const TaskInfo& task) {

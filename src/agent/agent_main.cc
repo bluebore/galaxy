@@ -12,7 +12,7 @@
 
 #include "gflags/gflags.h"
 #include "sofa/pbrpc/pbrpc.h"
-
+#include "utils/http_server.h"
 #include "agent/agent_impl.h"
 #include "utils/build_info.h"
 #include "logging.h"
@@ -21,7 +21,10 @@ volatile static bool s_is_stop = false;
 
 DECLARE_bool(v);
 DECLARE_string(agent_port);
-
+DECLARE_int32(agent_http_port);
+DECLARE_string(agent_work_dir);
+DECLARE_string(agent_gc_dir);
+DECLARE_string(agent_coredump_dir);
 void StopSigHandler(int /*sig*/) {
     s_is_stop = true;
 }
@@ -70,7 +73,13 @@ int main (int argc, char* argv[]) {
         LOG(WARNING, "Rpc Server Start failed");
         return EXIT_FAILURE;
     }
-
+    std::vector<std::pair<std::string, std::string> > router;
+    router.push_back(std::make_pair("/gc", FLAGS_agent_gc_dir));
+    router.push_back(std::make_pair("/container", FLAGS_agent_work_dir));
+    router.push_back(std::make_pair("/coredump", FLAGS_agent_coredump_dir));
+    ::baidu::galaxy::HttpFileServer http_server(router, FLAGS_agent_http_port);
+    http_server.Start(10);
+    LOG(INFO, "start http server on %d", FLAGS_agent_http_port);
     signal(SIGINT, StopSigHandler);
     signal(SIGTERM, StopSigHandler);
     signal(SIGCHLD, SigChldHandler);

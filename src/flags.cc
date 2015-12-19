@@ -21,6 +21,7 @@ DEFINE_int32(master_agent_rpc_timeout, 10, "Agent RPC timeout (seconds)");
 DEFINE_int32(master_query_period, 30000, "Query period");
 DEFINE_int32(master_job_trace_interval, 60000, "the period of trace job state");
 DEFINE_int32(master_cluster_trace_interval, 60000, "the period of trace job state");
+DEFINE_int32(master_preempt_interval, 2000, "the period of preempt");
 DEFINE_string(master_lock_path, "/master_lock", "master lock name on nexus");
 DEFINE_string(master_path, "/master", "master path on nexus");
 DEFINE_string(safemode_store_path, "/safemode", "master safemode path on nexus");
@@ -36,6 +37,8 @@ DEFINE_int32(scheduler_get_pending_job_timeout, 2000, "the timeout that schedule
 DEFINE_int32(scheduler_get_pending_job_period, 2000, "the period that scheduler get pending job from master");
 DEFINE_int32(scheduler_sync_resource_timeout, 1000, "the timeout that scheduler sync resource from master");
 DEFINE_int32(scheduler_sync_resource_period, 2000, "the period that scheduler sync resource from master");
+DEFINE_int32(scheduler_sync_job_period, 2000, "the period that scheduler sync job from master");
+DEFINE_int32(scheduler_sync_job_timeout, 2000, "the time that scheduler sync job from master");
 DEFINE_int32(scheduler_feasibility_factor, 2, "the feasibility factor which schedulder use to calc agent for pending job");
 
 DEFINE_double(scheduler_cpu_used_factor, 10.0, "the cpu used factor for calc agent load score");
@@ -46,6 +49,7 @@ DEFINE_int32(scheduler_agent_overload_turns_threashold, 3, "agent overload times
 
 // agent
 DEFINE_string(agent_port, "8080", "agent listen port");
+DEFINE_int32(agent_http_port, 8222, "agent http server port");
 DEFINE_int32(agent_background_threads_num, 2, "agent background threads");
 DEFINE_int32(agent_heartbeat_interval, 1000, "agent haertbeat interval ms");
 DEFINE_string(agent_ip, "127.0.0.1", "agent host ip");
@@ -54,6 +58,7 @@ DEFINE_int64(agent_mem_share, 68719476736, "agent memory");
 DEFINE_string(agent_initd_bin, "./initd", "initd bin path");
 DEFINE_string(agent_work_dir, "./work_dir", "the work dir for storaging job package and runtime dir");
 DEFINE_string(agent_gc_dir, "./gc_dir", "the gc dir for pod env");
+DEFINE_string(agent_coredump_dir, "./core_dir", "the core dump dir for pod env");
 DEFINE_int64(agent_gc_timeout, 1000 * 60 * 60 * 5, "gc timeout");
 DEFINE_bool(agent_namespace_isolation_switch, false, "agent namespace isolate");
 
@@ -68,6 +73,7 @@ DEFINE_string(agent_global_hardlimit_path, "galaxy", "agent cpu hard limit root"
 DEFINE_string(agent_global_softlimit_path, "softlimit", "agent cpu soft limit root");
 DEFINE_string(agent_global_cgroup_path, "galaxy", "agent cgroup global path");
 DEFINE_int32(agent_detect_interval, 1000, "agent detect process running interval");
+DEFINE_int32(agent_task_oom_delay_restart_time, 30000, "agent task oom delay restart time");
 DEFINE_string(agent_default_user, "galaxy", "agent default run task user");
 DEFINE_int32(send_bps_quota, 200000000, "galaxy net send limit");
 DEFINE_int32(recv_bps_quota, 200000000, "galaxy new recv limit");

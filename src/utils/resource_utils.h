@@ -29,7 +29,15 @@ public:
     // alloc require resource from target 
     static bool Alloc(const Resource& require, 
                       Resource& target);
-
+    static bool AllocPort(const Resource& require,
+                     Resource& used);
+    static void DeallocPort(const Resource& to_be_free,
+                            Resource* used);
+    static bool AllocResource(const Resource& require,
+                              const std::vector<Resource>& alloc,
+                              AgentInfo* agent);
+    static void DeallocResource(const Resource& to_be_free,
+                               AgentInfo* agent);
 
     // compare two resource object
     // the check options include cpu , mem ,disks , ssds

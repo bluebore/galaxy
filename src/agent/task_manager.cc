@@ -38,6 +38,7 @@ DECLARE_string(agent_oom_killer);
 DECLARE_int32(agent_detect_interval);
 DECLARE_int32(agent_memory_check_interval);
 DECLARE_int32(agent_millicores_share);
+DECLARE_int32(agent_task_oom_delay_restart_time);
 DECLARE_int64(agent_mem_share);
 DECLARE_string(agent_default_user);
 DECLARE_bool(agent_namespace_isolation_switch);
@@ -110,6 +111,7 @@ int TaskManager::Init() {
             LOG(WARNING, "mkdir global cgroup path failed"); 
             return -1;
         }
+
         LOG(INFO, "support cgroups hierarchy %s", hierarchy.c_str());
         hierarchies_[sub_systems[i]] = hierarchy;
     }
@@ -873,6 +875,7 @@ void TaskManager::DelayCheckTaskStageChange(const std::string& task_id) {
         return; 
     }
     TaskInfo* task_info = it->second;
+    int32_t task_delay_check_time = FLAGS_agent_detect_interval;
     // switch task stage
     if (task_info->stage == kTaskStagePENDING 
             && task_info->status.state() != kTaskError) {
@@ -912,11 +915,24 @@ void TaskManager::DelayCheckTaskStageChange(const std::string& task_id) {
     } else if (task_info->stage == kTaskStageRUNNING
             && task_info->status.state() != kTaskError) {
         int chk_res = RunProcessCheck(task_info);
-        if (chk_res == -1 && 
+        // make a delay to restart task for oom
+        if (chk_res == -1 
+            && task_info->main_process.status() == kProcessKilled
+            && !task_info->delay_restarted) {
+            // avoid task migration
+            task_info->main_process.set_status(kProcessRunning);
+            task_info->status.set_state(kTaskRunning);
+            task_info->delay_restarted = true;
+            task_delay_check_time = FLAGS_agent_task_oom_delay_restart_time;
+            LOG(WARNING, "task %s of pod %s  in job %s delay restart for oom",
+                    task_info->task_id.c_str(), task_info->pod_id.c_str(), task_info->job_id.c_str());
+
+        } else if (chk_res == -1 && 
                 task_info->fail_retry_times 
-                    < task_info->max_retry_times) {
+                < task_info->max_retry_times) {
             task_info->fail_retry_times++;
-            RunTask(task_info);         
+            RunTask(task_info);
+            task_info->delay_restarted = false;
         }
     } else if (task_info->stage == kTaskStageSTOPPING) {
         int chk_res = TerminateProcessCheck(task_info);
@@ -942,11 +958,10 @@ void TaskManager::DelayCheckTaskStageChange(const std::string& task_id) {
                 TaskState_Name(task_info->status.state()).c_str());
     }
     background_thread_.DelayTask(
-                    FLAGS_agent_detect_interval, 
+                    task_delay_check_time, 
                     boost::bind(
                         &TaskManager::DelayCheckTaskStageChange,
                         this, task_id));
-    return; 
 }
 
 bool TaskManager::HandleInitTaskComCgroup(std::string& subsystem, TaskInfo* task) {
@@ -1271,6 +1286,15 @@ void TaskManager::MemoryCheck(const std::string& task_id) {
 
 int TaskManager::InitTcpthrotEnv() {
     std::string hierarchy = FLAGS_gce_cgroup_root + "/tcp_throt";
+    if (!file::IsExists(hierarchy)) {
+        LOG(WARNING, "hierarchy %s not exists", hierarchy.c_str());
+        return -1;
+    }
+    if (!file::Mkdir(hierarchy + "/" + FLAGS_agent_global_cgroup_path)) {
+        LOG(WARNING, "mkdir global cgroup path failed");
+        return -1;
+    }
+    
     if (cgroups::Write(hierarchy,
                        FLAGS_agent_global_cgroup_path,
                        "tcp_throt.send_bps_limit",

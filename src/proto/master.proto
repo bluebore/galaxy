@@ -13,10 +13,9 @@ enum JobType {
 }
 
 enum JobPriority {
-    kMonitor = 75;
-    kOnline = 50;
-    kOffline = 25;
-    kBestEffort = 0;
+    kStorageService = 100;
+    kNormalService = 70;
+    kBatchTask = 25;
 }
 
 enum JobState {
@@ -193,7 +192,6 @@ message ProposeRequest {
 
 message ProposeResponse {
     optional Status status = 1;
-    // 返回给调度器最新agent状态信息
     repeated AgentInfo agents = 2;
 }
 
@@ -241,6 +239,26 @@ message ShowPodResponse {
     optional Status status = 2;
 }
 
+message JobIdDiff {
+    optional string jobid = 1;
+    optional string version = 2;
+}
+
+message GetJobDescriptorRequest{
+    repeated JobIdDiff jobs = 1;
+}
+
+message JobEntity {
+    optional string jobid = 1;
+    optional JobDescriptor desc = 2;
+}
+
+message GetJobDescriptorResponse {
+    repeated JobEntity jobs = 1;
+    repeated string deleted_jobs = 2;
+    optional Status status = 3;
+}
+
 message GetMasterStatusRequest {}
 
 message GetMasterStatusResponse {
@@ -271,6 +289,20 @@ message GetMasterStatusResponse {
     optional Status status = 17;
 }
 
+message PreemptEntity {
+    optional string jobid = 1;
+    optional string podid = 2;
+}
+
+message PreemptRequest {
+    optional PreemptEntity pending_pod = 1;
+    repeated PreemptEntity preempted_pods = 2;
+    optional string addr = 3;
+}
+
+message PreemptResponse {
+    optional Status status = 1;
+}
 
 service Master {
     rpc SubmitJob(SubmitJobRequest) returns (SubmitJobResponse);
@@ -294,8 +326,9 @@ service Master {
 
     rpc GetPendingJobs(GetPendingJobsRequest) returns (GetPendingJobsResponse);
     rpc GetResourceSnapshot(GetResourceSnapshotRequest) returns (GetResourceSnapshotResponse);
+    rpc GetJobDescriptor(GetJobDescriptorRequest) returns (GetJobDescriptorResponse);
     rpc Propose(ProposeRequest) returns (ProposeResponse);
-
+    rpc Preempt(PreemptRequest) returns (PreemptResponse);
     rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse);
     rpc LabelAgents(LabelAgentRequest) returns (LabelAgentResponse);
 }

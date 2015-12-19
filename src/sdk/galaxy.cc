@@ -35,6 +35,7 @@ public:
                  std::vector<PodInformation>* pods);
     bool GetStatus(MasterStatus* status);
     bool SwitchSafeMode(bool mode);
+    bool Preempt(const PreemptPropose& propose);
     bool GetMasterAddr(std::string* master_addr);
 private:
     bool FillJobDescriptor(const JobDescription& sdk_job, JobDescriptor* job);
@@ -45,6 +46,34 @@ private:
     std::string master_key_;
     ::galaxy::ins::sdk::InsSDK* nexus_; 
 };
+
+bool GalaxyImpl::Preempt(const PreemptPropose& propose) {
+    PreemptRequest request;
+    PreemptResponse response;
+    PreemptEntity* pending_pod = request.mutable_pending_pod();
+    pending_pod->set_jobid(propose.pending_pod.first);
+    pending_pod->set_podid(propose.pending_pod.second);
+    for (size_t i = 0; i < propose.preempted_pods.size(); i++) {
+        PreemptEntity* preempt_pod = request.add_preempted_pods();
+        preempt_pod->set_jobid(propose.preempted_pods[i].first);
+        preempt_pod->set_podid(propose.preempted_pods[i].second);
+    }
+    Master_Stub* master = NULL;
+    bool  ok = BuildMasterClient(&master);
+    if (!ok) {
+        return false;
+    }
+    request.set_addr(propose.addr);
+    bool ret = rpc_client_->SendRequest(master, &Master_Stub::Preempt,
+                                        &request, &response, 5, 1);
+    if (!ret || 
+            (response.has_status() 
+                    && response.status() != kOk)) {
+        return false;     
+    }    
+    return true;
+
+}
 
 bool GalaxyImpl::GetMasterAddr(std::string* master_addr) {
     if (master_addr == NULL) {
@@ -125,11 +154,7 @@ bool GalaxyImpl::FillJobDescriptor(const JobDescription& sdk_job,
         return false;
     }
     job->set_type(job_type);
-    JobPriority priority;
-    ok = JobPriority_Parse(sdk_job.priority, &priority);
-    if (!ok) {
-        return false;
-    }
+    job->set_priority(sdk_job.priority);
     job->set_deploy_step(sdk_job.deploy_step);
     job->set_replica(sdk_job.replica);
 

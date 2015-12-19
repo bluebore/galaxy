@@ -14,3 +14,7 @@ urlpatterns += urls.patterns('',
      (r'^trace/', urls.include('trace.urls')),
 )
 
+urlpatterns += urls.patterns('',
+     (r'^dc/', urls.include('dc.urls')),
+)
+
