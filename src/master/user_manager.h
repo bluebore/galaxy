@@ -87,6 +87,8 @@ public:
     UserManager();
     ~UserManager();
     bool Init();
+    bool GetSuperUser(User* user);
+    bool GetUserById(const std::string& uid, User* user);
     bool AddUser(const User& user);
     bool Login(const std::string& name, 
                const std::string& password,

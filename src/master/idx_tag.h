@@ -12,6 +12,8 @@ struct pod_id_tag {};
 struct id_tag{};
 struct name_tag{};
 struct target_tag{};
+struct user_name_tag{};
+struct uid_tag{};
 
 }
 }

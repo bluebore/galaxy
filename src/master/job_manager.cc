@@ -185,8 +185,12 @@ Status JobManager::LabelAgents(const LabelCell& label_cell) {
     return kOk;
 }
 
-Status JobManager::Add(const JobId& job_id, const JobDescriptor& job_desc) { 
+Status JobManager::Add(const JobId& job_id, 
+                       const JobDescriptor& job_desc,
+                       const User& user) { 
     Job* job = new Job();
+    job->uid_ = user.uid();
+    job->user_name_ = user.name();
     job->state_ = kJobNormal;
     job->desc_.CopyFrom(job_desc);
     for (int i = 0; i < job->desc_.pod().tasks_size(); i++) {
@@ -218,6 +222,8 @@ Status JobManager::Add(const JobId& job_id, const JobDescriptor& job_desc) {
     JobIndex index;
     index.id_ = job->id_;
     index.name_ = job->desc_.name();
+    index.uid_= job->uid_;
+    index.user_name_ = job->user_name_;
     MutexLock lock(&mutex_); 
     //TODO solve name collision 
     job_index_->insert(index);
@@ -384,12 +390,15 @@ void JobManager::FillAllJobs() {
     }
 }
 
-void JobManager::ReloadJobInfo(const JobInfo& job_info) {
+void JobManager::ReloadJobInfo(const JobInfo& job_info,
+                               const User& owner) {
     Job* job = new Job();
     job->state_ = job_info.state();
     job->desc_.CopyFrom(job_info.desc());
     std::string job_id = job_info.jobid();
     job->id_ = job_id;
+    job->uid_ = owner.uid();
+    job->user_name_ = owner.name();
     job->update_state_ = job_info.update_state();
     job->latest_version = job_info.latest_version();
     for (int32_t i = 0; i < job_info.pod_descs_size(); i++) {
@@ -399,6 +408,8 @@ void JobManager::ReloadJobInfo(const JobInfo& job_info) {
     JobIndex index;
     index.id_ = job_id;
     index.name_ = job->desc_.name();
+    index.uid_ = owner.uid();
+    index.user_name_ = owner.name();
     MutexLock lock(&mutex_);
     const JobSetNameIndex& name_index = job_index_->get<name_tag>();
     if (name_index.find(index.name_) != name_index.end()) {
@@ -1494,6 +1505,7 @@ bool JobManager::SaveToNexus(const Job* job) {
         job_info.mutable_desc()->release_pod();
     }
     job_info.set_latest_version(job->latest_version);
+    job_info.set_uid(job->uid_);
     std::map<Version, PodDescriptor>::const_iterator it = job->pod_desc_.begin();
     for(; it != job->pod_desc_.end(); ++it) {
         PodDescriptor* pod_desc = job_info.add_pod_descs();
@@ -1986,6 +1998,20 @@ void JobManager::GetJobDescByDiff(const JobIdDiffList& jobids,
             job_entity->mutable_desc()->mutable_pod()->CopyFrom(pod_it->second);
         }
     }
+}
+
+bool JobManager::IsOwner(const std::string& job_id, const std::string& uid) {
+    MutexLock lock(&mutex_);
+    const JobSetIdIndex& id_index = job_index_->get<id_tag>();
+    JobSetIdIndex::const_iterator id_index_it = id_index.find(job_id);
+    if (id_index_it == id_index.end()) {
+        LOG(WARNING, "fail to find job id %s in job_index", job_id.c_str());
+        return false;
+    }
+    if (id_index_it->uid_ != uid) {
+        return false;
+    }
+    return true;
 }
 
 }

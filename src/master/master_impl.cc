@@ -57,10 +57,13 @@ void MasterImpl::OnSessionTimeout() {
 
 void MasterImpl::Init() {
     AcquireMasterLock();
-    LOG(INFO, "begin to reload job descriptor from nexus");
+    bool ok = user_manager_->Init();
+    if (ok) {
+        assert(0);
+    }
+    LOG(INFO, "reload users from nexus successfully");
     ReloadJobInfo();
     ReloadLabelInfo();
-    user_manager_->Init();
 }
 
 void MasterImpl::ReloadLabelInfo() {
@@ -92,17 +95,29 @@ void MasterImpl::ReloadJobInfo() {
     std::string end_key = start_key + "~";
     ::galaxy::ins::sdk::ScanResult* result = nexus_->Scan(start_key, end_key);
     int job_amount = 0;
+    User root;
+    bool ok = user_manager_->GetSuperUser(&root);
+    if (!ok) {
+        assert(0);
+    }
     while (!result->Done()) {
         assert(result->Error() == ::galaxy::ins::sdk::kOK);
         std::string key = result->Key();
         std::string job_raw_data = result->Value(); 
         JobInfo job_info;
         bool ok = job_info.ParseFromString(job_raw_data);
+        if (!ok) {
+            LOG(WARNING, "faild to parse job_info: %s", key.c_str());
+            assert(0);
+        }
+        User owner;
+        ok = user_manager_->GetUserById(job_info.uid(), &owner); 
         if (ok) {
             LOG(INFO, "reload job: %s", job_info.jobid().c_str());
-            job_manager_.ReloadJobInfo(job_info);
+            job_manager_.ReloadJobInfo(job_info, owner);
         } else {
-            LOG(WARNING, "faild to parse job_info: %s", key.c_str());
+            LOG(WARNING, "faild to get user with id %s, assigned to root user", job_info.uid().c_str());
+            job_manager_.ReloadJobInfo(job_info, root);
         }
         result->Next();
         job_amount ++;
@@ -141,10 +156,18 @@ void MasterImpl::SubmitJob(::google::protobuf::RpcController* /*controller*/,
                            const ::baidu::galaxy::SubmitJobRequest* request,
                            ::baidu::galaxy::SubmitJobResponse* response,
                            ::google::protobuf::Closure* done) {
+    std::string sid = request->sid();
+    User user;
+    bool ok = user_manager_->Auth(sid, &user);
+    if (!ok) {
+        response->set_status(kSessionTimeout);
+        done->Run();
+        return;
+    }
     const JobDescriptor& job_desc = request->job();
     MasterUtil::TraceJobDesc(job_desc);
     JobId job_id = MasterUtil::UUID();
-    Status status = job_manager_.Add(job_id, job_desc);
+    Status status = job_manager_.Add(job_id, job_desc, user);
     response->set_status(status);
     if (status == kOk) {
         response->set_jobid(job_id);
@@ -156,7 +179,20 @@ void MasterImpl::UpdateJob(::google::protobuf::RpcController* /*controller*/,
                            const ::baidu::galaxy::UpdateJobRequest* request,
                            ::baidu::galaxy::UpdateJobResponse* response,
                            ::google::protobuf::Closure* done) {
+    std::string sid = request->sid();
+    User user;
+    bool ok = user_manager_->Auth(sid, &user);
+    if (!ok) {
+        response->set_status(kSessionTimeout);
+        done->Run();
+        return;
+    }
     JobId job_id = request->jobid();
+    if (!job_manager_.IsOwner(job_id, user.uid())) {
+        response->set_status(kPermissionDenied);
+        done->Run();
+        return;
+    }
     LOG(INFO, "update job %s replica %d", job_id.c_str(), request->job().replica());
     Status status = job_manager_.Update(job_id, request->job());
     response->set_status(status);
@@ -183,7 +219,20 @@ void MasterImpl::TerminateJob(::google::protobuf::RpcController* ,
                               const ::baidu::galaxy::TerminateJobRequest* request,
                               ::baidu::galaxy::TerminateJobResponse* response,
                               ::google::protobuf::Closure* done) {
+    std::string sid = request->sid();
+    User user;
+    bool ok = user_manager_->Auth(sid, &user);
+    if (!ok) {
+        response->set_status(kSessionTimeout);
+        done->Run();
+        return;
+    }
     JobId job_id = request->jobid();
+    if (!job_manager_.IsOwner(job_id, user.uid())) {
+        response->set_status(kPermissionDenied);
+        done->Run();
+        return;
+    }
     LOG(INFO, "terminate job %s", job_id.c_str());
     Status status= job_manager_.Terminte(job_id);
     response->set_status(status);

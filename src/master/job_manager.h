@@ -43,25 +43,32 @@ typedef google::protobuf::RepeatedPtrField<baidu::galaxy::JobEntity> JobEntityLi
 struct JobIndex {
     std::string id_;
     std::string name_;
+    std::string uid_;
+    std::string user_name_;
 };
 
 // the name and id should be unique
 typedef boost::multi_index_container<
      JobIndex,
      boost::multi_index::indexed_by<
-          boost::multi_index::hashed_unique<
+         boost::multi_index::hashed_unique<
              boost::multi_index::tag<id_tag>,
              BOOST_MULTI_INDEX_MEMBER(JobIndex , std::string, id_)
          >,
          boost::multi_index::hashed_unique<
              boost::multi_index::tag<name_tag>,
              BOOST_MULTI_INDEX_MEMBER(JobIndex, std::string, name_)
-        >
+         >,
+         boost::multi_index::ordered_non_unique<
+             boost::multi_index::tag<uid_tag>,
+             BOOST_MULTI_INDEX_MEMBER(JobIndex, std::string, uid_)
+         >
     >
 > JobSet;
 
 typedef boost::multi_index::index<JobSet, id_tag>::type JobSetIdIndex;
 typedef boost::multi_index::index<JobSet, name_tag>::type JobSetNameIndex;
+typedef boost::multi_index::index<JobSet, uid_tag>::type JobSetUidIndex;
 
 struct Job {
     JobState state_;
@@ -71,6 +78,8 @@ struct Job {
     std::map<Version, PodDescriptor> pod_desc_;
     JobUpdateState update_state_;
     Version latest_version;
+    std::string uid_;
+    std::string user_name_;
 };
 
 struct PreemptTask {
@@ -110,7 +119,9 @@ typedef boost::multi_index::index<PreemptTaskSet, addr_tag>::type PreemptTaskAdd
 
 class JobManager {
 public:
-    Status Add(const JobId& job_id, const JobDescriptor& job_desc);
+    Status Add(const JobId& job_id, 
+               const JobDescriptor& job_desc,
+               const User& user);
     Status Update(const JobId& job_id, const JobDescriptor& job_desc);
     Status Suspend(const JobId& jobid);
     Status Resume(const JobId& jobid);
@@ -138,7 +149,7 @@ public:
     Status GetJobInfo(const JobId& jobid, JobInfo* job_info);
     void KeepAlive(const std::string& agent_addr);
     void DeployPod();
-    void ReloadJobInfo(const JobInfo& job_info);
+    void ReloadJobInfo(const JobInfo& job_info, const User& owner);
     Status SetSafeMode(bool mode);
     Status LabelAgents(const LabelCell& label_cell);
     bool GetJobIdByName(const std::string& job_name, std::string* jobid);
@@ -147,6 +158,7 @@ public:
     bool Preempt(const PreemptEntity& pending_pod,
                  const std::vector<PreemptEntity>& preempted_pods,
                  const std::string& addr);
+    bool IsOwner(const std::string& job_id, const std::string& uid);
 private:
     void SuspendPod(PodStatus* pod);
     void ResumePod(PodStatus* pod);
@@ -236,7 +248,7 @@ private:
     ThreadPool thread_pool_;
     ThreadPool trace_pool_;
     ThreadPool preempt_pool_;
-    Mutex mutex_;   
+    Mutex mutex_;
     Mutex mutex_timer_;
     RpcClient rpc_client_;
     int64_t on_query_num_;

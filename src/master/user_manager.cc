@@ -326,5 +326,23 @@ bool UserManager::AssignQuota(const std::string& uid, const std::string& op, con
     }
 }
 
+bool UserManager::GetSuperUser(User* user) {
+    return GetUserById(super_uid_, user);
+}
+
+bool UserManager::GetUserById(const std::string& uid, User* user) {
+    MutexLock lock(&mutex_);
+    if (user == NULL) {
+        return false;
+    }
+    const UserSetIdIndex& id_index = user_set_->get<id_tag>();
+    UserSetIdIndex::const_iterator id_index_it = id_index.find(uid);
+    if (id_index_it != id_index.end()) {
+        user->CopyFrom(id_index_it->user);
+        return true;
+    }
+    return false;
+}
+
 }
 }

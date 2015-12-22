@@ -108,7 +108,7 @@ private:
       void AcquireMasterLock();
       // TODO should return value
       void ReloadJobInfo();
-      void ReloadLabelInfo(); 
+      void ReloadLabelInfo();
 private:
       JobManager job_manager_;
       InsSDK* nexus_;
