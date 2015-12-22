@@ -58,7 +58,7 @@ void MasterImpl::OnSessionTimeout() {
 void MasterImpl::Init() {
     AcquireMasterLock();
     bool ok = user_manager_->Init();
-    if (ok) {
+    if (!ok) {
         assert(0);
     }
     LOG(INFO, "reload users from nexus successfully");
