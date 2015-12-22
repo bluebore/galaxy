@@ -193,8 +193,8 @@ bool UserManager::Login(const std::string& name,
     }
     const UserSetNameIndex& name_index = user_set_->get<name_tag>();
     UserSetNameIndex::const_iterator it = name_index.find(name);
-    if (it != name_index.end()) {
-        LOG(INFO, "user %s does exist", name.c_str());
+    if (it == name_index.end()) {
+        LOG(INFO, "user %s does not exist", name.c_str());
         return false; 
     }
     //TODO md5sum

@@ -145,13 +145,16 @@ public:
     static Galaxy* ConnectGalaxy(const std::string& nexus_servers,
                                  const std::string& master_key);
     //create a new job
-    virtual bool SubmitJob(const JobDescription& job, std::string* job_id) = 0;
+    virtual bool SubmitJob(const JobDescription& job,
+                           const std::string& sid,
+                           std::string* job_id) = 0;
     //update job for example update the replicate_count
     virtual bool UpdateJob(const std::string& jobid, const JobDescription& job) = 0;
     //list all jobs in galaxys
     virtual bool ListJobs(std::vector<JobInformation>* jobs) = 0;
     //termintate job
-    virtual bool TerminateJob(const std::string& job_id) = 0;
+    virtual bool TerminateJob(const std::string& job_name,
+                              const std::string& sid) = 0;
     //list all nodes of cluster
     virtual bool ListAgents(std::vector<NodeDescription>* nodes) = 0;
     virtual bool LabelAgents(const std::string& label, 
@@ -164,6 +167,9 @@ public:
     virtual bool SwitchSafeMode(bool mode) = 0;
     virtual bool Preempt(const PreemptPropose& propose) = 0;
     virtual bool GetMasterAddr(std::string* master_addr) = 0;
+    virtual bool Login(const std::string& name, 
+                       const std::string& password,
+                       std::string* sid) = 0;
 };
 
 } // namespace galaxy

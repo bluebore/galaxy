@@ -22,11 +22,15 @@ public:
         nexus_ = new ::galaxy::ins::sdk::InsSDK(nexus_servers);
     }
     virtual ~GalaxyImpl() {}
-    bool SubmitJob(const JobDescription& job, std::string* job_id);
-    bool UpdateJob(const std::string& jobid, const JobDescription& job);
+    bool SubmitJob(const JobDescription& job, 
+                   const std::string& sid,
+                   std::string* job_id);
+    bool UpdateJob(const std::string& jobname,
+                   const JobDescription& job);
     bool ListJobs(std::vector<JobInformation>* jobs);
     bool ListAgents(std::vector<NodeDescription>* nodes);
-    bool TerminateJob(const std::string& job_id);
+    bool TerminateJob(const std::string& jobname, 
+                      const std::string& sid);
     bool LabelAgents(const std::string& label, 
                      const std::vector<std::string>& agents);
     bool ShowPod(const std::string& jobid,
@@ -37,6 +41,9 @@ public:
     bool SwitchSafeMode(bool mode);
     bool Preempt(const PreemptPropose& propose);
     bool GetMasterAddr(std::string* master_addr);
+    bool Login(const std::string& name, 
+               const std::string& password,
+               std::string* sid);
 private:
     bool FillJobDescriptor(const JobDescription& sdk_job, JobDescriptor* job);
     void FillResource(const Resource& res, ResDescription* res_desc);
@@ -44,8 +51,34 @@ private:
 private:
     RpcClient* rpc_client_;
     std::string master_key_;
-    ::galaxy::ins::sdk::InsSDK* nexus_; 
+    ::galaxy::ins::sdk::InsSDK* nexus_;
 };
+
+bool GalaxyImpl::Login(const std::string& name,
+                       const std::string& password,
+                       std::string* sid) {
+    if (sid == NULL) {
+        return false;
+    }
+    LoginRequest request;
+    request.set_name(name);
+    request.set_password(password);
+    LoginResponse response;
+    Master_Stub* master = NULL;
+    bool  ok = BuildMasterClient(&master);
+    if (!ok) {
+        return false;
+    }
+    bool ret = rpc_client_->SendRequest(master, &Master_Stub::Login,
+                                        &request, &response, 5, 1);
+    if (!ret || 
+        (response.has_status() 
+        && response.status() != kOk)) {
+        return false;
+    }
+    *sid = response.sid();
+    return true;
+}
 
 bool GalaxyImpl::Preempt(const PreemptPropose& propose) {
     PreemptRequest request;
@@ -126,10 +159,12 @@ bool GalaxyImpl::LabelAgents(const std::string& label,
     return true;
 }
 
-bool GalaxyImpl::TerminateJob(const std::string& job_id) {
+bool GalaxyImpl::TerminateJob(const std::string& job_name,
+                              const std::string& sid) {
     TerminateJobRequest request;
     TerminateJobResponse response;
-    request.set_jobid(job_id);
+    request.set_job_name(job_name);
+    request.set_sid(sid);
     Master_Stub* master = NULL;
     bool  ok = BuildMasterClient(&master);
     if (!ok) {
@@ -241,11 +276,14 @@ void GalaxyImpl::FillResource(const Resource& res, ResDescription* res_desc) {
 }
 
 
-bool GalaxyImpl::SubmitJob(const JobDescription& job, std::string* job_id){
+bool GalaxyImpl::SubmitJob(const JobDescription& job, 
+                           const std::string& sid,                   
+                           std::string* job_id){
     if (job_id == NULL) {
         return false;
     }
     SubmitJobRequest request;
+    request.set_sid(sid);
     SubmitJobResponse response;
     bool ok = FillJobDescriptor(job, request.mutable_job());
     if (!ok) {

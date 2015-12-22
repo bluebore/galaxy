@@ -33,7 +33,9 @@ DEFINE_string(f, "", "specify config file ,job config file or label config file"
 DEFINE_string(n, "", "specify job name to query pods");
 DEFINE_string(j, "", "specify job id");
 DEFINE_string(l, "", "add a label to agent");
-DEFINE_string(p, "", "specify pod id");
+DEFINE_string(u, "", "specify user to login galaxy");
+DEFINE_string(P, "", "specify pod id");
+DEFINE_string(p, "", "specify password to login galaxy");
 DEFINE_int32(d, 0, "specify delay time to query");
 DEFINE_int32(cli_server_port, 8775, "cli server listen port");
 DECLARE_string(flagfile);
@@ -44,7 +46,7 @@ const std::string kGalaxyUsage = "galaxy client.\n"
                                  "    galaxy jobs \n"
                                  "    galaxy agents\n"
                                  "    galaxy pods -j <jobid>\n"
-                                 "    galaxy kill -j <jobid>\n"
+                                 "    galaxy kill -n <jobname>\n"
                                  "    galaxy update -j <jobid> -f <jobconfig>\n"
                                  "    galaxy label -l <label> -f <lableconfig>\n"
                                  "    galaxy preempt -f <config>\n"
@@ -56,8 +58,27 @@ const std::string kGalaxyUsage = "galaxy client.\n"
                                  "    -j jobid     Specify job id to kill or update.\n"
                                  "    -d delay     Specify delay in second to update infomation.\n"
                                  "    -l label     Add label to list of agents.\n"
-                                 "    -n name      Specify job name to query pods.\n";
+                                 "    -u username  Specify username to login in galaxy.\n"
+                                 "    -p password  Specify password to login in galaxy.\n"
+                                 "    -n name      Specify job name to query pods or kill\n";
 
+bool Login(std::string* sid) {
+    if (FLAGS_u.empty()) {
+        fprintf(stderr, "-u is required\n");
+        return false;
+    }
+    if (FLAGS_p.empty()) {
+        fprintf(stderr, "-p is required\n");
+        return false;
+    }
+    std::string master_key = FLAGS_nexus_root_path + FLAGS_master_path; 
+    baidu::galaxy::Galaxy* galaxy = baidu::galaxy::Galaxy::ConnectGalaxy(FLAGS_nexus_servers, master_key);
+    if (galaxy == NULL) {
+        fprintf(stderr, "fail to connect to galaxy\n");
+        return false;
+    }
+    return galaxy->Login(FLAGS_u, FLAGS_p, sid);
+}
 int ReadableStringToInt(const std::string& input, int64_t* output) {
     if (output == NULL) {
         return -1;
@@ -377,6 +398,12 @@ int AddJob() {
         fprintf(stderr, "-f is required\n");
         return -1;
     }
+    std::string sid;
+    bool ok = Login(&sid);
+    if (!ok) {
+        fprintf(stderr, "fail to login galaxy\n");
+        return -1;
+    }
     std::string master_key = FLAGS_nexus_root_path + FLAGS_master_path; 
     baidu::galaxy::Galaxy* galaxy = baidu::galaxy::Galaxy::ConnectGalaxy(FLAGS_nexus_servers, master_key);
     baidu::galaxy::JobDescription job;
@@ -386,7 +413,7 @@ int AddJob() {
         return -1;
     }
     std::string jobid;
-    bool ok = galaxy->SubmitJob(job, &jobid);
+    ok = galaxy->SubmitJob(job, sid, &jobid);
     if (!ok) {
         fprintf(stderr, "Submit job fail\n");
         return 1;
@@ -754,13 +781,20 @@ int PreemptPod() {
 int KillJob() {
     std::string master_key = FLAGS_nexus_root_path + FLAGS_master_path; 
     baidu::galaxy::Galaxy* galaxy = baidu::galaxy::Galaxy::ConnectGalaxy(FLAGS_nexus_servers, master_key);
-    if (FLAGS_j.empty()) {
+    if (FLAGS_n.empty()) {
         return 1;
     }
-    if (galaxy->TerminateJob(FLAGS_j)) {
-        printf("terminate job %s successfully\n", FLAGS_j.c_str());
+    std::string sid;
+    bool ok = Login(&sid);
+    if (!ok) {
+        fprintf(stderr, "fail to login galaxy \n");
+        return -1;
+    }
+    if (galaxy->TerminateJob(FLAGS_n, sid)) {
+        printf("terminate job %s successfully\n", FLAGS_n.c_str());
         return 0;
     }
+    printf("fail to terminate job %s \n", FLAGS_n.c_str());
     return 1;
 }
 

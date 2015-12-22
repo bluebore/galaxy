@@ -108,7 +108,7 @@ message ResumeJobResponse {
 }
 
 message TerminateJobRequest {
-    optional string jobid = 1;
+    optional string job_name = 1;
     optional string sid = 2;
 }
 

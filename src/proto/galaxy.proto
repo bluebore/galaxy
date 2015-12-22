@@ -19,6 +19,7 @@ enum Status {
     kLabelAgentFail = 21;
     kSessionTimeout = 22;
     kPermissionDenied = 23;
+    kNameExists = 24;
 }
 
 enum PodState {

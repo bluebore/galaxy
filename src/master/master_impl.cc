@@ -165,6 +165,13 @@ void MasterImpl::SubmitJob(::google::protobuf::RpcController* /*controller*/,
         return;
     }
     const JobDescriptor& job_desc = request->job();
+    std::string exist_job_id;
+    ok = job_manager_.GetJobIdByName(job_desc.name(), &exist_job_id);
+    if (ok) { 
+        response->set_status(kNameExists);
+        done->Run();
+        return;
+    }
     MasterUtil::TraceJobDesc(job_desc);
     JobId job_id = MasterUtil::UUID();
     Status status = job_manager_.Add(job_id, job_desc, user);
@@ -227,14 +234,21 @@ void MasterImpl::TerminateJob(::google::protobuf::RpcController* ,
         done->Run();
         return;
     }
-    JobId job_id = request->jobid();
-    if (!job_manager_.IsOwner(job_id, user.uid())) {
+    std::string exist_job_id;
+    ok = job_manager_.GetJobIdByName(request->job_name(), &exist_job_id);
+    if (!ok) { 
+        response->set_status(kJobNotFound);
+        done->Run();
+        return;
+    }
+
+    if (!job_manager_.IsOwner(exist_job_id, user.uid())) {
         response->set_status(kPermissionDenied);
         done->Run();
         return;
     }
-    LOG(INFO, "terminate job %s", job_id.c_str());
-    Status status= job_manager_.Terminte(job_id);
+    LOG(INFO, "terminate job %s", exist_job_id.c_str());
+    Status status= job_manager_.Terminte(exist_job_id);
     response->set_status(status);
     done->Run();
 }
