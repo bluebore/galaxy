@@ -19,6 +19,24 @@ HttpClient::HttpClient() {
 
 }
 
+
+bool HttpClient::SyncGet(const HttpGetRequest& request,
+                         HttpResponse* response) {
+    Url url;
+    bool ok = ParseUrl(request.url, &url);
+    if (!ok) {
+        return false;
+    } 
+    boost::asio::streambuf req_buf;
+    boost::asio::streambuf resp_buf;
+
+}
+
+bool HttpClient::BuildGetReq(const HttpGetRequest& req,
+                             boost::asio::streambuf& req_buf) {
+
+}
+
 bool HttpClient::AsyncPost(const boost::shared_ptr<HttpPostRequest> request_ptr,
                            boost::shared_ptr<HttpResponse> response_ptr,
                            HttpCallback callback) {

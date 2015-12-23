@@ -37,6 +37,41 @@ void BaseClient::AsyncRequest(const std::string& server,
             context_ptr));
 }
 
+void BaseClient::SyncRequest(const std::string& server,
+                             const std::string& protocol,
+                             const boost::asio::streambuf& request,
+                             boost::asio::streambuf& response,
+                             ResponseMeta& meta) {
+    boost::asio::ip::tcp::resolver resolver(io_service_);
+    boost::asio::ip::tcp::resolver::query query(server, protocol);
+    boost::asio::ip::tcp::resolver::iterator endpoint_it = resolver.resolve(query);
+    boost::asio::ip::tcp::socket socket(io_service_);
+    boost::asio::connect(socket, endpoint_it);
+    boost::asio::write(socket, request);
+    boost::asio::read_util(socket, response, "\r\n");
+    std::istream response_stream(&response);
+    response_stream >> meta.http_version;
+    response_stream >> meta.status_code;
+    std::getline(response_stream, meta.http_msg);
+    boost::asio::read_until(socket, response, "\r\n\r\n");
+    std::string header;
+    while (std::getline(response_stream, header) && header != "\r") {
+        meta.headers.push_back(header);
+    }
+    if (response.size() > 0) {
+        std::ostringstream os;
+        os << &response;
+        LOG(WARNING, "unused chars %s ", os.str().c_str()); 
+    }
+    boost::system::error_code error;
+    while (boost::asio::read(socket, response,
+     boost::asio::transfer_at_least(1), error)) {}
+    if (error == boost::asio::error::eof) {
+        return true;
+    }
+    return false;
+}
+
 void BaseClient::HandleResolveCompleted(const boost::system::error_code& err,
                                boost::asio::ip::tcp::resolver::iterator iterator,
                                boost::shared_ptr<RequestContext> context_ptr) {
@@ -160,5 +195,6 @@ void BaseClient::HandleReadBody(const boost::system::error_code& err,
                               -1);
     }
 }
+
 }
 }

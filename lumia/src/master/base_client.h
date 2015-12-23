@@ -55,6 +55,11 @@ public:
                       boost::shared_ptr<boost::asio::streambuf> response_ptr,
                       boost::shared_ptr<ResponseMeta> meta_ptr,
                       Callback callback);
+    bool SyncRequest(const std::string& server,
+                     const std::string& protocol,
+                     const boost::asio::streambuf& request,
+                     boost::asio::streambuf& response,
+                     ResponseMeta& mete);
     void Run();
 private:
     void HandleResolveCompleted(const boost::system::error_code& err,

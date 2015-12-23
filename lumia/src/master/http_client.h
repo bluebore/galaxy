@@ -49,6 +49,8 @@ public:
     bool AsyncPost(const boost::shared_ptr<HttpPostRequest> request_ptr,
                    boost::shared_ptr<HttpResponse> response_ptr,
                    HttpCallback callback);
+    bool SyncGet(const HttpGetRequest& request,
+                 HttpResponse* response);
 private:
     bool BuildPostForm(const boost::shared_ptr<HttpPostRequest> request_ptr, 
                        const Url& url,
@@ -65,6 +67,8 @@ private:
                  const boost::shared_ptr<boost::asio::streambuf> response_buffer,
                  const boost::shared_ptr<ResponseMeta> meta_ptr,
                  Callback callback);
+    bool BuildGetReq(const HttpGetRequest& req,
+                     boost::asio::streambuf& req_buf);
 private:
     BaseClient base_client_;
     ::baidu::common::ThreadPool worker_;
