@@ -1,0 +1,9 @@
+package baidu.lumia;
+
+message TaskOutput {
+    optional string id = 1;
+    optional bytes stdout = 2;
+    optional bytes stderr = 3;
+    optional int64 time = 4;
+    optional string task_id = 5;
+}

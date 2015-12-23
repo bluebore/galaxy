@@ -1,0 +1,147 @@
+import "agent.proto";
+
+package baidu.lumia;
+
+option cc_generic_services = true;
+option py_generic_services = true;
+
+enum LumiaStatus {
+    kLumiaOk = 0;
+    kLumiaMinionNotFound = 1;
+    kLumiaMinionInProcess = 2;
+    kLumiaScriptNotFound = 3;
+}
+
+enum MinionState {
+    kMinionAlive = 0;
+    kMinionRestarting = 1;
+    kMinionReinstalling = 2;
+    kMinionIniting = 3;
+    kMinionDeadChecking = 4;
+    kMinionJoining = 5;
+    kMinionError = 6;
+}
+
+message Cpu {
+    optional string clock = 1;
+    optional int32 count = 2;
+}
+
+message Memory {
+    optional int64 size = 1;
+    optional int32 count = 2;
+}
+
+message Disk {
+    optional int64 size = 1;
+    optional int32 count = 2;
+    optional int32 speed = 3;
+}
+
+message Minion {
+    optional string id = 1;
+    optional string ip = 2;
+    optional string rock_ip = 3;
+    optional string hostname = 4;
+    optional MinionState state = 5;
+    
+    optional Cpu cpu = 6;
+    optional Memory mem = 7;
+    optional Disk disk = 8;
+    optional Disk flash = 9;
+    optional int32 bandwidth = 10;
+
+    optional string datacenter = 11;
+    optional MinionStatus status = 12;
+    optional bool in_pool = 13;
+    optional bool hyper_threading = 14;
+}
+
+message ReportDeadMinionRequest {
+    optional string ip = 1;
+    optional string reason = 2;
+}
+
+message ReportDeadMinionResponse {
+    optional LumiaStatus status = 1; 
+}
+
+message Minions {
+    repeated Minion minions = 1;
+}
+
+message GetMinionRequest {
+    repeated string ips = 1;
+    repeated string hostnames = 2;
+    repeated string ids = 3;
+}
+
+message GetMinionResponse {
+    repeated Minion minions = 1;
+}
+
+message SystemScript {
+    optional string name = 1;
+    optional bytes content = 2;
+}
+
+message ImportDataRequest {
+    optional Minions minions = 1;
+    repeated SystemScript scripts = 2; 
+}
+
+message ImportDataResponse {
+    optional LumiaStatus status = 1;
+}
+
+message PingRequest {
+    optional string node_addr = 1;
+}
+
+message PingResponse {
+    optional LumiaStatus status = 1;
+}
+
+message MinionOverview {
+    optional string hostname = 1;
+    optional string ip = 2;
+    optional bool mount_ok = 3;
+    optional bool device_ok = 4;
+    optional int64 datetime = 5;
+}
+
+message GetOverviewRequest {}
+message GetOverviewResponse {
+    repeated MinionOverview minions = 1;
+}
+
+message GetStatusRequest {}
+message GetStatusResponse {
+    repeated string live_nodes = 1;
+    repeated string dead_nodes = 2;
+}
+
+message ExecTaskRequest {
+    optional bytes content = 1;
+    optional string user = 2;
+    repeated string hosts = 3;
+    optional int32 step_size = 4;
+}
+
+message ExecTaskResponse {
+    optional string id = 1;
+    optional LumiaStatus status = 2;
+    repeated string not_exist_hosts = 3;
+}
+
+service LumiaCtrl {
+    rpc ReportDeadMinion(ReportDeadMinionRequest) returns (ReportDeadMinionResponse);
+    rpc GetMinion(GetMinionRequest) returns (GetMinionResponse);
+    rpc ImportData(ImportDataRequest) returns (ImportDataResponse);
+    rpc Ping(PingRequest) returns (PingResponse);
+    rpc GetOverview(GetOverviewRequest) returns (GetOverviewResponse);
+    rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
+    rpc Exec(ExecTaskRequest) returns (ExecTaskResponse);
+}
+
+
