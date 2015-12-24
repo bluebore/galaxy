@@ -51,10 +51,16 @@ public:
                    HttpCallback callback);
     bool SyncGet(const HttpGetRequest& request,
                  HttpResponse* response);
+    bool SyncPost(const HttpPostRequest& request,
+                 HttpResponse* response);
+
 private:
     bool BuildPostForm(const boost::shared_ptr<HttpPostRequest> request_ptr, 
                        const Url& url,
                        boost::shared_ptr<boost::asio::streambuf> request_buffer);
+    bool BuildSyncPostForm(const HttpPostRequest& request,
+                           const Url& url,
+                           boost::asio::streambuf& request_buffer);
     bool ParseUrl(const std::string& surl, Url* url);
     void UrlEncode(const std::string& str, std::string* output);
     void HandleCallback(HttpCallback callback, boost::shared_ptr<HttpResponse> response_ptr,
@@ -67,7 +73,8 @@ private:
                  const boost::shared_ptr<boost::asio::streambuf> response_buffer,
                  const boost::shared_ptr<ResponseMeta> meta_ptr,
                  Callback callback);
-    bool BuildGetReq(const HttpGetRequest& req,
+    bool BuildGetReq(const Url& url,
+                     const HttpGetRequest& req,
                      boost::asio::streambuf& req_buf);
 private:
     BaseClient base_client_;

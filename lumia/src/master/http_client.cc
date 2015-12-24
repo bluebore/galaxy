@@ -29,13 +29,70 @@ bool HttpClient::SyncGet(const HttpGetRequest& request,
     } 
     boost::asio::streambuf req_buf;
     boost::asio::streambuf resp_buf;
-
+    ResponseMeta meta;
+    ok = BuildGetReq(url, request, req_buf);
+    if (!ok) {
+        return false;
+    }
+    ok = base_client_.SyncRequest(url.server, url.protocol,
+                                  req_buf, resp_buf, meta);
+    if (ok) {
+        std::ostringstream os;
+        os << &resp_buf;
+        response->body = os.str();
+        response->status = meta.status;
+        response->headers = meta.headers;
+        return true;
+    }
+    return false;
 }
 
-bool HttpClient::BuildGetReq(const HttpGetRequest& req,
+bool HttpClient::BuildGetReq(const Url& url,
+                             const HttpGetRequest& req,
                              boost::asio::streambuf& req_buf) {
-
+    std::ostream os(&req_buf);
+    std::stringstream body;
+    os << "GET "<< url.path << " HTTP/1.1\r\n";
+    os << "Host: "<< url.server << "\r\n";
+    std::vector<std::string>::const_iterator header_it = req.headers.begin();
+    for (; header_it != req.headers.end(); ++header_it) {
+        os << *header_it << "\r\n";
+    }
+    os << "User-Agent: Lumia Master\r\n";
+    os << "Connection: close\r\n";
+    os << "Accept: *\r\n";
+    os << "\r\n";
+    return true;
 }
+
+bool HttpClient::SyncPost(const HttpPostRequest& request,
+                 HttpResponse* response) {
+
+    Url url;
+    bool ok = ParseUrl(request.url, &url);
+    if (!ok) {
+        return false;
+    } 
+    boost::asio::streambuf req_buf;
+    boost::asio::streambuf resp_buf;
+    ResponseMeta meta;
+    ok = BuildSyncPostForm(request, url, req_buf);
+    if (!ok) {
+        return false;
+    }
+    ok = base_client_.SyncRequest(url.server, url.protocol,
+                                  req_buf, resp_buf, meta);
+    if (ok) {
+        std::ostringstream os;
+        os << &resp_buf;
+        response->body = os.str();
+        response->status = meta.status;
+        response->headers = meta.headers;
+        return true;
+    }
+    return false;
+}
+
 
 bool HttpClient::AsyncPost(const boost::shared_ptr<HttpPostRequest> request_ptr,
                            boost::shared_ptr<HttpResponse> response_ptr,
@@ -86,6 +143,8 @@ void HttpClient::HandleCallback(HttpCallback callback,
         std::ostringstream os;
         os << response_buffer.get();
         response_ptr->body = os.str();
+        response_ptr->status = meta_ptr->status;
+        response_ptr->headers = meta_ptr->headers;
     }
     callback(response_ptr);
 }
@@ -113,6 +172,39 @@ bool HttpClient::BuildPostForm(const boost::shared_ptr<HttpPostRequest> request_
 
     std::vector<std::string>::iterator header_it = request_ptr->headers.begin();
     for (; header_it != request_ptr->headers.end(); ++header_it) {
+        os << *header_it << "\r\n";
+    }
+    std::string encoded_body = body.str();
+    os << "Content-Length: " << encoded_body.length() << "\r\n";
+    os << "User-Agent: Lumia Master\r\n";
+    os << "Connection: close\r\n";
+    os << "Accept: *\r\n";
+    os << "\r\n";
+    os << encoded_body;
+    return true;
+}
+
+bool HttpClient::BuildSyncPostForm(const HttpPostRequest& request,
+                                   const Url& url,
+                                   boost::asio::streambuf& request_buffer){
+    std::ostream os(&request_buffer);
+    std::stringstream body;
+    std::vector<std::pair<std::string, std::string> >::const_iterator it = request.data.begin();
+    os << "POST "<< url.path << " HTTP/1.1\r\n";
+    os << "Host: "<< url.server << "\r\n";
+    os << "Content-Type: application/x-www-form-urlencoded\r\n";
+    int flag = 0;
+    for (; it != request.data.end(); ++it) {
+        if (flag >0) {
+            body << "&";
+        }
+        std::string encoded_str;
+        UrlEncode(it->second, &encoded_str);
+        body << it->first << "=" << encoded_str;
+        ++flag;
+    }
+    std::vector<std::string>::const_iterator header_it = request.headers.begin();
+    for (; header_it != request.headers.end(); ++header_it) {
         os << *header_it << "\r\n";
     }
     std::string encoded_body = body.str();

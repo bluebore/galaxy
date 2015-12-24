@@ -57,9 +57,9 @@ public:
                       Callback callback);
     bool SyncRequest(const std::string& server,
                      const std::string& protocol,
-                     const boost::asio::streambuf& request,
+                     boost::asio::streambuf& request,
                      boost::asio::streambuf& response,
-                     ResponseMeta& mete);
+                     ResponseMeta& meta);
     void Run();
 private:
     void HandleResolveCompleted(const boost::system::error_code& err,

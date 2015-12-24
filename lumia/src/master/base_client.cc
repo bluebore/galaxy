@@ -37,9 +37,9 @@ void BaseClient::AsyncRequest(const std::string& server,
             context_ptr));
 }
 
-void BaseClient::SyncRequest(const std::string& server,
+bool BaseClient::SyncRequest(const std::string& server,
                              const std::string& protocol,
-                             const boost::asio::streambuf& request,
+                             boost::asio::streambuf& request,
                              boost::asio::streambuf& response,
                              ResponseMeta& meta) {
     boost::asio::ip::tcp::resolver resolver(io_service_);
@@ -48,10 +48,10 @@ void BaseClient::SyncRequest(const std::string& server,
     boost::asio::ip::tcp::socket socket(io_service_);
     boost::asio::connect(socket, endpoint_it);
     boost::asio::write(socket, request);
-    boost::asio::read_util(socket, response, "\r\n");
+    boost::asio::read_until(socket, response, "\r\n");
     std::istream response_stream(&response);
     response_stream >> meta.http_version;
-    response_stream >> meta.status_code;
+    response_stream >> meta.status;
     std::getline(response_stream, meta.http_msg);
     boost::asio::read_until(socket, response, "\r\n\r\n");
     std::string header;

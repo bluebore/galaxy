@@ -19,6 +19,8 @@ public:
                    const std::string& kernel,
                    RmsCallback callback);
 private:
+    bool GetRmsAccess(std::string* token);
+private:
     HttpClient* http_client_;
 };
 
