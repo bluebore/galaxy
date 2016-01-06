@@ -30,7 +30,6 @@ sleep 3
 tar zcf batch.tar.gz ../galaxy
 echo "sleep 10000000000" > longrun.sh
 tar zcf longrun.tar.gz longrun.sh
-python SimpleHTTPServer 8181 &
 ../galaxy submit -f sample.json
 
 ../galaxy jobs
