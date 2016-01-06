@@ -5,19 +5,20 @@
 #include "agent/agent_impl.h"
 
 #include "gflags/gflags.h"
-
 #include "boost/bind.hpp"
 #include "boost/algorithm/string.hpp"
 #include "boost/algorithm/string/split.hpp"
 #include "proto/master.pb.h"
 #include "logging.h"
 #include "agent/agent_internal_infos.h"
+#include "utils/trace.h"
 #include "agent/utils.h"
 
 DECLARE_string(master_host);
 DECLARE_string(master_port);
 DECLARE_int32(agent_background_threads_num);
 DECLARE_int32(agent_heartbeat_interval);
+DECLARE_int32(agent_trace_pod_interval);
 DECLARE_string(agent_ip);
 DECLARE_string(agent_port);
 DECLARE_string(agent_work_dir);
@@ -26,26 +27,44 @@ DECLARE_int32(agent_millicores_share);
 DECLARE_int64(agent_mem_share);
 
 DECLARE_string(agent_persistence_path);
+DECLARE_bool(enable_resource_minitor);
+DECLARE_int32(stat_check_period);
+DECLARE_double(max_cpu_usage);
+DECLARE_double(max_mem_usage);
+DECLARE_double(max_disk_r_kbps);
+DECLARE_double(max_disk_w_kbps);
+DECLARE_double(max_disk_r_rate);
+DECLARE_double(max_disk_w_rate);
+DECLARE_double(max_disk_util);
+DECLARE_double(max_net_in_bps);
+DECLARE_double(max_net_out_bps);
+DECLARE_double(max_net_in_pps);
+DECLARE_double(max_net_out_pps);
+DECLARE_double(max_intr_rate);
+DECLARE_double(max_soft_intr_rate);
+DECLARE_int32(agent_recover_threshold);
 
 namespace baidu {
 namespace galaxy {
-
+    
 AgentImpl::AgentImpl() : 
     master_endpoint_(),
     lock_(),
     background_threads_(FLAGS_agent_background_threads_num),
+    trace_pool_(10),
     rpc_client_(NULL),
     endpoint_(),
     master_(NULL),
     resource_capacity_(),
     master_watcher_(NULL),
-    mutex_master_endpoint_() { 
-
+    mutex_master_endpoint_(),
+    state_(kInit) {
     rpc_client_ = new RpcClient();    
     endpoint_ = FLAGS_agent_ip;
     endpoint_.append(":");
     endpoint_.append(FLAGS_agent_port);
     master_watcher_ = new MasterWatcher();
+    recover_threshold_ = 0;
 }
 
 AgentImpl::~AgentImpl() {
@@ -143,6 +162,22 @@ void AgentImpl::RunPod(::google::protobuf::RpcController* /*cntl*/,
                        ::google::protobuf::Closure* done) {
     do {
         MutexLock scope_lock(&lock_);
+        if (state_ == kOffline) {
+            resp->set_status(kAgentError);
+            lock_.Unlock();
+            OfflineAgentRequest request;
+            OfflineAgentResponse response;
+            MutexLock lock(&mutex_master_endpoint_);
+            request.set_endpoint(endpoint_);
+            if (!rpc_client_->SendRequest(master_,
+                                          &Master_Stub::OfflineAgent,
+                                          &request,
+                                          &response,
+                                          5, 1)) {
+                LOG(WARNING, "send offline request fail");
+            }
+            break;
+        }
         if (!req->has_podid()
                 || !req->has_pod()) {
             resp->set_status(kInputError);  
@@ -177,7 +212,9 @@ void AgentImpl::RunPod(::google::protobuf::RpcController* /*cntl*/,
             break;
         }
         LOG(INFO, "run pod %s", req->podid().c_str());
-        resp->set_status(kOk); 
+        resp->set_status(kOk);
+        trace_pool_.DelayTask(FLAGS_agent_trace_pod_interval,
+                boost::bind(&AgentImpl::CollectPodStat, this, req->podid()));
     } while (0);
     done->Run();
     return;
@@ -212,14 +249,24 @@ void AgentImpl::KillPod(::google::protobuf::RpcController* /*cntl*/,
     return;
 }
 
+void AgentImpl::KillAllPods() {
+    lock_.AssertHeld();
+    for (std::map<std::string, PodDescriptor>::iterator it = pods_descs_.begin();
+            it != pods_descs_.end(); it++) {
+        std::string pod_id = it->first;
+        pod_manager_.DeletePod(pod_id);
+        LOG(WARNING, "fork to kill %s", pod_id.c_str());
+    }
+    return;
+}
+
 void AgentImpl::KeepHeartBeat() {
     MutexLock lock(&mutex_master_endpoint_);
     if (!PingMaster()) {
-        LOG(WARNING, "ping master %s failed", 
-                     master_endpoint_.c_str());
+        LOG(WARNING, "ping master %s failed",master_endpoint_.c_str());
     }
     background_threads_.DelayTask(FLAGS_agent_heartbeat_interval,
-                                  boost::bind(&AgentImpl::KeepHeartBeat, this));
+            boost::bind(&AgentImpl::KeepHeartBeat, this));
     return;
 }
 
@@ -248,6 +295,9 @@ bool AgentImpl::RestorePods() {
                     pod.pod_id.c_str()); 
             return false;
         }
+        trace_pool_.DelayTask(FLAGS_agent_trace_pod_interval,
+                boost::bind(&AgentImpl::CollectPodStat, this, pod.pod_id));
+
     }
     return true;
 }
@@ -286,7 +336,9 @@ bool AgentImpl::Init() {
     background_threads_.DelayTask(
                 500, 
                 boost::bind(&AgentImpl::LoopCheckPods, this)); 
-
+    if (FLAGS_enable_resource_minitor) {
+        background_threads_.AddTask(boost::bind(&AgentImpl::CheckSysHealth, this));
+    }
     return true;
 }
 
@@ -294,7 +346,8 @@ bool AgentImpl::PingMaster() {
     mutex_master_endpoint_.AssertHeld();
     HeartBeatRequest request;
     HeartBeatResponse response;
-    request.set_endpoint(endpoint_); 
+    request.set_endpoint(endpoint_);
+    LOG(WARNING, "agent %s ping master : %s", endpoint_.c_str(), master_endpoint_.c_str());
     return rpc_client_->SendRequest(master_,
                                     &Master_Stub::HeartBeat,
                                     &request,
@@ -420,6 +473,22 @@ void AgentImpl::ConvertToPodPropertiy(const PodInfo& show_pod_info, PodPropertiy
     return;
 }
 
+void AgentImpl::CollectPodStat(const std::string& podid) {
+    MutexLock scope_lock(&lock_);
+    PodInfo pod_info;
+    int ok = pod_manager_.ShowPod(podid, &pod_info);
+    if (ok != 0) {
+        LOG(WARNING, "pod %s does not exist", podid.c_str());
+        return;
+    }
+    LOG(INFO, "trace pod %s", podid.c_str());
+    Trace::TracePodStat(&pod_info.pod_status,
+                        pod_info.pod_desc.requirement().millicores(),
+                        pod_info.pod_desc.requirement().memory());
+    trace_pool_.DelayTask(FLAGS_agent_trace_pod_interval,
+            boost::bind(&AgentImpl::CollectPodStat, this, podid));
+}
+
 void AgentImpl::ShowPods(::google::protobuf::RpcController* /*cntl*/,
                          const ::baidu::galaxy::ShowPodsRequest* req,
                          ::baidu::galaxy::ShowPodsResponse* resp,
@@ -452,6 +521,126 @@ void AgentImpl::ShowPods(::google::protobuf::RpcController* /*cntl*/,
     } while (0);
     done->Run();    
     return;
+}
+
+void AgentImpl::CheckSysHealth() {
+    bool ret = true;
+    int coll_rlt = resource_collector_.CollectStatistics();
+    if (coll_rlt == -1) {
+        LOG(WARNING, "Collect sys stat fail.");
+        ret = false;
+    } else if (coll_rlt == 1)  {
+        background_threads_.DelayTask(FLAGS_stat_check_period, boost::bind(&AgentImpl::CheckSysHealth, this));
+        return;
+    } else if (fabs(FLAGS_max_cpu_usage) >= 1e-6 
+            && resource_collector_.GetStat()->cpu_used_ > FLAGS_max_cpu_usage) {
+        LOG(WARNING, "cpu uage %f reach threshold %f",
+                resource_collector_.GetStat()->cpu_used_, FLAGS_max_cpu_usage);
+        ret = false;
+    } else if (fabs(FLAGS_max_mem_usage) >= 1e-6 
+            && resource_collector_.GetStat()->mem_used_ > FLAGS_max_mem_usage) {
+        LOG(WARNING, "mem usage %f reach threshold %f",
+                resource_collector_.GetStat()->mem_used_, FLAGS_max_mem_usage);
+        ret = false;
+    } else if (fabs(FLAGS_max_disk_r_kbps) >= 1e-6
+            && resource_collector_.GetStat()->disk_read_Bps_ > FLAGS_max_disk_r_kbps) {
+        LOG(WARNING, "disk read Bps %f reach threshold %f",
+                resource_collector_.GetStat()->disk_read_Bps_, FLAGS_max_disk_r_kbps);
+        ret = false;
+    } else if (fabs(FLAGS_max_disk_w_kbps) >= 1e-6 
+            && resource_collector_.GetStat()->disk_write_Bps_ > FLAGS_max_disk_w_kbps) {
+        LOG(WARNING, "disk write Bps %f reach threshold %f",
+                resource_collector_.GetStat()->disk_write_Bps_, FLAGS_max_disk_w_kbps);
+        ret = false;
+    } else if (fabs(FLAGS_max_disk_r_rate) >= 1e-6
+            && resource_collector_.GetStat()->disk_read_times_ > FLAGS_max_disk_r_rate) {
+        LOG(WARNING, "disk write rate %f reach threshold %f",
+                resource_collector_.GetStat()->disk_read_times_, FLAGS_max_disk_r_rate);
+        ret = false;
+    } else if (fabs(FLAGS_max_disk_w_rate) >= 1e-6 &&
+            resource_collector_.GetStat()->disk_write_times_ > FLAGS_max_disk_w_rate) {
+        LOG(WARNING, "disk write rate %f reach threshold %f", 
+                resource_collector_.GetStat()->disk_write_times_, FLAGS_max_disk_w_rate);
+        ret = false;
+    } else if (fabs(FLAGS_max_disk_util) >= 1e-6
+            && resource_collector_.GetStat()->disk_io_util_ > FLAGS_max_disk_util) {
+        LOG(WARNING, "disk io util %f reach threshold %f", 
+                resource_collector_.GetStat()->disk_io_util_, FLAGS_max_disk_util);
+        ret = false;
+    } else if (fabs(FLAGS_max_net_in_bps) >= 1e-6
+            && resource_collector_.GetStat()->net_in_bps_ > FLAGS_max_net_in_bps) {
+        LOG(WARNING, "net in bps %f reach threshold %f",
+                resource_collector_.GetStat()->net_in_bps_, FLAGS_max_net_in_bps);
+        ret = false;
+    } else if (fabs(FLAGS_max_net_out_bps) >= 1e-6
+            && resource_collector_.GetStat()->net_out_bps_ > FLAGS_max_net_out_bps) {
+        LOG(WARNING, "net out bps %f reach threshold %f", 
+                resource_collector_.GetStat()->net_out_bps_, FLAGS_max_net_out_bps);
+        ret = false;
+    } else if (fabs(FLAGS_max_net_in_pps) >= 1e-6 
+            && resource_collector_.GetStat()->net_in_pps_ > FLAGS_max_net_in_pps) {
+        LOG(WARNING, "net in pps %f reach threshold %f", 
+                resource_collector_.GetStat()->net_in_bps_, FLAGS_max_net_in_pps);
+        ret = false;
+    } else if (fabs(FLAGS_max_net_out_pps) >= 1e-6 &&
+            resource_collector_.GetStat()->net_out_pps_ > FLAGS_max_net_out_pps) {
+        LOG(WARNING, "net out pps %f reach threshold %f",
+                resource_collector_.GetStat()->net_out_pps_, FLAGS_max_net_out_pps);
+        ret = false;
+    } else if (fabs(FLAGS_max_intr_rate) >= 1e-6  && 
+            resource_collector_.GetStat()->intr_rate_ > FLAGS_max_intr_rate) {
+        LOG(WARNING, "interupt rate %f reach threshold %f", 
+                resource_collector_.GetStat()->intr_rate_, FLAGS_max_intr_rate);
+        ret = false;
+    } else if (fabs(FLAGS_max_soft_intr_rate) >= 1e-6 &&
+            resource_collector_.GetStat()->soft_intr_rate_ > FLAGS_max_soft_intr_rate) {
+        LOG(WARNING, "soft interupt rate %f reach threshold %f",
+                resource_collector_.GetStat()->soft_intr_rate_, FLAGS_max_soft_intr_rate);
+        ret = false;
+    }
+    recover_threshold_++;
+    if (ret) {
+        if ((recover_threshold_ > FLAGS_agent_recover_threshold 
+                && state_ == kOffline) || state_ == kInit) {
+            OnlineAgentRequest request;
+            OnlineAgentResponse response;
+            MutexLock lock(&mutex_master_endpoint_);
+            request.set_endpoint(endpoint_);
+            if (!rpc_client_->SendRequest(master_,
+                                          &Master_Stub::OnlineAgent,
+                                          &request,
+                                          &response,
+                                          5, 1)) {
+                LOG(WARNING, "send online request fail");
+            } else {
+                mutex_master_endpoint_.Unlock();
+                MutexLock scope_lock(&lock_);
+                state_ = kAlive;
+                LOG(WARNING, "agent state Alive.");
+            }
+        }
+    } else {
+        recover_threshold_ = 0;
+        if (state_ != kOffline) {
+            MutexLock scope_lock(&lock_);
+            state_ = kOffline;
+            KillAllPods();
+            LOG(WARNING, "agent state offline, sys health checker kill all pods");
+            lock_.Unlock();
+            OfflineAgentRequest request;
+            OfflineAgentResponse response;
+            MutexLock lock(&mutex_master_endpoint_);
+            request.set_endpoint(endpoint_);
+            if (!rpc_client_->SendRequest(master_,
+                                         &Master_Stub::OfflineAgent,
+                                         &request,
+                                         &response,
+                                         5, 1)) {
+                LOG(WARNING, "send offline request fail");
+            }
+        }
+    }
+    background_threads_.DelayTask(FLAGS_stat_check_period, boost::bind(&AgentImpl::CheckSysHealth, this));
 }
 
 }   // ending namespace galaxy

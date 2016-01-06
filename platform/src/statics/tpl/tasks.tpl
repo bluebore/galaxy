@@ -15,7 +15,7 @@
         {{#tasks}}
            <tr>
                <td>{{pod_id}}</td>
-               <td>{{agent_addr}}</td>
+               <td><a href="{{agent_addr}}">{{agent_addr}}</a></td>
                <td>{{internal_error}}</td>
                <td>{{error}}</td>
                <td>{{cmd}}</td>

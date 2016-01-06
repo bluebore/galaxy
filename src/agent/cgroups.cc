@@ -17,7 +17,6 @@
 namespace baidu {
 namespace galaxy {
 namespace cgroups {
-
 bool FreezerSwitch(const std::string& hierarchy,
                    const std::string& cgroup,
                    const std::string& freezer_state) {
@@ -31,6 +30,8 @@ bool FreezerSwitch(const std::string& cgroup,
         if (0 != Write(cgroup, 
                        "freezer.state", 
                        freezer_state)) {
+            LOG(WARNING, "fail to write freeze state %s to %s",
+                    freezer_state.c_str(), cgroup.c_str());
             return false; 
         }     
         ::usleep(100000);  
@@ -38,6 +39,7 @@ bool FreezerSwitch(const std::string& cgroup,
         if (0 != Read(cgroup,
                       "freezer.state",
                       &freezer_state_val)) {
+            LOG(WARNING, "fail to read freeze state from %s", cgroup.c_str());
             return false; 
         } 
         if (freezer_state_val == freezer_state) {

@@ -37,7 +37,6 @@ class GalaxySDK(object):
         if response.status != galaxy_pb2.kOk:
             LOG.error("fail get pods");
             return [], False
-        pods = []
         for pod in response.pods:
             new_pod = util.pb2dict(pod) 
             new_pod["stage"] = galaxy_pb2.PodStage.Name(pod.stage)

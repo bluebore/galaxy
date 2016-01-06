@@ -301,29 +301,41 @@ int PodManager::CheckPod(const std::string& pod_id) {
 
     int32_t millicores = 0;
     int64_t memory_used = 0;
+    int64_t read_bytes_ps = 0;
+    int64_t write_bytes_ps = 0;
+    int64_t syscr_ps = 0;
+    int64_t syscw_ps = 0;
     std::map<std::string, TaskInfo>::iterator task_it = 
         pod_info.tasks.begin();
     TaskState pod_state = kTaskRunning; 
     std::vector<std::string> to_del_task;
+    pod_info.pod_status.mutable_status()->Clear();
     for (; task_it != pod_info.tasks.end(); ++task_it) {
         if (task_manager_->QueryTask(&(task_it->second)) != 0) {
             to_del_task.push_back(task_it->first);
         } else {
             millicores += task_it->second.status.resource_used().millicores();
             memory_used += task_it->second.status.resource_used().memory();
+            read_bytes_ps += task_it->second.status.resource_used().read_bytes_ps();
+            write_bytes_ps += task_it->second.status.resource_used().write_bytes_ps();
+            syscr_ps += task_it->second.status.resource_used().syscr_ps();
+            syscw_ps += task_it->second.status.resource_used().syscw_ps();
             // TODO pod state 
             if (task_it->second.status.state() <= kTaskRunning
                     && task_it->second.status.state() < pod_state) {
-                pod_state = task_it->second.status.state();
-                 
+                pod_state = task_it->second.status.state(); 
             } else if (task_it->second.status.state() > pod_state){
-                pod_state = task_it->second.status.state();
-                 
+                pod_state = task_it->second.status.state(); 
             }
+            pod_info.pod_status.mutable_status()->Add()->CopyFrom(task_it->second.status);
         }
     }
     pod_info.pod_status.mutable_resource_used()->set_millicores(millicores);
     pod_info.pod_status.mutable_resource_used()->set_memory(memory_used);
+    pod_info.pod_status.mutable_resource_used()->set_read_bytes_ps(read_bytes_ps);
+    pod_info.pod_status.mutable_resource_used()->set_write_bytes_ps(write_bytes_ps);
+    pod_info.pod_status.mutable_resource_used()->set_syscr_ps(syscr_ps);
+    pod_info.pod_status.mutable_resource_used()->set_syscw_ps(syscw_ps);
     std::string version = pod_info.pod_desc.version();
     pod_info.pod_status.set_version(version);
     switch (pod_state) {
@@ -418,11 +430,12 @@ int PodManager::AddPod(const PodInfo& info) {
     std::string gc_dir = FLAGS_agent_gc_dir + "/" 
         + internal_info.pod_id + "_" + time_str;
     internal_info.pod_status.set_pod_gc_path(gc_dir);
+    internal_info.pod_status.set_start_time(::baidu::common::timer::get_micros());
     LOG(WARNING, "pod gc path %s", pods_[info.pod_id].pod_status.pod_gc_path().c_str());
 
     if (AllocPortForInitd(internal_info.initd_port) != 0){
         LOG(WARNING, "pod %s alloc port for initd failed",
-                internal_info.pod_id.c_str());            
+                internal_info.pod_id.c_str()); 
         return -1;
     }
     int lanuch_initd_ret = -1;
@@ -436,7 +449,7 @@ int PodManager::AddPod(const PodInfo& info) {
         LOG(WARNING, "lanuch initd for %s failed",
                 internal_info.pod_id.c_str()); 
         return -1;
-    }                    
+    } 
     std::map<std::string, TaskInfo>::iterator task_it = 
         internal_info.tasks.begin();
     for (; task_it != internal_info.tasks.end(); ++task_it) {

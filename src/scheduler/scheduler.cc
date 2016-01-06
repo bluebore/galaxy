@@ -432,18 +432,19 @@ int32_t Scheduler::ChoosePods(std::vector<JobInfo>& pending_jobs,
             }
         }
         uint32_t max_deploy_pods = job_pending_pods.size();
-        if (job_it->desc().deploy_step() > 0 && 
-            (uint32_t)job_it->desc().deploy_step() < max_deploy_pods) { 
-            max_deploy_pods = job_it->desc().deploy_step();
-        }
-        LOG(INFO, "job %s deploy stat: pending_size %u, deploying_num %u, max_deploy_pods %u",
-          job_it->jobid().c_str(), job_pending_pods.size(), deploying_num, max_deploy_pods);
+        LOG(INFO, "job %s deploy stat: pending_size %u, deploying_num %u, max_deploy_pods %u, step size %u",
+          job_it->jobid().c_str(), job_pending_pods.size(), deploying_num, max_deploy_pods, 
+          job_it->desc().deploy_step());
         if (job_pending_pods.size() <= 0 
-           || deploying_num >= max_deploy_pods) {
+           || deploying_num >= (uint32_t)job_it->desc().deploy_step()) {
             continue;
         }
         std::vector<std::string> need_schedule;
-        for (uint32_t i = 0; i < job_pending_pods.size() && deploying_num < max_deploy_pods; i++) {
+        for (uint32_t i = 0; 
+            i < job_pending_pods.size()
+            && deploying_num < (uint32_t)job_it->desc().deploy_step()
+            && deploying_num < max_deploy_pods;
+            i++) {
             need_schedule.push_back(job_pending_pods[i]);
             deploying_num++;
         }

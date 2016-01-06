@@ -11,6 +11,7 @@
 #include "boost/unordered_set.hpp"
 
 #include "sofa/pbrpc/pbrpc.h"
+#include "proto/galaxy.pb.h"
 #include "proto/agent.pb.h"
 #include "proto/master.pb.h"
 
@@ -62,6 +63,8 @@ private:
     bool RestorePods();
     
     void LoopCheckPods();
+    
+    void KillAllPods();
     // ret ==  0 alloc success
     //        -1 alloc failed
     int AllocResource(const Resource& requirement);
@@ -71,23 +74,26 @@ private:
 
     void CreatePodInfo(const ::baidu::galaxy::RunPodRequest* req, 
                        PodInfo* pod_info);
+    
+    void CheckSysHealth();
 
     struct ResourceCapacity {
         int64_t millicores; 
         int64_t memory;
         // TODO initd port not included
         boost::unordered_set<int32_t> used_port;
-        ResourceCapacity() 
+        ResourceCapacity()
             : millicores(0),
               memory(0),
               used_port() {
         }
     };
+    void CollectPodStat(const std::string& podid);
 private:
-    std::string master_endpoint_;
-    
+    std::string master_endpoint_; 
     Mutex lock_;
     ThreadPool background_threads_;
+    ThreadPool trace_pool_;
     RpcClient* rpc_client_;
     std::string endpoint_;
     Master_Stub* master_;
@@ -98,7 +104,10 @@ private:
 
     PodManager pod_manager_;
     std::map<std::string, PodDescriptor> pods_descs_; 
-    PersistenceHandler persistence_handler_;    
+    PersistenceHandler persistence_handler_;
+    GlobalResourceCollector resource_collector_;
+    AgentState state_;
+    int32_t recover_threshold_;
 };
 
 }   // ending namespace galaxy

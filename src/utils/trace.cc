@@ -20,12 +20,12 @@ DECLARE_string(agent_ip);
 namespace baidu {
 namespace galaxy {
 
+static boost::uuids::random_generator gen;
 void Trace::Init() {
 }
 
 std::string Trace::GenUuid() {
-    boost::uuids::uuid uuid = boost::uuids::random_generator()();
-    return boost::lexical_cast<std::string>(uuid); 
+    return boost::lexical_cast<std::string>(gen()); 
 }
 
 void Trace::Log(::google::protobuf::Message& msg, const std::string& pk) {
@@ -173,6 +173,10 @@ void Trace::TracePodStat(const PodStatus* pod, int32_t cpu_quota, int64_t mem_qu
     stat.set_jobid(pod->jobid());
     stat.set_cpu_quota(cpu_quota);
     stat.set_mem_quota(mem_quota);
+    stat.set_read_bytes_ps(pod->resource_used().read_bytes_ps());
+    stat.set_write_bytes_ps(pod->resource_used().write_bytes_ps());
+    stat.set_syscr_ps(pod->resource_used().syscr_ps());
+    stat.set_syscw_ps(pod->resource_used().syscw_ps());
     stat.set_cpu_used(pod->resource_used().millicores());
     stat.set_mem_used(pod->resource_used().memory());
     stat.set_time(::baidu::common::timer::get_micros());

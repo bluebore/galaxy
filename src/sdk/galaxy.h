@@ -24,6 +24,10 @@ struct ResDescription {
     std::vector<int32_t> ports;
     std::vector<VolumeDescription> ssds;
     std::vector<VolumeDescription> disks;
+    int64_t read_bytes_ps;
+    int64_t write_bytes_ps;
+    int64_t syscr_ps;
+    int64_t syscw_ps;
 };
 
 struct TaskDescription {
@@ -65,7 +69,14 @@ struct JobInformation {
     int64_t mem_used;
     int32_t pending_num;
     int32_t deploying_num;
+    int32_t death_num;
+    int64_t create_time;
+    int64_t update_time;
     std::string state;
+    int64_t read_bytes_ps;
+    int64_t write_bytes_ps;
+    int64_t syscr_ps;
+    int64_t syscw_ps;
 };
 
 struct NodeDescription {
@@ -90,6 +101,19 @@ struct PodInformation {
     std::string state;
     std::string version;
     std::string endpoint;
+    int64_t pending_time;
+    int64_t sched_time;
+    int64_t start_time;
+};
+
+struct TaskInformation {
+    std::string podid;
+    ResDescription used;
+    std::string state;
+    std::string endpoint;
+    int64_t deploy_time;
+    int64_t start_time;
+    std::string cmd;
 };
 
 struct MasterStatus {
@@ -163,6 +187,12 @@ public:
                          std::vector<PodInformation>* pods) = 0;
     virtual bool GetPodsByName(const std::string& jobname, 
                                std::vector<PodInformation>* pods) = 0;
+    virtual bool GetPodsByAgent(const std::string& endpoint,
+                                std::vector<PodInformation>* pods) = 0;
+    virtual bool GetTasksByJob(const std::string& jobid,
+                               std::vector<TaskInformation>* tasks) = 0;
+    virtual bool GetTasksByAgent(const std::string& endpoint,
+                                 std::vector<TaskInformation>* tasks) = 0;
     virtual bool GetStatus(MasterStatus* status) = 0;
     virtual bool SwitchSafeMode(bool mode) = 0;
     virtual bool Preempt(const PreemptPropose& propose) = 0;
@@ -170,6 +200,8 @@ public:
     virtual bool Login(const std::string& name, 
                        const std::string& password,
                        std::string* sid) = 0;
+    virtual bool OfflineAgent(const std::string& agent_addr) = 0;
+    virtual bool OnlineAgent(const std::string& agent_addr) = 0;
 };
 
 } // namespace galaxy

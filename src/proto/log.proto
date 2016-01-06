@@ -27,6 +27,10 @@ message PodStat {
     optional int64 dynamic_mem_quota = 8;
     optional int64 time = 9;
     optional string podid = 10;
+    optional int64 read_bytes_ps = 11;
+    optional int64 write_bytes_ps = 12;
+    optional int64 syscr_ps = 13;
+    optional int64 syscw_ps = 14;
 }
 
 message PodEvent {
@@ -123,6 +127,17 @@ message TaskEvent {
     optional string gc_dir = 18;
 }
 
+message AgentStat {
+    optional string addr = 1;
+    optional int64 job_count = 2;
+    optional int64 cpu_millicores = 3;
+    optional int64 cpu_used_millicores = 4;
+    optional int64 mem_used = 5;
+    optional int64 mem_quota = 6;
+
+}
+
+
 message ClusterStat {
     // index
     optional string data_center = 1;
@@ -147,6 +162,11 @@ message ClusterStat {
     optional string id = 16;
 }
 
+message JobPodPair {
+    optional string jobid = 1;
+    optional string podid = 2;
+}
+
 message AgentEvent {
     // index pk
     optional string addr = 1;
@@ -156,5 +176,6 @@ message AgentEvent {
     // index 
     optional string data_center = 4;
     optional string id = 5;
+    repeated JobPodPair pods = 6;
 } 
 

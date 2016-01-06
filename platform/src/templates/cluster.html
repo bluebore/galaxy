@@ -3,11 +3,18 @@
 <link rel="stylesheet" type="text/css" href="{{media_url}}/statistic.css">
 <style>
 .my-container {
-background-color: rgb(247, 247, 249);
 border-radius: 1px;
-border-style: solid rgb(225, 225, 232) 1px;
 padding:3px;
-margin-bottom:5px;
+border-bottom: 1px #ededed solid;
+margin-bottom: 3px;
+}
+.pie {
+  height: 120px;
+  width:120px;
+  float:left;
+ }
+#real_time_mem {
+	margin-left:50px;
 }
 </style>
 {%endblock%}
@@ -19,17 +26,24 @@ margin-bottom:5px;
         </div>
         <div id="navbar" class="navbar-collapse collapse">
           <ul class="nav navbar-nav">
-              <li class="active"><a href="{{root_url}}trace/cluster">Cluster</a></li>
-              <li><a href="{{root_url}}trace/job">Jobs</a></li>
-              <li><a href="{{root_url}}trace/sql">Trace</a></li>
+              <li ><a href="{{root_url}}dc">DataCenter</a></li>
+              <li class="active"><a href="{{root_url}}trace/cluster?master={{master}}&dc={{dc}}&trace={{trace}}">Cluster</a></li>
+              <li><a href="{{root_url}}trace/job?master={{master}}&dc={{dc}}&trace={{trace}}">Jobs</a></li>
+              <li><a href="{{root_url}}trace/sql?master={{master}}&dc={{dc}}&trace={{trace}}">Trace</a></li>
          </ul>
        </div><!--/.nav-collapse -->
       </div>
     </nav>
-<div class="container my-container" id="real_time_cpu">
-</div>
 <div class="container my-container">
-<h4>Cluster Resource Statistics</h4>
+    <h4>实时资源使用</h4>
+    <div id="real_time_cpu" class="pie"> 
+    </div>
+    <div id="real_time_mem" class="pie"> 
+    </div>
+</div>
+
+<div class="container my-container">
+<h4>资源使用统计</h4>
 <div id="cluster_cpu_stat" style="float:left;display:inline;height: 350px; width: 540px">
     loading data...
 </div>
@@ -39,7 +53,7 @@ margin-bottom:5px;
 </div> 
 
 <div class="container my-container">
-<h4>Cluster Stabilization Statistics</h4>
+<h4>集群稳定性</h4>
 <div id="cluster_node_stat" style="float:left;display:inline;height: 350px; width: 540px">
     loading data...
 </div>
@@ -57,11 +71,20 @@ margin-bottom:5px;
 {%block custom-js%}
 <script src="//code.highcharts.com/stock/highstock.js"></script>
 <script src="{{media_url}}/mustache.js"></script>
+<script src="{{media_url}}/progressbar.min.js"></script>
 <script>
 Number.prototype.padLeft = function(base,chr){
    var  len = (String(base || 10).length - String(this).length)+1;
    return len > 0? new Array(len).join(chr || '0')+this : this;
 }
+var getGradientColor = function(percent) {
+    if (percent <= 0.3) {
+        return "#35aa47";
+    } else if (percent <= 0.5) {
+        return "#faa937";
+    }
+    return "#d84a38";
+};
 var ROOT_URL="{{root_url}}";
 var MEDIA_URL="{{media_url}}";
 $(function(){
@@ -117,14 +140,14 @@ $(function(){
     var today = new Date();
     var last = new Date(today.getTime() - (3 * 24 * 60 * 60 * 1000));
 
-    var query_cpu_stat = "select time, total_cpu_assigned,total_cpu_millicores,total_cpu_used_millicores from ClusterStat where data_center='yq01' "+
+    var query_cpu_stat = "select time, total_cpu_assigned,total_cpu_millicores,total_cpu_used_millicores from ClusterStat where data_center='{{dc}}' "+
         " and time >= '" + FormatDate(last) + "' and time <='" + FormatDate(today)+ "'";
    
 
-    $.getJSON(ROOT_URL+"trace/squery?limit=5000&db=baidu.galaxy&sql="+ encodeURIComponent(query_cpu_stat),function(data){
+    $.getJSON(ROOT_URL+"trace/squery?dc={{dc}}&master={{master}}&trace={{trace}}&limit=5000&db=baidu.galaxy&sql="+ encodeURIComponent(query_cpu_stat),function(data){
         $('#cluster_cpu_stat').highcharts('StockChart', {
             title: {
-                text: 'cluster cpu stat'
+                text: 'cpu状态'
             },
             yAxis: {
                    plotLines: [{
@@ -154,12 +177,12 @@ $(function(){
             series :ProcessCpuStat(data) 
         });
     });
-    var query_mem_stat = "select time, total_memory_assigned,total_memory,total_memory_used from ClusterStat where data_center='yq01' "+
+    var query_mem_stat = "select time, total_memory_assigned,total_memory,total_memory_used from ClusterStat where data_center='{{dc}}' "+
         " and time >= '" + FormatDate(last) + "' and time <='" + FormatDate(today)+"'";  
-     $.getJSON(ROOT_URL+"trace/squery?db=baidu.galaxy&sql="+ encodeURIComponent(query_mem_stat),function(data){
+    $.getJSON(ROOT_URL+"trace/squery?dc={{dc}}&master={{master}}&trace={{trace}}&db=baidu.galaxy&sql="+ encodeURIComponent(query_mem_stat),function(data){
         $('#cluster_mem_stat').highcharts('StockChart', {
             title: {
-                text: 'cluster memory stat'
+                text: '内存状态'
             },
             yAxis: {
                    plotLines: [{
@@ -189,9 +212,9 @@ $(function(){
             series :ProcessMemStat(data) 
         });
     });
-    var query_stable_stat = "select time,total_pod_count,total_node_count, alive_node_count,dead_node_count from ClusterStat where data_center='yq01'"+
+    var query_stable_stat = "select time,total_pod_count,total_node_count, alive_node_count,dead_node_count from ClusterStat where data_center='{{dc}}'"+
     " and time >= '" + FormatDate(last) + "' and time <='" + FormatDate(today)+"'"; 
-    $.getJSON(ROOT_URL+"trace/squery?limit=5000&db=baidu.galaxy&sql="+ encodeURIComponent(query_stable_stat),function(data){ 
+    $.getJSON(ROOT_URL+"trace/squery?master={{master}}&dc={{dc}}&trace={{trace}}&limit=5000&db=baidu.galaxy&sql="+ encodeURIComponent(query_stable_stat),function(data){ 
         var total_node = new Array;
         var total_alive = new Array;
         var total_dead = new Array;
@@ -211,7 +234,7 @@ $(function(){
         pod_stock.push({name:"pod", data:total_pod});
         $('#cluster_node_stat').highcharts('StockChart', {
             title: {
-                text: 'cluster node stat'
+                text: '节点状态'
             },
             yAxis: {
                    plotLines: [{
@@ -242,7 +265,7 @@ $(function(){
         });
         $('#cluster_pod_stat').highcharts('StockChart', {
             title: {
-                text: 'cluster pod stat'
+                text: "运行任务数"
             },
             yAxis: {
                    plotLines: [{
@@ -272,32 +295,46 @@ $(function(){
             series :pod_stock 
         });
     });
-    var GetCpuStatus = function(){
-        $.getJSON(ROOT_URL+"trace/status", function(data){
-            $.get(MEDIA_URL +"/tpl/cpu.tpl", function(tpl){
-                var overused = data.data.status.cpu_used - data.data.status.cpu_assigned;
-                if (overused < 0) {
-                    overused = 0;
-                }
-                var cpu_data =  {
-                                   cpu_total: Math.round(data.data.status.cpu_total/1000),
-                                   cpu_assigned: Math.round(data.data.status.cpu_assigned/1000),
-                                   cpu_used:Math.round(data.data.status.cpu_used/1000),
-                                   overused:Math.round(overused/1000)
-                                };
-                var cpu_info = Mustache.render(tpl, {cpu:cpu_data});
-                 $("#real_time_cpu").html(cpu_info);
+    var GetStatus = function(){
+        $.getJSON(ROOT_URL+"trace/status?master={{master}}&dc={{dc}}&trace={{trace}}", function(data){
+			var element = document.getElementById('real_time_cpu'); 
+            var cpu_percent = Math.round(data.data.status.cpu_used * 100 / data.data.status.cpu_total);
+            var color =getGradientColor(cpu_percent/100.0); 
+			var cpu_circle = new ProgressBar.Circle(element, {
+                color: color,
+                trailColor: '#eee',
+    			trailWidth: 10,
+    			duration: 2000,
+    			easing: 'bounce',
+    			strokeWidth: 10
+			});
+            cpu_circle.setText("cpu "+cpu_percent+"%");
+            cpu_circle.animate(cpu_percent/100.0);
+           
+			var mem_element = document.getElementById('real_time_mem'); 
+            var mem_percent = Math.round(data.data.status.mem_used * 100 / data.data.status.mem_total);
+            var mem_color =getGradientColor(mem_percent/100.0); 
+            var mem_circle = new ProgressBar.Circle(mem_element, {
+                color: mem_color,
+                trailColor: '#eee',
+    			trailWidth: 10,
+    			duration: 2000,
+    			easing: 'bounce',
+    			strokeWidth: 10
+			});
+            mem_circle.setText("mem "+mem_percent+"%");
+            mem_circle.animate(mem_percent/100.0);
+           
+
         });
-       });
     }
-    GetCpuStatus();
-    setInterval(GetCpuStatus(), 60 * 1000);
+    GetStatus();
     var GetAgentEvent = function(){
-        var query = "select addr, time, action, data_center from AgentEvent where data_center='yq01' " + 
+    var query = "select addr, ftime, action, data_center,time from AgentEvent where data_center='{{dc}}' " + 
         " and time >= '" + FormatDate(last) + "' and time <='" + FormatDate(today)+"'"; 
-        $.getJSON(ROOT_URL+"trace/squery?limit=5000&db=baidu.galaxy&sql=" + encodeURIComponent(query), function(data) { 
+        $.getJSON(ROOT_URL+"trace/squery?master={{master}}&dc={{dc}}&trace={{trace}}&limit=5000&db=baidu.galaxy&sql=" + encodeURIComponent(query), function(data) { 
                 var events = Mustache.render(data.data.tpl, {datas:data.data.datas});
-                $("#agent-stat").html(events);      
+                $("#agent-stat").html(events);
         });
     }
     GetAgentEvent();

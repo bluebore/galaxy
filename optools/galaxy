@@ -1,0 +1,104 @@
+#!/bin/sh
+#
+# /etc/init.d/galaxy
+# Subsystem file for "galaxy" server
+#
+# chkconfig: 2345 95 05
+# description: galaxy server daemon
+#
+# processname: galaxy
+
+PROD_ADDR=ftp://xxxxxx/tmp/galaxy.tar.gz
+. /etc/rc.d/init.d/functions
+AGENT_IP=`hostname -i`
+AGENT_HOME=/home/galaxy/agent
+RETVAL=0
+init() {
+    // config core dump dir
+    mkdir -p /home/disk2/coresave
+    echo '/home/disk2/coresave/core.%e.%p.%t' | tee /proc/sys/kernel/core_pattern
+    chmod 777 -R /home/disk2/coresave
+    // mount cgroup
+    CGROUP_ROOT=/cgroups
+    mkdir -p $CGROUP_ROOT/cpu && mount -t cgroup -ocpu none $CGROUP_ROOT/cpu >/dev/null 2>&1
+    mkdir -p $CGROUP_ROOT/memory && mount -t cgroup -omemory none $CGROUP_ROOT/memory >/dev/null 2>&1
+    mkdir -p $CGROUP_ROOT/cpuacct && mount -t cgroup -ocpuacct none $CGROUP_ROOT/cpuacct >/dev/null 2>&1
+    mkdir -p $CGROUP_ROOT/freezer && mount -t cgroup -ofreezer none $CGROUP_ROOT/freezer >/dev/null 2>&1
+    // mount fstab
+    mount -a
+    /usr/sbin/adduser galaxy >/dev/null 2>&1
+    mkdir -p $AGENT_HOME/work_dir
+    GC_DIR_TO_REMOVE=$AGENT_HOME/gc_dir_to_remove
+    test -e $AGENT_HOME/gc_dir && mv -f $AGENT_HOME/gc_dir $GC_DIR_TO_REMOVE
+    test -e $GC_DIR_TO_REMOVE && nohup rm -rf $GC_DIR_TO_REMOVE>/dev/null 2>&1 &
+    mkdir -p $AGENT_HOME/gc_dir
+    mkdir -p $AGENT_HOME/log
+    echo 0 > /proc/sys/kernel/printk
+}
+
+download_pkg() {
+    cd $AGENT_HOME
+    wget -O tmp.tar.gz $PROD_ADDR
+    tar -zxvf tmp.tar.gz
+    cpu_count=`cat /proc/cpuinfo | grep processor | wc -l`
+    cpu_share_count=`echo $(($cpu_count * 78 / 100 *1000))`
+    sed -i "s/--agent_millicores_share=.*/--agent_millicores_share=$cpu_share_count/" conf/galaxy.flag
+    mem_size=`free  -g | grep Mem | awk '{print (int($2) - 2) * 1024 * 1024 *1024 }'`
+    sed -i "s/--agent_mem_share.*/--agent_mem_share=$mem_size/" conf/galaxy.flag
+    echo "--agent_ip=$AGENT_IP" >> conf/galaxy.flag
+    df -h | grep ssd | awk '{print $6}' >> conf/mount_bind.template
+    df -h | grep disk | awk '{print $6}' >> conf/mount_bind.template
+}
+
+start() {
+    init;
+    download_pkg;
+    cd $AGENT_HOME
+    ./bin/babysitter bin/galaxy-agent.conf start
+}
+
+stop() {
+    cd $AGENT_HOME
+    ./bin/babysitter bin/galaxy-agent.conf stop >/dev/null 2>&1
+    sleep 2
+    baby_pid=`ps -ef | grep babysitter | grep galaxy-agent | awk '{print $2}'`
+    if [ ! -z "$baby_pid" -a "$baby_pid" != " " ];then
+        kill -9 $baby_pid
+        echo "clean babysitter"
+    fi
+    agent_pid=`ps -ef | grep agent | grep galaxy.flag | grep -v initd | awk '{print $2}'`
+    if [ ! -z "$agent_pid" -a "$agent_pid" != " " ];then
+        for pid in $agent_pid;
+        do
+            kill -9 $pid
+        done
+    fi
+}
+
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        stop
+        start
+        ;;
+    reload)
+        echo "reload"
+        ;;
+    condrestart)
+        echo "condrestart"
+        ;;
+    status)
+        nc -z 0.0.0.0 8221 >/dev/null 2>&1
+        RETVAL=$?
+        ;;
+    *)
+        echo $"Usage: $0 {start|stop|restart|reload|condrestart|status}"
+        RETVAL=1
+esac
+exit $RETVAL

@@ -26,6 +26,7 @@ DECLARE_string(safemode_store_path);
 DECLARE_string(safemode_store_key);
 DECLARE_string(labels_store_path);
 DECLARE_string(jobs_store_path);
+DECLARE_string(agents_store_path);
 DECLARE_string(data_center);
 DECLARE_int32(master_pending_job_wait_timeout);
 DECLARE_int32(master_job_trace_interval);
@@ -36,7 +37,6 @@ namespace galaxy {
 JobManager::JobManager()
     : on_query_num_(0),
     pod_cv_(&mutex_){
-    ScheduleNextQuery();
     state_to_stage_[kPodPending] = kStageRunning;
     state_to_stage_[kPodDeploying] = kStageRunning;
     state_to_stage_[kPodRunning] = kStageRunning;
@@ -56,12 +56,16 @@ JobManager::JobManager()
     else {
         safe_mode_ = kSafeModeAutomatic;
     }
-    trace_pool_.DelayTask(FLAGS_master_cluster_trace_interval, 
-               boost::bind(&JobManager::TraceClusterStat, this));
 }
 
 JobManager::~JobManager() {
     delete nexus_;
+}
+
+void JobManager::Start() {
+    trace_pool_.DelayTask(FLAGS_master_cluster_trace_interval, 
+               boost::bind(&JobManager::TraceClusterStat, this));
+    ScheduleNextQuery();
 }
 
 bool JobManager::CheckSafeModeManual(bool& mode) {
@@ -214,6 +218,8 @@ Status JobManager::Add(const JobId& job_id,
     job->latest_version = job->desc_.pod().version();
     // disable update default
     job->update_state_ = kUpdateSuspend;
+    job->create_time = ::baidu::common::timer::get_micros();
+    job->update_time = ::baidu::common::timer::get_micros();
     // TODO add nexus lock
     bool save_ok = SaveToNexus(job);
     if (!save_ok) {
@@ -258,6 +264,7 @@ Status JobManager::Update(const JobId& job_id, const JobDescriptor& job_desc) {
             LOG(WARNING, "update job %s failed for handle update job error", job_id.c_str());
             return kJobUpdateFail;
         }
+        job.update_time = ::baidu::common::timer::get_micros();
     }
     // TODO add nexus lock
     bool save_ok = SaveToNexus(&job);
@@ -271,6 +278,7 @@ Status JobManager::Update(const JobId& job_id, const JobDescriptor& job_desc) {
         LOG(WARNING, "update job failed, job not found: %s", job_id.c_str());
         return kJobNotFound;
     }
+    it->second->update_time = ::baidu::common::timer::get_micros();
     int32_t old_replica = it->second->desc_.replica();
     bool ok = HandleUpdateJob(job_desc, it->second, 
                       &replica_changed, &pod_desc_changed);
@@ -366,6 +374,9 @@ void JobManager::FillPodsToJob(Job* job) {
         pod_status->set_state(kPodPending);
         pod_status->set_stage(kStagePending);
         pod_status->set_version(job->latest_version);
+        pod_status->set_pending_time(::baidu::common::timer::get_micros());
+        pod_status->set_sched_time(-1);
+        pod_status->set_start_time(-1);
         job->pods_[pod_id] = pod_status;
         need_scale_up = true;
     }
@@ -373,7 +384,6 @@ void JobManager::FillPodsToJob(Job* job) {
         LOG(INFO, "move job %s to scale up queue", job->id_.c_str());
         scale_up_jobs_.insert(job->id_);
     }
-   
 }
 
 void JobManager::FillAllJobs() {
@@ -405,6 +415,13 @@ void JobManager::ReloadJobInfo(const JobInfo& job_info,
         const PodDescriptor& desc = job_info.pod_descs(i);
         job->pod_desc_[desc.version()] = desc;
     }
+    if (job_info.has_create_time()) {
+        job->create_time = job_info.create_time();
+    } 
+
+    if (job_info.has_update_time()) {
+        job->update_time = job_info.update_time();
+    }
     JobIndex index;
     index.id_ = job_id;
     index.name_ = job->desc_.name();
@@ -419,7 +436,7 @@ void JobManager::ReloadJobInfo(const JobInfo& job_info,
     }
     jobs_[job_id] = job;
     trace_pool_.DelayTask(FLAGS_master_job_trace_interval, 
-               boost::bind(&JobManager::TraceJobStat, this, job_id));
+                          boost::bind(&JobManager::TraceJobStat, this, job_id));
 }
 
 bool JobManager::GetJobIdByName(const std::string& job_name, 
@@ -717,6 +734,7 @@ Status JobManager::Propose(const ScheduleInfo& sche_info) {
         }
         agent->set_version(agent->version() + 1);
         pod->set_endpoint(sche_info.endpoint());
+        pod->set_sched_time(::baidu::common::timer::get_micros());
         ChangeStage("scheduler propose ",kStageRunning, pod, job_it->second);
         LOG(INFO, "propose success, %s will be run on %s",
         podid.c_str(), endpoint.c_str());
@@ -800,7 +818,6 @@ void JobManager::KeepAlive(const std::string& agent_addr) {
     {
         MutexLock lock(&mutex_);
         if (agents_.find(agent_addr) == agents_.end()) {
-            LOG(INFO, "new agent added: %s", agent_addr.c_str());
             AgentInfo* agent = new AgentInfo();
             agent->set_version(0);
             agents_[agent_addr] = agent;
@@ -809,6 +826,11 @@ void JobManager::KeepAlive(const std::string& agent_addr) {
         AgentInfo* agent = agents_[agent_addr];
         agent->set_state(kAlive);
         agent->set_endpoint(agent_addr);
+        std::map<AgentAddr, AgentPersistenceInfo*>::iterator agent_custom_infos_it = agent_custom_infos_.find(agent_addr);
+        if (agent_custom_infos_it != agent_custom_infos_.end()) {
+            agent->set_state(agent_custom_infos_it->second->state());
+        }
+        LOG(INFO, "agent %s comes back with state %s", agent_addr.c_str(), AgentState_Name(agent->state()).c_str());
     }
 
     MutexLock lock(&mutex_timer_);
@@ -818,19 +840,18 @@ void JobManager::KeepAlive(const std::string& agent_addr) {
         timer_id = agent_timer_[agent_addr];
         bool cancel_ok = death_checker_.CancelTask(timer_id);
         if (!cancel_ok) {
-            LOG(WARNING, "agent is offline, agent: %s", agent_addr.c_str());
-            
+            LOG(WARNING, "agent is dead, agent: %s", agent_addr.c_str());
         }
     }
     timer_id = death_checker_.DelayTask(FLAGS_master_agent_timeout,
-                                        boost::bind(&JobManager::HandleAgentOffline,
+                                        boost::bind(&JobManager::HandleAgentDead,
                                                     this,
                                                     agent_addr));
     agent_timer_[agent_addr] = timer_id;
 }
 
-void JobManager::HandleAgentOffline(const std::string agent_addr) {
-    LOG(WARNING, "agent is offline: %s", agent_addr.c_str());
+void JobManager::HandleAgentDead(const std::string agent_addr) {
+    LOG(WARNING, "agent is dead: %s", agent_addr.c_str());
     MutexLock lock(&mutex_);
     std::map<AgentAddr, AgentInfo*>::iterator a_it = agents_.find(agent_addr);
     if (a_it == agents_.end()) {
@@ -842,7 +863,7 @@ void JobManager::HandleAgentOffline(const std::string agent_addr) {
         MutexLock lock(&mutex_timer_);
         int64_t timer_id;
         timer_id = death_checker_.DelayTask(FLAGS_master_agent_timeout,
-                                            boost::bind(&JobManager::HandleAgentOffline,
+                                            boost::bind(&JobManager::HandleAgentDead,
                                                         this,
                                                         agent_addr));
         agent_timer_[agent_addr] = timer_id;
@@ -852,7 +873,7 @@ void JobManager::HandleAgentOffline(const std::string agent_addr) {
     e.set_addr(agent_addr);
     e.set_data_center(FLAGS_data_center);
     e.set_time(::baidu::common::timer::get_micros());
-    e.set_action("offline");
+    e.set_action("kDead");
     Trace::TraceAgentEvent(e);
     PodMap& agent_pods = pods_on_agent_[agent_addr];
     PodMap::iterator it = agent_pods.begin();
@@ -860,14 +881,18 @@ void JobManager::HandleAgentOffline(const std::string agent_addr) {
     for (; it != agent_pods.end(); ++it) {
         std::map<PodId, PodStatus*>::iterator jt = it->second.begin();
         for (; jt != it->second.end(); ++jt) {
-            PodStatus* pod = jt->second; 
+            PodStatus* pod = jt->second;
             std::map<JobId, Job*>::iterator job_it = jobs_.find(pod->jobid());
             if (job_it ==  jobs_.end()) {
                 continue;
             }
-            wait_to_pending.push_back(std::make_pair(job_it->second, pod)); 
+            wait_to_pending.push_back(std::make_pair(job_it->second, pod));
+            JobPodPair* job_pod = e.add_pods();
+            job_pod->set_jobid(pod->jobid());
+            job_pod->set_podid(pod->podid());
         }
     }
+    Trace::TraceAgentEvent(e);
     std::vector<std::pair<Job*, PodStatus*> >::iterator pending_it = wait_to_pending.begin();
     for (; pending_it != wait_to_pending.end(); ++pending_it) {
         pending_it->second->set_stage(kStageDeath);
@@ -875,7 +900,6 @@ void JobManager::HandleAgentOffline(const std::string agent_addr) {
         ChangeStage(reason, kStagePending, pending_it->second, pending_it->first);
     }
     pods_on_agent_.erase(agent_addr);
-    LOG(INFO, "agent is dead: %s", agent_addr.c_str());
 }
 
 void JobManager::RunPod(const PodDescriptor& desc, Job* job, PodStatus* pod) {
@@ -961,11 +985,7 @@ void JobManager::Query() {
 void JobManager::QueryAgent(AgentInfo* agent) {
     mutex_.AssertHeld();
     const AgentAddr& endpoint = agent->endpoint();
-    int64_t seq_id = agent_sequence_ids_[endpoint];
-    if (agent->state() != kAlive) {
-        LOG(DEBUG, "ignore dead agent [%s]", endpoint.c_str());
-        return;
-    }
+    int64_t seq_id = agent_sequence_ids_[endpoint]; 
     QueryRequest* request = new QueryRequest;
     QueryResponse* response = new QueryResponse;
 
@@ -1022,12 +1042,16 @@ void JobManager::QueryAgentCallback(AgentAddr endpoint, const QueryRequest* requ
         const PodStatus& report_pod_info = report_agent_info.pods(i);
         const JobId& jobid = report_pod_info.jobid();
         const PodId& podid = report_pod_info.podid(); 
-        LOG(INFO, "the pod %s of job %s on agent %s state %s version %s",
+        LOG(INFO, "the pod %s of job %s on agent %s state %s version %s, mem %ld cpu %ld  io(r/w) %ld / %ld",
                   podid.c_str(), 
                   jobid.c_str(), 
                   report_agent_info.endpoint().c_str(),
                   PodState_Name(report_pod_info.state()).c_str(),
-                  report_pod_info.version().c_str()); 
+                  report_pod_info.version().c_str(),
+                  report_pod_info.resource_used().memory(),
+                  report_pod_info.resource_used().millicores(),
+                  report_pod_info.resource_used().read_bytes_ps(),
+                  report_pod_info.resource_used().write_bytes_ps()); 
         std::map<JobId, Job*>::iterator job_it = jobs_.find(jobid);
         // job does not exist in master
         if (job_it == jobs_.end()) {
@@ -1086,6 +1110,9 @@ void JobManager::QueryAgentCallback(AgentAddr endpoint, const QueryRequest* requ
             pod->mutable_resource_used()->CopyFrom(report_pod_info.resource_used());
             pod->set_state(report_pod_info.state());
             pod->set_endpoint(report_agent_info.endpoint());
+            if (report_pod_info.has_start_time()) {
+                pod->set_start_time(report_pod_info.start_time());
+            }
             pods_on_agent[jobid].erase(podid);
             if (pods_on_agent[jobid].size() == 0) {
                 pods_on_agent.erase(jobid);
@@ -1247,6 +1274,7 @@ void JobManager::GetJobsOverview(JobOverviewList* jobs_overview) {
         uint32_t running_num = 0;
         uint32_t pending_num = 0;
         uint32_t deploying_num = 0;
+        uint32_t death_num = 0;
         std::map<PodId, PodStatus*>& pods = job->pods_;
         std::map<PodId, PodStatus*>::iterator pod_it = pods.begin();
         for (; pod_it != pods.end(); ++pod_it) {
@@ -1259,11 +1287,16 @@ void JobManager::GetJobsOverview(JobOverviewList* jobs_overview) {
                 pending_num++;
             } else if(pod->state() == kPodDeploying) {
                 deploying_num++;
+            } else {
+                death_num++;
             } 
         }
         overview->set_running_num(running_num);
         overview->set_pending_num(pending_num);
         overview->set_deploying_num(deploying_num);
+        overview->set_death_num(death_num);
+        overview->set_create_time(job->create_time);
+        overview->set_update_time(job->update_time);
     }
 }
 
@@ -1511,7 +1544,8 @@ bool JobManager::SaveToNexus(const Job* job) {
         PodDescriptor* pod_desc = job_info.add_pod_descs();
         pod_desc->CopyFrom(it->second);
     }
-
+    job_info.set_create_time(job->create_time);
+    job_info.set_update_time(job->update_time);
     std::string job_raw_data;
     std::string job_key = FLAGS_nexus_root_path + FLAGS_jobs_store_path 
                           + "/" + job->id_;
@@ -1583,6 +1617,48 @@ Status JobManager::GetPods(const std::string& jobid,
         pod->set_endpoint(pod_status->endpoint());
         pod->mutable_used()->CopyFrom(pod_status->resource_used());
         pod->mutable_assigned()->CopyFrom(desc_it->second.requirement());
+        pod->set_pending_time(pod_status->pending_time());
+        pod->set_sched_time(pod_status->sched_time());
+        pod->set_start_time(pod_status->start_time());
+    }
+    return kOk;
+}
+
+Status JobManager::GetPodsByAgent(const std::string& endpoint,
+                                  PodOverviewList* pods) {
+    MutexLock lock(&mutex_);
+    std::map<AgentAddr, PodMap>::iterator agent_it = pods_on_agent_.find(endpoint);
+    if (agent_it == pods_on_agent_.end()) {
+        return kOk;
+    }
+    PodMap& pod_map = agent_it->second;
+    std::map<JobId, std::map<PodId, PodStatus*> >::iterator job_it = pod_map.begin();
+    for (; job_it != pod_map.end(); ++job_it) {
+        std::map<JobId, Job*>::iterator ijob_it = jobs_.find(job_it->first);
+        if (ijob_it == jobs_.end()) {
+            continue;
+        }
+        Job* job = ijob_it->second;
+        std::map<PodId, PodStatus*>::iterator pod_it = job_it->second.begin();
+        for (; pod_it != job_it->second.end(); ++pod_it) {
+            PodStatus* pod_status = pod_it->second;
+            std::map<Version, PodDescriptor>::iterator desc_it = job->pod_desc_.find(pod_status->version());
+            if (desc_it == job->pod_desc_.end()) {
+                continue;
+            }
+            PodOverview* pod = pods->Add();
+            pod->set_jobid(pod_status->jobid());
+            pod->set_podid(pod_status->podid());
+            pod->set_stage(pod_status->stage());
+            pod->set_state(pod_status->state());
+            pod->set_version(pod_status->version());
+            pod->set_endpoint(pod_status->endpoint());
+            pod->mutable_used()->CopyFrom(pod_status->resource_used());
+            pod->mutable_assigned()->CopyFrom(desc_it->second.requirement());
+            pod->set_pending_time(pod_status->pending_time());
+            pod->set_sched_time(pod_status->sched_time());
+            pod->set_start_time(pod_status->start_time());
+        } 
     }
     return kOk;
 }
@@ -1710,6 +1786,7 @@ void JobManager::HandleLostPod(const AgentAddr& addr, const PodMap& pods_not_on_
             if (p_it->second->stage() == kStageFinished) {
                 ChangeStage(reason, kStageDeath, p_it->second, job_it->second);
             } else {
+                p_it->second->set_stage(kStageDeath);
                 ChangeStage(reason, kStagePending, p_it->second, job_it->second);
             }
         }
@@ -1998,6 +2075,211 @@ void JobManager::GetJobDescByDiff(const JobIdDiffList& jobids,
             job_entity->mutable_desc()->mutable_pod()->CopyFrom(pod_it->second);
         }
     }
+}
+bool JobManager::OnlineAgent(const std::string& endpoint) {
+    if (endpoint.empty()) {
+        return false;
+    }
+    {
+        AgentPersistenceInfo agent;
+        agent.set_endpoint(endpoint);
+        agent.set_state(kAlive);
+        bool ok = SaveAgentToNexus(agent);
+        if (!ok) {
+            return false;
+        }
+    } 
+    MutexLock lock(&mutex_);
+    std::map<AgentAddr, AgentInfo*>::iterator agent_it = agents_.find(endpoint);
+    if (agent_it != agents_.end()) {
+        AgentInfo* agent = agent_it->second;
+        // let agent heart beat change it's state to kAlive
+        if (agent->state() == kOffline) { 
+            agent->set_state(kDead);
+            agent->set_version(agent->version() + 1);
+        }
+    }
+    std::map<AgentAddr, AgentPersistenceInfo*>::iterator agent_custom_infos_it = agent_custom_infos_.find(endpoint);
+    if (agent_custom_infos_it != agent_custom_infos_.end()) {
+        AgentPersistenceInfo* agent = agent_custom_infos_it->second;
+        agent->set_state(kAlive);
+    }else {
+        AgentPersistenceInfo* agent = new AgentPersistenceInfo();
+        agent->set_endpoint(endpoint);
+        agent->set_state(kAlive);
+    }
+    return true;
+}
+
+bool JobManager::OfflineAgent(const std::string& endpoint) {
+    if (endpoint.empty()) {
+        return false;
+    }
+    {
+        AgentPersistenceInfo agent;
+        agent.set_endpoint(endpoint);
+        agent.set_state(kOffline);
+        bool ok = SaveAgentToNexus(agent);
+        if (!ok) {
+            return false;
+        }
+    }
+    MutexLock lock(&mutex_);
+    std::map<AgentAddr, AgentInfo*>::iterator agent_it = agents_.find(endpoint);
+    if (agent_it != agents_.end()) {
+        AgentInfo* agent = agent_it->second;
+        if (agent->state() == kAlive) {
+            StopPodsOnAgent(endpoint);
+        }
+        agent->set_state(kOffline);
+        agent->set_version(agent->version() + 1);
+        LOG(INFO, "agent %s is offline", endpoint.c_str());
+        AgentEvent e;
+        e.set_addr(endpoint);
+        e.set_data_center(FLAGS_data_center);
+        e.set_time(::baidu::common::timer::get_micros());
+        e.set_action("kOffline");
+        Trace::TraceAgentEvent(e);
+    }
+    std::map<AgentAddr, AgentPersistenceInfo*>::iterator agent_custom_infos_it = agent_custom_infos_.find(endpoint);
+    if (agent_custom_infos_it != agent_custom_infos_.end()) {
+        AgentPersistenceInfo* agent = agent_custom_infos_it->second;
+        agent->set_state(kOffline);
+    }else {
+        AgentPersistenceInfo* agent = new AgentPersistenceInfo();
+        agent->set_endpoint(endpoint);
+        agent->set_state(kOffline);
+        agent_custom_infos_.insert(std::make_pair(endpoint, agent));
+    }
+    return true;
+}
+
+bool JobManager::SaveAgentToNexus(const AgentPersistenceInfo& agent) {
+    if (agent.endpoint().empty()) {
+        return false;
+    }
+    std::string agent_raw_data;
+    std::string agent_key = FLAGS_nexus_root_path + FLAGS_agents_store_path 
+                          + "/" + agent.endpoint();
+    agent.SerializeToString(&agent_raw_data);
+    ::galaxy::ins::sdk::SDKError err;
+    bool ok = nexus_->Put(agent_key, agent_raw_data, &err);
+    if (ok && err == ::galaxy::ins::sdk::kOK) {
+        LOG(INFO, "save agent %s state successfully ", agent.endpoint().c_str());
+        return true;
+    }
+    LOG(WARNING, "fail to save agent %s state for %s", 
+            agent.endpoint().c_str(),
+           ::galaxy::ins::sdk::InsSDK::StatusToString(err).c_str());
+    return false;
+}
+
+void JobManager::StopPodsOnAgent(const std::string& endpoint) {
+    mutex_.AssertHeld();
+    std::map<AgentAddr, PodMap>::iterator pods_on_agent_it = pods_on_agent_.find(endpoint);
+    if (pods_on_agent_it == pods_on_agent_.end()) {
+        return;
+    }
+    LOG(INFO, "stop all pods on agent %s", endpoint.c_str());
+    PodMap::iterator job_it = pods_on_agent_it->second.begin();
+    std::string reason = "offline agent " + endpoint;
+    for (; job_it != pods_on_agent_it->second.end(); ++job_it) {
+        std::map<JobId, Job*>::iterator real_job_it = jobs_.find(job_it->first);
+        if (real_job_it == jobs_.end()) {
+            LOG(WARNING, "job %s does exist but it exists on agent %s, leave it alone",
+                    job_it->first.c_str(), endpoint.c_str());
+            continue;
+        }
+        Job* job = real_job_it->second;
+        std::map<PodId, PodStatus*>::iterator pod_it = job_it->second.begin();
+        for (; pod_it !=  job_it->second.end(); ++pod_it) {
+            PodStatus* pod = pod_it->second;
+            LOG(INFO, "stop pod %s of job %s for agent %s offline",
+                    pod->podid().c_str(),
+                    job->id_.c_str(),
+                    endpoint.c_str());
+            ChangeStage(reason, kStageDeath, pod, job);
+        }
+    }
+}
+
+void JobManager::ReloadAgent(const AgentPersistenceInfo& agent) {
+    MutexLock lock(&mutex_);
+    if (agent_custom_infos_.find(agent.endpoint()) != agent_custom_infos_.end()) {
+        return;
+    }
+    AgentPersistenceInfo* agent_info = new AgentPersistenceInfo();
+    agent_info->CopyFrom(agent);
+    agent_custom_infos_.insert(std::make_pair(agent.endpoint(), agent_info));
+}
+
+Status JobManager::GetTaskByJob(const std::string& jobid,
+                                TaskOverviewList* tasks) { 
+    MutexLock lock(&mutex_);
+    std::map<JobId, Job*>::iterator job_it = jobs_.find(jobid);
+    if (job_it == jobs_.end()) {
+        return kJobNotFound;
+    }
+    Job* job = job_it->second;
+    std::map<PodId, PodStatus*>::iterator pod_it = job->pods_.begin();
+    for (; pod_it != job->pods_.end(); ++pod_it) {
+        PodStatus* pod_status = pod_it->second;
+        std::map<Version, PodDescriptor>::iterator desc_it = job->pod_desc_.find(pod_status->version());
+        if (desc_it == job->pod_desc_.end()) {
+            continue;
+        }
+        for (int i = 0; i < pod_status->status_size(); i++) {
+            TaskOverview* task = tasks->Add();
+            task->set_podid(pod_status->podid());
+            task->set_state(pod_status->status(i).state());
+            task->set_endpoint(pod_status->endpoint());
+            task->set_deploy_time(pod_status->status(i).deploy_time());
+            task->set_start_time(pod_status->status(i).start_time());
+            task->set_cmd(pod_status->status(i).cmd());
+            task->mutable_used()->CopyFrom(pod_status->status(i).resource_used());
+        } 
+    }
+    LOG(INFO, "get %d task from job %s", tasks->size(), jobid.c_str());
+    return kOk;
+}
+
+Status JobManager::GetTaskByAgent(const std::string& endpoint,
+                                TaskOverviewList* tasks) {
+    MutexLock lock(&mutex_);
+    LOG(INFO, "get task from agent %s", endpoint.c_str());
+    std::map<AgentAddr, PodMap>::iterator agent_it = pods_on_agent_.find(endpoint);
+    if (agent_it == pods_on_agent_.end()) {
+        return kOk;
+    }
+    PodMap& pod_map = agent_it->second;
+    std::map<JobId, std::map<PodId, PodStatus*> >::iterator job_it = pod_map.begin();
+    for (; job_it != pod_map.end(); ++job_it) {
+        std::map<JobId, Job*>::iterator ijob_it = jobs_.find(job_it->first);
+        if (ijob_it == jobs_.end()) {
+            continue;
+        }
+        Job* job = ijob_it->second;
+        std::map<PodId, PodStatus*>::iterator pod_it = job_it->second.begin();
+        for (; pod_it != job_it->second.end(); ++pod_it) {
+            PodStatus* pod_status = pod_it->second;
+            std::map<Version, PodDescriptor>::iterator desc_it = job->pod_desc_.find(pod_status->version());
+            if (desc_it == job->pod_desc_.end()) {
+                continue;
+            }
+            for (int i = 0; i < pod_status->status_size(); i++) {
+                TaskOverview* task = tasks->Add();
+                task->set_podid(pod_status->podid());
+                task->set_state(pod_status->status(i).state());
+                task->set_endpoint(pod_status->endpoint());
+                task->set_deploy_time(pod_status->status(i).deploy_time());
+                task->set_start_time(pod_status->status(i).start_time());
+                task->set_cmd(pod_status->status(i).cmd());
+                task->mutable_used()->CopyFrom(pod_status->status(i).resource_used());
+            } 
+        } 
+    }
+    return kOk;
+
 }
 
 bool JobManager::IsOwner(const std::string& job_id, const std::string& uid) {

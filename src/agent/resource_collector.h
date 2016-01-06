@@ -6,7 +6,9 @@
 #define _SRC_AGENT_RESOURCE_COLLECTOR_H
 
 #include <string>
-
+#include <stdint.h>
+#include <map>
+#include <vector>
 namespace baidu {
 namespace galaxy {
 
@@ -32,6 +34,24 @@ struct ResourceStatistics {
     long cpu_cores;
 
     long memory_rss_in_bytes;
+    long tmpfs_in_bytes;
+        
+    //io
+    long rd_ios;
+    long wr_ios;
+    long rd_sectors;
+    long wr_sectors;
+
+    //interupt
+    long interupt_times;
+    long soft_interupt_times;
+
+    //net
+    long net_in_bits;
+    long net_out_bits;
+    long net_in_packets;
+    long net_out_packets;
+	
     ResourceStatistics() :
         cpu_user_time(0),
         cpu_nice_time(0),
@@ -43,9 +63,21 @@ struct ResourceStatistics {
         cpu_stealstolen(0),
         cpu_guest(0),
         cpu_cores(0),
-        memory_rss_in_bytes(0) {
-    }
+        memory_rss_in_bytes(0),
+        tmpfs_in_bytes(0),
+        rd_ios(0),
+        wr_ios(0),
+        rd_sectors(0),
+        wr_sectors(0),
+        interupt_times(0),
+        soft_interupt_times(0),
+        net_in_bits(0),
+        net_out_bits(0),
+        net_in_packets(0),
+        net_out_packets(0) {
+	}
 };
+
 
 // unit jiffies
 struct CgroupResourceStatistics {
@@ -62,6 +94,69 @@ struct CgroupResourceStatistics {
         cpu_cores_limit(0),
         memory_rss_in_bytes(0) {
     }
+};
+
+struct SysStat {
+    ResourceStatistics last_stat_;
+    ResourceStatistics cur_stat_;
+    double cpu_used_;
+    double mem_used_;
+    double disk_read_Bps_;
+    double disk_write_Bps_;
+    double disk_read_times_;
+    double disk_write_times_;
+    double disk_io_util_;
+    double net_in_bps_;
+    double net_out_bps_;
+    double net_in_pps_;
+    double net_out_pps_;
+    double intr_rate_;
+    double soft_intr_rate_;
+    int collect_times_;
+    SysStat():last_stat_(),
+              cur_stat_(),
+              cpu_used_(0.0),
+              mem_used_(0.0),
+              disk_read_Bps_(0.0),
+              disk_write_Bps_(0.0),
+              disk_read_times_(0.0),
+              disk_write_times_(0.0),
+              disk_io_util_(0.0),
+              net_in_bps_(0.0),
+              net_out_bps_(0.0),
+              net_in_pps_(0.0),
+              net_out_pps_(0.0),
+              intr_rate_(0.0),
+              soft_intr_rate_(0.0),
+              collect_times_(0) {
+        }
+    ~SysStat(){
+        }
+};
+//
+struct ProcIOStatistics {
+    int64_t rchar;
+    int64_t wchar;
+    int64_t syscr;
+    int64_t syscw;
+    int64_t read_bytes;
+    int64_t write_bytes;
+    int64_t cancelled_write_bytes;
+};
+
+struct CGroupIOStatistics{
+    std::map<int, ProcIOStatistics> processes;
+};
+
+class CGroupIOCollector{
+
+public:
+    CGroupIOCollector();
+    ~CGroupIOCollector();
+    static bool Collect(const std::string& cgroup_path,
+                        CGroupIOStatistics* stat);
+private:
+    static bool GetProcIOStat(int pid, ProcIOStatistics* stat);
 };
 
 class CGroupResourceCollector : public ResourceCollector {
@@ -114,6 +209,23 @@ private:
     int collector_times_;
 };
 
+class GlobalResourceCollector {
+public:
+    explicit GlobalResourceCollector();
+    virtual ~GlobalResourceCollector();
+    int CollectStatistics();
+    SysStat* GetStat(); 
+private:
+    bool GetGlobalCpuStat();
+    bool GetGlobalMemStat();
+    bool GetGlobalIntrStat();
+    bool GetGlobalNetStat();
+    bool GetGlobalIOStat();
+    bool CheckSysHealth();
+    
+private:
+    SysStat* stat_;
+};
 }   // ending namespace galaxy
 }   // ending namespace baidu
 

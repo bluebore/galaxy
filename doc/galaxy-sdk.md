@@ -10,10 +10,12 @@ galaxy sdk 初始化需要两个参数
 ```
 
 ### 通过job name获取pod列表
-
+通过这个方法能够获得每个实例部署在哪一台机器上面
 ```
 std::vector<baidu::galaxy::PodInformation> pods;
 bool ok = galaxy->GetPodsByName("jobname", &pods);
 ```
+
+
 
 

@@ -30,6 +30,21 @@ std::string MasterUtil::UUID() {
 void MasterUtil::AddResource(const Resource& from, Resource* to) {
     to->set_millicores(to->millicores() + from.millicores());
     to->set_memory(to->memory() + from.memory());
+    if (from.has_read_bytes_ps()) {
+        LOG(INFO, "add read bytes %ld", from.read_bytes_ps());
+        to->set_read_bytes_ps(to->read_bytes_ps() + from.read_bytes_ps());
+    }
+    if (from.has_write_bytes_ps()) {
+        to->set_write_bytes_ps(to->write_bytes_ps() + from.write_bytes_ps());
+    }
+
+    if (from.has_syscr_ps()) {
+        to->set_syscr_ps(to->syscr_ps() + from.syscr_ps());
+    }
+
+    if (from.has_syscw_ps()) {
+        to->set_syscw_ps(to->syscw_ps() + from.syscw_ps());
+    }
 }
 
 void MasterUtil::SubstractResource(const Resource& from, Resource* to) {

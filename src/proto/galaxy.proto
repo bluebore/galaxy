@@ -17,9 +17,10 @@ enum Status {
     kJobTerminateFail = 19;
     kRpcError = 20;
     kLabelAgentFail = 21;
-    kSessionTimeout = 22;
-    kPermissionDenied = 23;
-    kNameExists = 24;
+    kAgentError = 22;
+    kSessionTimeout = 23;
+    kPermissionDenied = 24;
+    kNameExists = 25;
 }
 
 enum PodState {
@@ -58,8 +59,14 @@ enum SourceType {
 }
 
 enum AgentState {
+    // in service
     kAlive = 0;
-    kDead = 1;    
+    // agent is dead
+    kDead = 1;
+    // out of service
+    kOffline = 2;
+    // init
+    kInit = 3;
 }
 
 message Volume {
@@ -72,11 +79,17 @@ message Resource {
     optional int64 memory = 2;
     repeated int32 ports = 3;
     repeated Volume disks = 4;
-    repeated Volume ssds = 5; 
+    repeated Volume ssds = 5;
+    optional int64 read_bytes_ps = 6;
+    optional int64 write_bytes_ps = 7;
+    optional int64 syscr_ps = 8;
+    optional int64 syscw_ps = 9;
 }
 
 enum MemIsolationType {
+    // cgroup
     kMemIsolationCgroup = 0;
+    // user custom limit
     kMemIsolationLimit = 1;
 }
 
@@ -118,7 +131,11 @@ message TaskStatus {
     optional Resource resource_used = 3;
     optional string version = 4;
     optional TaskState state = 5;
+    optional int64 deploy_time = 6;
+    optional int64 start_time = 7;
+    optional string cmd = 8;
 }
+
 
 message PodStatus {
     optional string podid = 1;
@@ -131,6 +148,14 @@ message PodStatus {
     optional string pod_gc_path = 9;
     optional string version = 10;
     optional int32 priority = 11;
+    optional int64 pending_time = 12;
+    optional int64 sched_time = 13;
+    optional int64 start_time = 14;
+}
+
+message AgentPersistenceInfo {
+    optional string endpoint = 1;
+    optional AgentState state = 8;
 }
 
 message AgentInfo {
@@ -142,6 +167,7 @@ message AgentInfo {
     optional AgentState state = 8;
     optional int32 version = 9;
     repeated string tags = 10;
+    optional int64 time = 11;
 }
 
 message User {

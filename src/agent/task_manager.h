@@ -32,6 +32,7 @@ protected:
     int PrepareWorkspace(TaskInfo* task_info);
     int PrepareCgroupEnv(TaskInfo* task_info); 
     int PrepareResourceCollector(TaskInfo* task_info);
+    int PrepareIOCollector(TaskInfo* task_info);
     int PrepareVolumeEnv(TaskInfo* task_info);
 
     int CleanWorkspace(TaskInfo* task_info);
@@ -77,10 +78,16 @@ protected:
     bool HandleInitTaskComCgroup(std::string& subsystem, TaskInfo* task);
     bool HandleInitTaskTcpCgroup(std::string& subsystem, TaskInfo* task);
     int InitTcpthrotEnv();
+
+    bool KillTask(TaskInfo* task);
+
+    void MemoryCheck(const std::string& task_id);
+    void CollectIO(const std::string& task_id);
 protected:
     Mutex tasks_mutex_;
     std::map<std::string, TaskInfo*> tasks_;
     ThreadPool background_thread_;
+    ThreadPool killer_pool_;
     std::string cgroup_root_;
     typedef boost::function<bool (TaskInfo* task)> CgroupFunc;
     std::map<std::string, CgroupFunc> cgroup_funcs_;

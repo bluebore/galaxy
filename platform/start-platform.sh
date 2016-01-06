@@ -1,1 +1,1 @@
-cd src && python manage.py runserver  `hostname`:8181
+cd src && python manage.py runserver  `hostname`:8282

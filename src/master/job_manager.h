@@ -34,6 +34,7 @@ typedef google::protobuf::RepeatedPtrField<baidu::galaxy::DiffVersion> DiffVersi
 typedef google::protobuf::RepeatedPtrField<std::string> StringList;
 typedef std::string Version;
 typedef google::protobuf::RepeatedPtrField<baidu::galaxy::PodOverview> PodOverviewList;
+typedef google::protobuf::RepeatedPtrField<baidu::galaxy::TaskOverview> TaskOverviewList;
 typedef std::map<JobId, std::map<PodId, PodStatus*> > PodMap;
 typedef google::protobuf::RepeatedPtrField<baidu::galaxy::JobIdDiff> JobIdDiffList;
 typedef google::protobuf::RepeatedPtrField<baidu::galaxy::JobEntity> JobEntityList;
@@ -80,6 +81,8 @@ struct Job {
     Version latest_version;
     std::string uid_;
     std::string user_name_;
+    int64_t create_time;
+    int64_t update_time;
 };
 
 struct PreemptTask {
@@ -90,7 +93,6 @@ struct PreemptTask {
     std::string addr_;
     Resource resource_;
     bool running_;
-
 };
 
 
@@ -122,6 +124,8 @@ public:
     Status Add(const JobId& job_id, 
                const JobDescriptor& job_desc,
                const User& user);
+    void Start();
+    Status Add(const JobId& job_id, const JobDescriptor& job_desc);
     Status Update(const JobId& job_id, const JobDescriptor& job_desc);
     Status Suspend(const JobId& jobid);
     Status Resume(const JobId& jobid);
@@ -150,22 +154,30 @@ public:
     void KeepAlive(const std::string& agent_addr);
     void DeployPod();
     void ReloadJobInfo(const JobInfo& job_info, const User& owner);
+    void ReloadJobInfo(const JobInfo& job_info);
+    void ReloadAgent(const AgentPersistenceInfo& agent);
     Status SetSafeMode(bool mode);
     Status LabelAgents(const LabelCell& label_cell);
     bool GetJobIdByName(const std::string& job_name, std::string* jobid);
     Status GetPods(const std::string& jobid, PodOverviewList* pods);
+    Status GetTaskByJob(const std::string& jobid, TaskOverviewList* tasks);
+    Status GetTaskByAgent(const std::string& endpoint, TaskOverviewList* tasks);
+    Status GetPodsByAgent(const std::string& endpoint, PodOverviewList* pods);
     Status GetStatus(::baidu::galaxy::GetMasterStatusResponse* response);
     bool Preempt(const PreemptEntity& pending_pod,
                  const std::vector<PreemptEntity>& preempted_pods,
                  const std::string& addr);
     bool IsOwner(const std::string& job_id, const std::string& uid);
+    bool OfflineAgent(const std::string& endpoints);
+    bool OnlineAgent(const std::string& endpoints);
 private:
     void SuspendPod(PodStatus* pod);
     void ResumePod(PodStatus* pod);
     Status AcquireResource(const PodStatus* pod, AgentInfo* agent);
     void GetPodRequirement(const PodStatus* pod, Resource* requirement);
     void CalculatePodRequirement(const PodDescriptor& pod_desc, Resource* pod_requirement);
-    void HandleAgentOffline(const std::string agent_addr);
+    void HandleAgentOffline(const std::string& agent_addr);
+    void HandleAgentDead(const std::string agent_addr);
     void ReschedulePod(PodStatus* pod_status);
     bool CheckSafeModeManual(bool& mode);
     bool SaveSafeMode(bool mode);
@@ -219,6 +231,7 @@ private:
 
     void CleanJob(const JobId& jobid);
     bool SaveToNexus(const Job* job);
+    bool SaveAgentToNexus(const AgentPersistenceInfo& agent);
     bool SaveLabelToNexus(const LabelCell& label_cell);
     bool DeleteFromNexus(const JobId& jobid);
 
@@ -232,6 +245,7 @@ private:
     void TraceJobStat(const std::string& jobid);
     void TraceClusterStat();
     void ProcessPreemptTask(const std::string& task_id);
+    void StopPodsOnAgent(const std::string& endpoint);
 private:
     std::map<JobId, Job*> jobs_;
     JobSet* job_index_;
@@ -244,6 +258,8 @@ private:
     std::map<AgentAddr, PodMap> pods_on_agent_;
     std::map<AgentAddr, AgentInfo*> agents_;
     std::map<AgentAddr, int64_t> agent_timer_;
+    // agent some custom settings eg mark agent offline
+    std::map<AgentAddr, AgentPersistenceInfo*> agent_custom_infos_;
     ThreadPool death_checker_;
     ThreadPool thread_pool_;
     ThreadPool trace_pool_;
@@ -274,8 +290,7 @@ private:
     // nexus
     ::galaxy::ins::sdk::InsSDK* nexus_;
 
-    CondVar pod_cv_;
-   
+    CondVar pod_cv_; 
 };
 
 }

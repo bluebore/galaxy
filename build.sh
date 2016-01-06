@@ -21,52 +21,60 @@ if [ -f "boost_1_57_0.tar.gz" ]
 then
     echo "boost exist"
 else
-    wget http://superb-dca2.dl.sourceforge.net/project/boost/boost/1.57.0/boost_1_57_0.tar.gz
-    tar zxf boost_1_57_0.tar.gz
+    echo "start install boost...."
+    wget http://superb-dca2.dl.sourceforge.net/project/boost/boost/1.57.0/boost_1_57_0.tar.gz >/dev/null
+    tar zxf boost_1_57_0.tar.gz >/dev/null
     rm -rf ${DEPS_PREFIX}/boost_1_57_0
     mv boost_1_57_0 ${DEPS_PREFIX}
+    echo "install boost done"
 fi
 
 if [ -d "rapidjson" ]
 then
     echo "rapid json exist"
 else
+    echo "start install rapidjson..."
     # rapidjson
-    git clone https://github.com/miloyip/rapidjson.git
+    git clone https://github.com/miloyip/rapidjson.git >/dev/null
     rm -rf ${DEPS_PREFIX}/rapidjson
     cp -rf rapidjson ${DEPS_PREFIX}
+    echo "install rapidjson done"
 fi
 
 if [ -d "protobuf" ]
 then
     echo "protobuf exist"
 else
+    echo "start install protobuf ..."
     # protobuf
     # wget --no-check-certificate https://github.com/google/protobuf/releases/download/v2.6.1/protobuf-2.6.1.tar.gz
-    git clone --depth=1 https://github.com/00k/protobuf
+    git clone --depth=1 https://github.com/00k/protobuf >/dev/null
     mv protobuf/protobuf-2.6.1.tar.gz .
-    tar zxf protobuf-2.6.1.tar.gz
+    tar zxf protobuf-2.6.1.tar.gz >/dev/null
     cd protobuf-2.6.1
-    ./configure ${DEPS_CONFIG}
-    make -j4
+    ./configure ${DEPS_CONFIG} >/dev/null
+    make -j4 >/dev/null
     make install
     cd -
+    echo "install protobuf done"
 fi
 
 if [ -d "snappy" ]
 then
     echo "snappy exist"
 else
+    echo "start install snappy ..."
     # snappy
     # wget --no-check-certificate https://snappy.googlecode.com/files/snappy-1.1.1.tar.gz
     git clone --depth=1 https://github.com/00k/snappy
     mv snappy/snappy-1.1.1.tar.gz .
-    tar zxf snappy-1.1.1.tar.gz
+    tar zxf snappy-1.1.1.tar.gz >/dev/null
     cd snappy-1.1.1
-    ./configure ${DEPS_CONFIG}
-    make -j4
+    ./configure ${DEPS_CONFIG} >/dev/null
+    make -j4 >/dev/null
     make install
     cd -
+    echo "install snappy done"
 fi
 
 if [ -f "sofa-pbrpc-1.0.0.tar.gz" ]
@@ -87,7 +95,7 @@ else
     cd src
     PROTOBUF_DIR=${DEPS_PREFIX} sh compile_proto.sh
     cd ..
-    make -j4
+    make -j4 >/dev/null
     make install
     cd ..
 fi
@@ -100,8 +108,8 @@ else
     wget http://www.us.apache.org/dist/zookeeper/stable/zookeeper-3.4.7.tar.gz
     tar zxf zookeeper-3.4.7.tar.gz
     cd zookeeper-3.4.7/src/c
-    ./configure ${DEPS_CONFIG}
-    make -j4
+    ./configure ${DEPS_CONFIG} >/dev/null
+    make -j4 >/dev/null
     make install
     cd -
 fi
@@ -114,8 +122,8 @@ else
     wget --no-check-certificate -O CMake-3.2.1.tar.gz https://github.com/Kitware/CMake/archive/v3.2.1.tar.gz
     tar zxf CMake-3.2.1.tar.gz
     cd CMake-3.2.1
-    ./configure --prefix=${DEPS_PREFIX}
-    make -j4
+    ./configure --prefix=${DEPS_PREFIX} >/dev/null
+    make -j4 >/dev/null
     make install
     cd -
 fi
@@ -128,8 +136,8 @@ else
     wget --no-check-certificate -O gflags-2.1.1.tar.gz https://github.com/schuhschuh/gflags/archive/v2.1.1.tar.gz
     tar zxf gflags-2.1.1.tar.gz
     cd gflags-2.1.1
-    cmake -DCMAKE_INSTALL_PREFIX=${DEPS_PREFIX} -DGFLAGS_NAMESPACE=google -DCMAKE_CXX_FLAGS=-fPIC
-    make -j4
+    cmake -DCMAKE_INSTALL_PREFIX=${DEPS_PREFIX} -DGFLAGS_NAMESPACE=google -DCMAKE_CXX_FLAGS=-fPIC >/dev/null
+    make -j4 >/dev/null
     make install
     cd -
 fi
@@ -142,8 +150,8 @@ else
     wget --no-check-certificate -O glog-0.3.3.tar.gz https://github.com/google/glog/archive/v0.3.3.tar.gz
     tar zxf glog-0.3.3.tar.gz
     cd glog-0.3.3
-    ./configure ${DEPS_CONFIG} CPPFLAGS=-I${DEPS_PREFIX}/include LDFLAGS=-L${DEPS_PREFIX}/lib
-    make -j4
+    ./configure ${DEPS_CONFIG} CPPFLAGS=-I${DEPS_PREFIX}/include LDFLAGS=-L${DEPS_PREFIX}/lib >/dev/null
+    make -j4 >/dev/null
     make install
     cd -
 fi
@@ -159,8 +167,8 @@ else
     mv gtest_archive/gtest-1.7.0.zip .
     unzip gtest-1.7.0.zip
     cd gtest-1.7.0
-    ./configure ${DEPS_CONFIG}
-    make
+    ./configure ${DEPS_CONFIG} >/dev/null
+    make -j8 >/dev/null
     cp -a lib/.libs/* ${DEPS_PREFIX}/lib
     cp -a include/gtest ${DEPS_PREFIX}/include
     cd -
@@ -174,8 +182,8 @@ else
     wget http://download.savannah.gnu.org/releases/libunwind/libunwind-0.99-beta.tar.gz
     tar zxf libunwind-0.99-beta.tar.gz
     cd libunwind-0.99-beta
-    ./configure ${DEPS_CONFIG}
-    make CFLAGS=-fPIC -j4
+    ./configure ${DEPS_CONFIG} >/dev/null
+    make CFLAGS=-fPIC -j4 >/dev/null
     make CFLAGS=-fPIC install
     cd -
 fi
@@ -191,8 +199,8 @@ else
     mv gperftools/gperftools-2.2.1.tar.gz .
     tar zxf gperftools-2.2.1.tar.gz
     cd gperftools-2.2.1
-    ./configure ${DEPS_CONFIG} CPPFLAGS=-I${DEPS_PREFIX}/include LDFLAGS=-L${DEPS_PREFIX}/lib
-    make -j4
+    ./configure ${DEPS_CONFIG} CPPFLAGS=-I${DEPS_PREFIX}/include LDFLAGS=-L${DEPS_PREFIX}/lib >/dev/null
+    make -j4 >/dev/null
     make install
     cd -
 fi
@@ -205,7 +213,7 @@ else
     # leveldb
     git clone https://github.com/imotai/leveldb.git
     cd leveldb
-    make -j8 
+    make -j8 >/dev/null 
     cp -rf include/* ${DEPS_PREFIX}/include
     cp libleveldb.a ${DEPS_PREFIX}/lib
     cd -
@@ -231,7 +239,7 @@ else
     export PATH=${DEPS_PREFIX}/bin:$PATH
     export BOOST_PATH=${DEPS_PREFIX}/boost_1_57_0
     export PBRPC_PATH=${DEPS_PREFIX}/
-    make -j4 ins && make -j4 install_sdk && make python
+    make -j4 ins >/dev/null && make -j4 install_sdk >/dev/null  && make python >/dev/null
     mkdir -p output/bin && cp ins output/bin
     cp -rf output/python/ ../../optools/
     cd -
@@ -257,7 +265,7 @@ else
     sed -i 's/^INS_PREFIX=.*/INS_PREFIX=..\/..\/thirdparty/' depends.mk
     sed -e '$ c -lgtest_main -lgtest -lglog -lgflags -ltcmalloc_minimal -lunwind' depends.mk > depends.mk.new
     mv depends.mk.new depends.mk
-    make -j8
+    make -j8 >/dev/null
     cp -a build/lib/*.a ${DEPS_PREFIX}/lib
     cp -a build/include/*.h ${DEPS_PREFIX}/include
     cd -
@@ -283,7 +291,7 @@ else
     sed -i 's/^INS_PREFIX=.*/INS_PREFIX=..\/..\/thirdparty/' depends.mk
     sed -i 's/^TERA_PREFIX=.*/TERA_PREFIX=..\/..\/thirdparty/' depends.mk
     sed -i '/-lgtest_main/c -lgtest_main -lgtest -lglog -lgflags -ltcmalloc_minimal -lunwind' depends.mk
-    make -j8
+    make -j8 >/dev/null
     cp src/ftrace/collector/logger.h ${DEPS_PREFIX}/include
     cp libftrace.a ${DEPS_PREFIX}/lib
     cd -
@@ -293,7 +301,7 @@ fi
 git clone https://github.com/baidu/common.git
 cd common
 sed -i 's/^INCLUDE_PATH=.*/INCLUDE_PATH=-Iinclude -I..\/..\/thirdparty\/boost_1_57_0/' Makefile
-make -j8
+make -j8 >/dev/null
 cp -rf include/* ${DEPS_PREFIX}/include
 cp -rf libcommon.a ${DEPS_PREFIX}/lib
 cd -

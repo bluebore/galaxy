@@ -20,7 +20,6 @@ BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 SECRET_KEY = 'pme%=52e+c=_n%gau$6h-=w@+^6l4r8d*-x9a*q5a$ixsk7(^b'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
 
 TEMPLATE_DEBUG = True
 
@@ -97,8 +96,6 @@ STATICFILES_DIRS = (
    os.path.join(BASE_DIR, "statics"),
 )
 
-GALAXY_ADDR=""
+DEBUG = True
 LUMIA_ADDR="127.0.0.1:8081"
-
-TRACE_QUERY_ENGINE="xxxx"
-GALAXY_MASTER="xxxx"
+LITE_DB_PATH=os.path.join(BASE_DIR, "dc.json")

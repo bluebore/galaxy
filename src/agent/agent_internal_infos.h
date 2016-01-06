@@ -42,19 +42,19 @@ struct TaskInfo {
     int initd_check_failed;
     std::string gc_dir;
     Initd_Stub* initd_stub;
-    CGroupResourceCollector* resource_collector; 
+    CGroupResourceCollector* resource_collector;
+    CGroupIOStatistics old_io_stat;
+    int64_t io_collect_counter;
     std::string ToString() {
         std::string pb_str;
         std::string str_format;     
         str_format.append("task_id : " + task_id + "\n");
         str_format.append("pod_id : "+ pod_id + "\n");
-        str_format.append("task desc : {\n");
-    
+        str_format.append("task desc : {\n"); 
         google::protobuf::TextFormat::PrintToString(desc, &pb_str);      
 
         str_format.append(pb_str);
-        str_format.append("}\n");
-         
+        str_format.append("}\n"); 
         str_format.append("task status : {\n");
         pb_str.clear(); 
         google::protobuf::TextFormat::PrintToString(status, &pb_str);
@@ -102,7 +102,9 @@ struct TaskInfo {
           stop_timeout_point(0),
           initd_check_failed(0),
           initd_stub(NULL),
-          resource_collector(NULL) {
+          resource_collector(NULL),
+          old_io_stat(),
+          io_collect_counter(0){
     }
 
     void CopyFrom(const TaskInfo& task) {

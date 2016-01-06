@@ -36,17 +36,20 @@ int main(int argc, char* argv[]) {
     sofa::pbrpc::RpcServerOptions options;
     sofa::pbrpc::RpcServer rpc_server(options);
     baidu::galaxy::MasterImpl* master_impl = new baidu::galaxy::MasterImpl();
-    baidu::galaxy::Master* master_service = master_impl;
-    if (!rpc_server.RegisterService(master_service)) {
+    // reload related meta before provide service
+    master_impl->Init();
+    if (!rpc_server.RegisterService(master_impl)) {
         LOG(FATAL, "failed to register master service");
         exit(-1);
-    }   
+    }
     std::string server_addr = "0.0.0.0:" + FLAGS_master_port;
+    // start to collect agent heart beat
     if (!rpc_server.Start(server_addr)) {
         LOG(FATAL, "failed to start galaxy master on %s", server_addr.c_str());
         exit(-2);
-    }  
-    master_impl->Init();
+    }
+    // start master related interval threads
+    master_impl->Start();
     signal(SIGINT, SignalIntHandler);
     signal(SIGTERM, SignalIntHandler);
     while (!s_quit) {

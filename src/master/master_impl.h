@@ -18,6 +18,7 @@ public:
       MasterImpl();
       virtual ~MasterImpl();
       void Init();
+      void Start();
       virtual void SubmitJob(::google::protobuf::RpcController* controller,
                             const ::baidu::galaxy::SubmitJobRequest* request,
                             ::baidu::galaxy::SubmitJobResponse* response,
@@ -83,6 +84,10 @@ public:
                            const ::baidu::galaxy::ShowPodRequest* request,
                            ::baidu::galaxy::ShowPodResponse* response,
                            ::google::protobuf::Closure* done);
+      virtual void ShowTask(::google::protobuf::RpcController* controller,
+                           const ::baidu::galaxy::ShowTaskRequest* request,
+                           ::baidu::galaxy::ShowTaskResponse* response,
+                           ::google::protobuf::Closure* done); 
       virtual void GetStatus(::google::protobuf::RpcController* controller,
                            const ::baidu::galaxy::GetMasterStatusRequest* request,
                            ::baidu::galaxy::GetMasterStatusResponse* response,
@@ -102,6 +107,16 @@ public:
                            AddUserResponse* response,
                            ::google::protobuf::Closure* done);
  
+      virtual void OfflineAgent(::google::protobuf::RpcController* controller,
+                                 const ::baidu::galaxy::OfflineAgentRequest* request,
+                                 ::baidu::galaxy::OfflineAgentResponse* response,
+                                 ::google::protobuf::Closure* done);
+
+      virtual void OnlineAgent(::google::protobuf::RpcController* controller,
+                                const ::baidu::galaxy::OnlineAgentRequest* request,
+                                ::baidu::galaxy::OnlineAgentResponse* response,
+                                ::google::protobuf::Closure* done);
+
       void OnSessionTimeout();
       void OnLockChange(std::string lock_session_id);
 private:
@@ -109,6 +124,7 @@ private:
       // TODO should return value
       void ReloadJobInfo();
       void ReloadLabelInfo();
+      void ReloadAgent();
 private:
       JobManager job_manager_;
       InsSDK* nexus_;

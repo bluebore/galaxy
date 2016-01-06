@@ -12,6 +12,7 @@ DECLARE_string(nexus_root_path);
 DECLARE_string(master_lock_path);
 DECLARE_string(master_path);
 DECLARE_string(jobs_store_path);
+DECLARE_string(agents_store_path);
 DECLARE_string(labels_store_path);
 DECLARE_int32(max_scale_down_size);
 DECLARE_int32(max_scale_up_size);
@@ -64,6 +65,11 @@ void MasterImpl::Init() {
     LOG(INFO, "reload users from nexus successfully");
     ReloadJobInfo();
     ReloadLabelInfo();
+    ReloadAgent();
+}
+
+void MasterImpl::Start() {
+    job_manager_.Start();
 }
 
 void MasterImpl::ReloadLabelInfo() {
@@ -88,6 +94,29 @@ void MasterImpl::ReloadLabelInfo() {
     }
     LOG(INFO, "reload label info %d", label_amount);
     return;
+}
+
+void MasterImpl::ReloadAgent() {
+    std::string start_key = FLAGS_nexus_root_path + FLAGS_agents_store_path + "/";
+    std::string end_key = start_key + "~"; 
+    ::galaxy::ins::sdk::ScanResult* result = nexus_->Scan(start_key, end_key);
+    int agent_amount = 0;
+    while (!result->Done()) { 
+        assert(result->Error() == ::galaxy::ins::sdk::kOK);
+        std::string key = result->Key();
+        std::string value = result->Value();
+        AgentPersistenceInfo agent;
+        bool ok = agent.ParseFromString(value);
+        if (ok) {
+            LOG(INFO, "reload agent %s", agent.endpoint().c_str());
+            job_manager_.ReloadAgent(agent);
+            agent_amount ++;
+        }else {
+            LOG(WARNING, "fail to parse agent info with key %s", key.c_str());
+        }
+        result->Next();
+    }
+    LOG(INFO, "reload agent count %d", agent_amount);
 }
 
 void MasterImpl::ReloadJobInfo() {
@@ -376,6 +405,7 @@ void MasterImpl::ShowPod(::google::protobuf::RpcController* /*controller*/,
     response->set_status(kInputError);
     do {
         std::string job_id;
+        std::string agent_addr;
         if (request->has_jobid()) {
             job_id = request->jobid();
         } else if (request->has_name()) {
@@ -383,14 +413,49 @@ void MasterImpl::ShowPod(::google::protobuf::RpcController* /*controller*/,
             if (!ok) {
                 break;
             }
+        } else if (request->has_endpoint()) {
+            agent_addr = request->endpoint();
         }
         if (!job_id.empty()) {
             Status ok = job_manager_.GetPods(job_id, 
                                      response->mutable_pods());
             response->set_status(ok);
+        }else if (!agent_addr.empty()) {
+            Status ok = job_manager_.GetPodsByAgent(agent_addr, 
+                                     response->mutable_pods());
+            response->set_status(ok);
         }
     }while(0);
     done->Run(); 
+}
+
+
+void MasterImpl::ShowTask(::google::protobuf::RpcController* controller,
+                           const ::baidu::galaxy::ShowTaskRequest* request,
+                           ::baidu::galaxy::ShowTaskResponse* response,
+                           ::google::protobuf::Closure* done) {
+    response->set_status(kInputError);
+    do {
+        std::string job_id;
+        std::string agent_addr;
+        if (request->has_jobid()) {
+            job_id = request->jobid();
+        }else if (request->has_endpoint()) {
+            agent_addr = request->endpoint();
+        }
+        if (!job_id.empty()) {
+            Status ok = job_manager_.GetTaskByJob(job_id, 
+                                     response->mutable_tasks());
+            response->set_status(ok);
+        }else if (!agent_addr.empty()) {
+            Status ok = job_manager_.GetTaskByAgent(agent_addr, 
+                                     response->mutable_tasks());
+            response->set_status(ok);
+        }
+    }while(0);
+    done->Run(); 
+
+
 }
 
 void MasterImpl::GetStatus(::google::protobuf::RpcController*,
@@ -471,6 +536,34 @@ void MasterImpl::AddUser(::google::protobuf::RpcController*,
     done->Run();
 }
 
+
+void MasterImpl::OfflineAgent(::google::protobuf::RpcController* controller,
+                              const ::baidu::galaxy::OfflineAgentRequest* request,
+                              ::baidu::galaxy::OfflineAgentResponse* response,
+                              ::google::protobuf::Closure* done) {
+
+    bool ok = job_manager_.OfflineAgent(request->endpoint());
+    if (!ok) {
+        response->set_status(kAgentError);
+    }else {
+        response->set_status(kOk);
+    }
+    done->Run();
+}
+
+void MasterImpl::OnlineAgent(::google::protobuf::RpcController* controller,
+                              const ::baidu::galaxy::OnlineAgentRequest* request,
+                              ::baidu::galaxy::OnlineAgentResponse* response,
+                              ::google::protobuf::Closure* done) {
+
+    bool ok = job_manager_.OnlineAgent(request->endpoint());
+    if (!ok) {
+        response->set_status(kAgentError);
+    }else {
+        response->set_status(kOk);
+    }
+    done->Run();
+}
 
 }
 }

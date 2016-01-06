@@ -55,7 +55,9 @@ message JobInfo {
     repeated PodDescriptor pod_descs = 6;
     // pod latest pod descriptor
     optional string latest_version = 7;
-    optional string uid = 8;
+    optional int64 create_time = 8;
+    optional int64 update_time = 9;
+    optional string uid = 10;
 }
 
 message ScheduleInfo {
@@ -128,6 +130,14 @@ message JobOverview {
     optional Resource resource_used = 5;
     optional int32 pending_num = 6;
     optional int32 deploying_num = 7;
+    optional int32 death_num = 8;
+    optional int64 create_time = 9;
+    optional int64 update_time = 10;
+    optional int64 read_bytes_ps = 11;
+    optional int64 write_bytes_ps = 12;
+    optional int64 syscr_ps = 13;
+    optional int64 syscw_ps = 14;
+
 }
 
 message ListJobsResponse {
@@ -225,6 +235,7 @@ message LabelAgentResponse {
 message ShowPodRequest {
     optional string jobid = 1;
     optional string name = 2;
+    optional string endpoint = 3;
 }
 
 message PodOverview {
@@ -236,6 +247,29 @@ message PodOverview {
     optional PodState state = 6;
     optional string version = 7;
     optional string endpoint = 8;
+    optional int64 pending_time = 9;
+    optional int64 sched_time = 10;
+    optional int64 start_time = 11;
+}
+
+message ShowTaskRequest {
+    optional string jobid = 1;
+    optional string endpoint = 2;
+}
+
+message TaskOverview {
+    optional string podid = 1;
+    optional TaskState state = 2;
+    optional string endpoint = 3;
+    optional int64 deploy_time = 4;
+    optional int64 start_time = 5;
+    optional string cmd = 6;
+    optional Resource used = 7;
+}
+
+message ShowTaskResponse {
+    repeated TaskOverview tasks = 1;
+    optional Status status = 2;
 }
 
 message ShowPodResponse {
@@ -328,6 +362,22 @@ message PreemptResponse {
     optional Status status = 1;
 }
 
+message OfflineAgentRequest {
+    optional string endpoint = 1;
+}
+
+message OfflineAgentResponse {
+    optional Status status = 1;
+}
+
+message OnlineAgentRequest {
+    optional string endpoint = 1;
+}
+
+message OnlineAgentResponse {
+    optional Status status = 1;
+}
+
 service Master {
     rpc SubmitJob(SubmitJobRequest) returns (SubmitJobResponse);
     rpc UpdateJob(UpdateJobRequest) returns (UpdateJobResponse);
@@ -336,6 +386,7 @@ service Master {
     rpc TerminateJob(TerminateJobRequest) returns (TerminateJobResponse);
     rpc ShowJob(ShowJobRequest) returns (ShowJobResponse);
     rpc ShowPod(ShowPodRequest) returns (ShowPodResponse);
+    rpc ShowTask(ShowTaskRequest) returns (ShowTaskResponse);
     rpc ListJobs(ListJobsRequest) returns (ListJobsResponse);
     rpc GetStatus(GetMasterStatusRequest) returns (GetMasterStatusResponse);
 
@@ -348,9 +399,12 @@ service Master {
     rpc GetJobDescriptor(GetJobDescriptorRequest) returns (GetJobDescriptorResponse);
     rpc Propose(ProposeRequest) returns (ProposeResponse);
     rpc Preempt(PreemptRequest) returns (PreemptResponse);
+
     rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse);
     rpc LabelAgents(LabelAgentRequest) returns (LabelAgentResponse);
 
     rpc Login(LoginRequest) returns (LoginResponse);
     rpc AddUser(AddUserRequest) returns (AddUserResponse);
+    rpc OfflineAgent(OfflineAgentRequest) returns (OfflineAgentResponse);
+    rpc OnlineAgent(OnlineAgentRequest) returns (OnlineAgentResponse);
 }

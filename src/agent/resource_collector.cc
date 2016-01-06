@@ -11,14 +11,17 @@
 #include <string.h>
 #include <string>
 #include <iostream>
+#include <fstream>
 #include "gflags/gflags.h"
 #include "boost/lexical_cast.hpp"
 #include "boost/algorithm/string.hpp"
 #include "boost/algorithm/string/predicate.hpp"
 #include "logging.h"
 #include "agent/cgroups.h"
+#include "agent/utils.h"
 
 DECLARE_string(gce_cgroup_root);
+DECLARE_int32(stat_check_period);
 
 namespace baidu {
 namespace galaxy {
@@ -268,6 +271,330 @@ double ProcResourceCollector::GetCpuUsage() {
     return rs;
 }
 
+GlobalResourceCollector::GlobalResourceCollector() {
+    stat_ = new SysStat();
+}
+
+GlobalResourceCollector::~GlobalResourceCollector() {
+    delete stat_;
+}
+
+SysStat* GlobalResourceCollector::GetStat() {
+    return stat_;
+}
+
+int GlobalResourceCollector::CollectStatistics() {
+    bool ret = -1;
+    do {
+        LOG(INFO, "start collect sys stat");
+        stat_->last_stat_ = stat_->cur_stat_;        
+        bool ok = GetGlobalCpuStat();
+        if (!ok) {
+            LOG(WARNING, "fail to get cpu usage");
+            break;
+        }
+        ok = GetGlobalMemStat();
+        if (!ok) {
+            LOG(WARNING, "fail to get mem usage");
+            break;
+        }
+        ok = GetGlobalIntrStat();
+        if (!ok) {
+            LOG(WARNING, "fail to get interupt usage");
+            break;
+        }
+        ok = GetGlobalIOStat();
+        if (!ok) {
+            LOG(WARNING, "fail to get IO usage");
+            break;
+        }
+        ok = GetGlobalNetStat();
+        if (!ok) {
+            LOG(WARNING, "fail to get Net usage");
+            break;
+        }
+        stat_->collect_times_++;
+        if (stat_->collect_times_ < MIN_COLLECT_TIME) {
+            LOG(WARNING, "collect times not reach %d", MIN_COLLECT_TIME);
+            ret = 1;
+            break;
+        }
+        ret = 0;
+    } while(0); 
+    return ret;
+}
+
+bool GlobalResourceCollector::GetGlobalCpuStat() {
+    ResourceStatistics statistics;
+    std::string path = "/proc/stat";
+    FILE* fin = fopen(path.c_str(), "r");
+    if (fin == NULL) {
+        LOG(WARNING, "open %s failed", path.c_str());
+        return false; 
+    }
+
+    ssize_t read;
+    size_t len = 0;
+    char* line = NULL;
+    if ((read = getline(&line, &len, fin)) == -1) {
+        LOG(WARNING, "read line failed err[%d: %s]", 
+                errno, strerror(errno)); 
+        fclose(fin);
+        return false;
+    }
+    fclose(fin);
+    char cpu[5];
+    int item_size = sscanf(line, 
+                           "%s %ld %ld %ld %ld %ld %ld %ld %ld %ld", 
+                           cpu,
+                           &(stat_->cur_stat_.cpu_user_time),
+                           &(stat_->cur_stat_.cpu_nice_time),
+                           &(stat_->cur_stat_.cpu_system_time),
+                           &(stat_->cur_stat_.cpu_idle_time),
+                           &(stat_->cur_stat_.cpu_iowait_time),
+                           &(stat_->cur_stat_.cpu_irq_time),
+                           &(stat_->cur_stat_.cpu_softirq_time),
+                           &(stat_->cur_stat_.cpu_stealstolen),
+                           &(stat_->cur_stat_.cpu_guest)); 
+
+    free(line); 
+    line = NULL;
+    if (item_size != 10) {
+        LOG(WARNING, "read from /proc/stat format err"); 
+        return false;
+    }
+    long total_cpu_time_last = 
+    stat_->last_stat_.cpu_user_time
+    + stat_->last_stat_.cpu_nice_time
+    + stat_->last_stat_.cpu_system_time
+    + stat_->last_stat_.cpu_idle_time
+    + stat_->last_stat_.cpu_iowait_time
+    + stat_->last_stat_.cpu_irq_time
+    + stat_->last_stat_.cpu_softirq_time
+    + stat_->last_stat_.cpu_stealstolen
+    + stat_->last_stat_.cpu_guest;
+    long total_cpu_time_cur =
+    stat_->cur_stat_.cpu_user_time
+    + stat_->cur_stat_.cpu_nice_time
+    + stat_->cur_stat_.cpu_system_time
+    + stat_->cur_stat_.cpu_idle_time
+    + stat_->cur_stat_.cpu_iowait_time
+    + stat_->cur_stat_.cpu_irq_time
+    + stat_->cur_stat_.cpu_softirq_time
+    + stat_->cur_stat_.cpu_stealstolen
+    + stat_->cur_stat_.cpu_guest;
+    long total_cpu_time = total_cpu_time_cur - total_cpu_time_last;
+    if (total_cpu_time < 0) {
+        LOG(WARNING, "invalide total cpu time cur %ld last %ld", total_cpu_time_cur, total_cpu_time_last);
+        return false;
+    }     
+
+    long total_used_time_last = 
+    stat_->last_stat_.cpu_user_time 
+    + stat_->last_stat_.cpu_system_time
+    + stat_->last_stat_.cpu_nice_time
+    + stat_->last_stat_.cpu_irq_time
+    + stat_->last_stat_.cpu_softirq_time
+    + stat_->last_stat_.cpu_stealstolen
+    + stat_->last_stat_.cpu_guest;
+
+    long total_used_time_cur =
+    stat_->cur_stat_.cpu_user_time
+    + stat_->cur_stat_.cpu_nice_time
+    + stat_->cur_stat_.cpu_system_time
+    + stat_->cur_stat_.cpu_irq_time
+    + stat_->cur_stat_.cpu_softirq_time
+    + stat_->cur_stat_.cpu_stealstolen
+    + stat_->cur_stat_.cpu_guest;
+    long total_cpu_used_time = total_used_time_cur - total_used_time_last;
+    if (total_cpu_used_time < 0)  {
+        LOG(WARNING, "invalude total cpu used time cur %ld last %ld", total_used_time_cur, total_used_time_last);
+        return false;
+    }
+    double rs = total_cpu_used_time / static_cast<double>(total_cpu_time);
+    stat_->cpu_used_ = rs;
+    return true;
+}
+
+bool GlobalResourceCollector::GetGlobalMemStat(){
+    FILE* fp = fopen("/proc/meminfo", "rb");
+    if (fp == NULL) {
+        return false;
+    }
+    std::string content;
+    char buf[1024];
+    int len = 0;
+    while ((len = fread(buf, 1, sizeof(buf), fp)) > 0) {
+        content.append(buf, len);
+    }
+    std::vector<std::string> lines;
+    boost::split(lines, content, boost::is_any_of("\n"));
+    int64_t total_mem = 0;
+    int64_t free_mem = 0;
+    int64_t buffer_mem = 0;
+    int64_t cache_mem = 0;
+    int64_t tmpfs_mem = 0;
+    for (size_t i = 0; i < lines.size(); i++) {
+        std::string line = lines[i];
+        std::vector<std::string> parts;
+        if (line.find("MemTotal:") == 0) {
+            boost::split(parts, line, boost::is_any_of(" "), boost::token_compress_on);
+            if (parts.size() < 2) {
+                fclose(fp);
+                return false;
+            }
+            total_mem = boost::lexical_cast<int64_t>(parts[parts.size() - 2]);
+        }else if (line.find("MemFree:") == 0) {
+            boost::split(parts, line, boost::is_any_of(" "), boost::token_compress_on);
+            if (parts.size() < 2) {
+                fclose(fp);
+                return false;
+            }
+            free_mem = boost::lexical_cast<int64_t>(parts[parts.size() - 2]);
+        }else if (line.find("Buffers:") == 0) {
+            boost::split(parts, line, boost::is_any_of(" "), boost::token_compress_on);
+            if (parts.size() < 2) {
+                fclose(fp);
+                return false;
+            }
+            buffer_mem = boost::lexical_cast<int64_t>(parts[parts.size() - 2]);
+        }else if (line.find("Cached:") == 0) {
+            boost::split(parts, line, boost::is_any_of(" "), boost::token_compress_on);
+            if (parts.size() < 2) {
+                fclose(fp);
+                return false;
+            }
+            cache_mem = boost::lexical_cast<int64_t>(parts[parts.size() - 2]);
+        }
+    }
+    fclose(fp);
+    
+    std::string path = "/etc/mtab";
+    std::ifstream stat(path.c_str());
+    if (!stat.is_open()) {
+        LOG(WARNING, "open proc stat fail.");
+        return false;
+    }
+    std::ostringstream tmp;
+    tmp << stat.rdbuf();
+    std::string mtab = tmp.str();
+    stat.close();
+    boost::split(lines, mtab, boost::is_any_of("\n"));
+    for (size_t n = 0; n < lines.size(); n++) {
+        std::string line = lines[n];
+        if (line.find("tmpfs") == 0) {
+            boost::trim(line);
+            int tmpfs_size = 0;
+            std::vector<std::string> parts;
+            boost::split(parts, line, boost::is_any_of(" "), boost::token_compress_on);
+            if (0 != sscanf(parts[3].c_str(), "rw,size=%dG", &tmpfs_size)) {
+                tmpfs_mem += tmpfs_size * 1024 * 1024;
+            } else if (0 != sscanf(parts[3].c_str(), "rw,size=%dM", &tmpfs_size)) {
+                tmpfs_mem += tmpfs_size * 1024;
+            }
+        }
+    }
+
+    stat_->mem_used_ = (total_mem - free_mem - buffer_mem - cache_mem + tmpfs_mem) / boost::lexical_cast<double>(total_mem);
+    return true;
+}
+
+bool GlobalResourceCollector::GetGlobalIntrStat() {
+    uint64_t intr_cnt = 0;
+    uint64_t softintr_cnt = 0;
+    std::string path = "/proc/stat";
+    std::ifstream stat(path.c_str());
+    if (!stat.is_open()) {
+        LOG(WARNING, "open proc stat fail.");
+        return false;
+    } 
+    std::vector<std::string> lines;
+    std::string content; 
+    stat >> content;
+    stat.close();
+    boost::split(lines, content, boost::is_any_of("\n"));
+    for (size_t n = 0; n < lines.size(); n++) {
+        std::string line = lines[n];
+        if (line.find("intr") != std::string::npos) {
+            boost::trim(line);
+            std::vector<std::string> parts;
+            boost::split(parts, line, boost::is_any_of(" "), boost::token_compress_on);
+            intr_cnt = boost::lexical_cast<int64_t>(parts[1]);
+        } else if (line.find("softirq") != std::string::npos) {
+            std::vector<std::string> parts;
+            boost::split(parts, line, boost::is_any_of(" "), boost::token_compress_on);
+            softintr_cnt = boost::lexical_cast<int64_t>(parts[1]);
+        }
+        continue;
+    }
+    stat_->cur_stat_.interupt_times = intr_cnt;
+    stat_->cur_stat_.soft_interupt_times = softintr_cnt;
+    stat_->intr_rate_ = (stat_->cur_stat_.interupt_times - stat_->last_stat_.interupt_times) / FLAGS_stat_check_period * 1000; 
+    stat_->soft_intr_rate_ = (stat_->cur_stat_.soft_interupt_times - stat_->last_stat_.soft_interupt_times) / FLAGS_stat_check_period * 1000;
+    return true;
+}
+
+bool GlobalResourceCollector::GetGlobalIOStat() {
+    std::string path = "/sys/block/sda/stat";
+    std::ifstream stat(path.c_str());
+    if (!stat.is_open()) {
+        LOG(WARNING, "open proc stat fail.");
+        return false;
+    }
+    std::ostringstream tmp;
+    tmp << stat.rdbuf(); 
+    std::string content = tmp.str();
+    stat.close();
+    boost::trim(content);
+    std::vector<std::string> parts;
+    boost::split(parts, content, boost::is_any_of(" "), boost::token_compress_on);
+    stat_->cur_stat_.rd_ios = boost::lexical_cast<int64_t>(parts[0]);
+    stat_->cur_stat_.rd_sectors = boost::lexical_cast<int64_t>(parts[2]);
+    stat_->cur_stat_.wr_ios = boost::lexical_cast<int64_t>(parts[4]);
+    stat_->cur_stat_.wr_sectors = boost::lexical_cast<int64_t>(parts[6]);
+    stat_->disk_read_times_ = (stat_->cur_stat_.rd_ios - stat_->last_stat_.rd_ios) / FLAGS_stat_check_period * 1000;
+    stat_->disk_write_times_ = (stat_->cur_stat_.wr_ios - stat_->last_stat_.wr_ios) / FLAGS_stat_check_period * 1000;
+    stat_->disk_read_Bps_ = (stat_->cur_stat_.rd_sectors - stat_->last_stat_.rd_sectors) / FLAGS_stat_check_period * 1000;
+    stat_->disk_write_Bps_ = (stat_->cur_stat_.wr_sectors - stat_->last_stat_.wr_sectors) / FLAGS_stat_check_period * 1000;
+    return true;
+}
+
+bool GlobalResourceCollector::GetGlobalNetStat() {
+    std::string path = "/proc/net/dev";
+    std::ifstream stat(path.c_str());
+    if (!stat.is_open()) {
+        LOG(WARNING, "open dev stat fail.");
+        return false;
+    }
+    std::ostringstream tmp;
+    tmp << stat.rdbuf();
+    std::string content = tmp.str();
+    stat.close();
+    std::vector<std::string> lines;
+    boost::split(lines, content, boost::is_any_of("\n"));
+    for (size_t n = 0; n < lines.size(); n++) {
+        std::string line = lines[n];
+        if (line.find("eth0") != std::string::npos || 
+                line.find("xgbe0") != std::string::npos) {
+            boost::trim(line);
+            std::vector<std::string> parts;
+            boost::split(parts, line, boost::is_any_of(" "), boost::token_compress_on);
+            std::vector<std::string> tokens;
+            boost::split(tokens, parts[0], boost::is_any_of(":"));
+            stat_->cur_stat_.net_in_bits = boost::lexical_cast<int64_t>(tokens[1]);
+            stat_->cur_stat_.net_in_packets = boost::lexical_cast<int64_t>(parts[1]);
+            stat_->cur_stat_.net_out_bits = boost::lexical_cast<int64_t>(parts[8]);
+            stat_->cur_stat_.net_out_packets = boost::lexical_cast<int64_t>(parts[9]);
+        }
+        continue;
+    }
+    stat_->net_in_bps_ = (stat_->cur_stat_.net_in_bits - stat_->last_stat_.net_in_bits) / FLAGS_stat_check_period * 1000;
+    stat_->net_out_bps_ = (stat_->cur_stat_.net_out_bits - stat_->last_stat_.net_out_bits) / FLAGS_stat_check_period * 1000;
+    stat_->net_in_pps_ = (stat_->cur_stat_.net_in_packets - stat_->last_stat_.net_in_packets) / FLAGS_stat_check_period * 1000;
+    stat_->net_out_pps_ = (stat_->cur_stat_.net_out_packets - stat_->last_stat_.net_out_packets) / FLAGS_stat_check_period * 1000;
+    return true;
+}
+
 bool GetGlobalCpuUsage(ResourceStatistics* statistics) {
     if (statistics == NULL) {
         return false; 
@@ -468,6 +795,71 @@ bool GetCgroupMemoryUsage(const std::string& group_path,
     return false;
 }
 
+CGroupIOCollector::CGroupIOCollector(){}
+
+CGroupIOCollector::~CGroupIOCollector(){}
+
+bool CGroupIOCollector::Collect(const std::string& cgroup_path,
+                                 CGroupIOStatistics* stat) {
+    std::vector<int> pids;
+    bool ok = ::baidu::galaxy::cgroups::GetPidsFromCgroup(cgroup_path, &pids);
+    if (!ok) {
+        LOG(WARNING, "fail to get pid from cgroup %s", cgroup_path.c_str());
+        return false;
+    }
+
+    std::vector<int>::iterator pid_it = pids.begin();
+    for (; pid_it != pids.end(); ++pid_it) {
+        ProcIOStatistics proc_stat;
+        ok = GetProcIOStat(*pid_it, &proc_stat);
+        if (!ok) {
+            LOG(WARNING, "fail to get pid %d io stat", *pid_it);
+            continue;
+        }
+        stat->processes.insert(std::make_pair(*pid_it, proc_stat));
+    }
+    return true;
+}
+
+bool CGroupIOCollector::GetProcIOStat(int pid, ProcIOStatistics* stat) {
+    std::string io_path = "/proc/" + boost::lexical_cast<std::string>(pid) + "/io";
+    bool ok = ::baidu::galaxy::file::IsExists(io_path);
+    if (!ok) {
+        LOG(WARNING, "io %s does not exist", io_path.c_str());
+        return false;
+    }
+    std::ifstream ifs;
+    ifs.open(io_path.c_str(), std::ifstream::binary);
+    while (ifs.good()) {
+        if (ifs.eof()) {
+            break;
+        }
+        std::string line;
+        std::getline(ifs, line);
+        std::vector<std::string> parts;
+        boost::split(parts, line, boost::is_any_of(": "));
+        if (parts.size() != 3) {
+            continue;
+        }
+        if (parts[0] == "rchar") {
+            stat->rchar = boost::lexical_cast<int64_t>(parts[2]);
+        } else if (parts[0] == "wchar") { 
+            stat->wchar = boost::lexical_cast<int64_t>(parts[2]);
+        } else if (parts[0] == "syscr") { 
+            stat->syscr = boost::lexical_cast<int64_t>(parts[2]);
+        } else if (parts[0] == "syscw") { 
+            stat->syscw = boost::lexical_cast<int64_t>(parts[2]);
+        } else if (parts[0] == "read_bytes") { 
+            stat->read_bytes = boost::lexical_cast<int64_t>(parts[2]);
+        } else if (parts[0] == "write_bytes") { 
+            stat->write_bytes = boost::lexical_cast<int64_t>(parts[2]);
+        } else if (parts[0] == "cancelled_write_bytes") { 
+            stat->cancelled_write_bytes = boost::lexical_cast<int64_t>(parts[2]);
+        }
+    }
+    ifs.close();
+    return true;
+}
 
 }   // ending namespace galaxy
 }   // ending namespace baidu
