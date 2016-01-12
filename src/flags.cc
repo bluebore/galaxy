@@ -44,6 +44,8 @@ DEFINE_int32(scheduler_sync_resource_timeout, 1000, "the timeout that scheduler 
 DEFINE_int32(scheduler_sync_resource_period, 2000, "the period that scheduler sync resource from master");
 DEFINE_int32(scheduler_sync_job_period, 2000, "the period that scheduler sync job from master");
 DEFINE_int32(scheduler_sync_job_timeout, 2000, "the time that scheduler sync job from master");
+DEFINE_int32(scheduler_sync_quota_period, 2000, "the period that scheduler sync quota from master");
+DEFINE_int32(scheduler_sync_quota_timeout, 2000, "the time that scheduler sync quota from master");
 DEFINE_int32(scheduler_feasibility_factor, 2, "the feasibility factor which schedulder use to calc agent for pending job");
 
 DEFINE_double(scheduler_cpu_used_factor, 10.0, "the cpu used factor for calc agent load score");

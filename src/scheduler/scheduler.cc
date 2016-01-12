@@ -419,6 +419,12 @@ int32_t Scheduler::ChoosePods(std::vector<JobInfo>& pending_jobs,
     std::vector<JobInfo>::const_iterator job_it = pending_jobs.begin();
     int32_t all_pod_needs = 0;
     for (; job_it != pending_jobs.end(); ++job_it) {
+        boost::unordered_map<std::string, Quota>::iterator quota_it = quotas_->find(job_it->uid());
+        if (quota_it == quotas_->end()) {
+            LOG(WARNING, "the job %s of uid %s has no quota",job_it->jobid().c_str(),
+                    job_it->uid().c_str());
+            continue;
+        }
         std::vector<std::string> job_pending_pods;
         uint32_t deploying_num = 0;
         for (int i = 0; i < job_it->pods_size(); i++) {
@@ -463,6 +469,11 @@ int32_t Scheduler::ChoosePods(std::vector<JobInfo>& pending_jobs,
               job_it->jobid().c_str(), job_it->latest_version().c_str());
             continue;
         }
+        ConsumeQuota(pod_desc, quota_it->second, need_schedule);
+        if (need_schedule.size() <= 0) {
+            LOG(WARNING, "job %s has no enough quota to deploy pod", job_it->jobid().c_str());
+            continue;
+        }
         boost::shared_ptr<PodScaleUpCell> need_schedule_cell(new PodScaleUpCell());
         need_schedule_cell->proposed = false;
         need_schedule_cell->pod = pod_desc;
@@ -475,6 +486,19 @@ int32_t Scheduler::ChoosePods(std::vector<JobInfo>& pending_jobs,
     }
     LOG(INFO, "total %d pods need be scheduled", all_pod_needs);
     return all_pod_needs;
+}
+
+void Scheduler::ConsumeQuota(const PodDescriptor& pod_desc,
+                                const Quota& quota,
+                                std::vector<std::string>& podids) {
+    int64_t left_cpu = quota.cpu_quota() - quota.cpu_assigned();
+    int64_t left_mem = quota.memory_quota() - quota.memory_assigned();
+    int64_t cpu_max_pod_count = left_cpu / pod_desc.requirement().millicores();
+    int64_t mem_max_pod_count = left_mem / pod_desc.requirement().memory();
+    int64_t max_pod_count = cpu_max_pod_count > mem_max_pod_count? mem_max_pod_count: cpu_max_pod_count;
+    for (int64_t i = 0; i < (podids.size() - max_pod_count); ++i) {
+        podids.pop_back();
+    }
 }
 
 int32_t Scheduler::ChooseReducingPod(std::vector<JobInfo>& reducing_jobs,
@@ -719,6 +743,37 @@ void Scheduler::SyncJobDescriptor(const GetJobDescriptorResponse* response) {
         LOG(INFO, "delete job %s desc", response->deleted_jobs(i).c_str());
         jobs_->erase(response->deleted_jobs(i));
     }
+}
+
+void Scheduler::BuildSyncQuotaRequest(SyncQuotaRequest* request) {
+    MutexLock lock(&sched_mutex_);
+    boost::unordered_map<std::string, Quota>::iterator quota_it = quotas_->begin();
+    for (; quota_it != quotas_->end(); ++quota_it) {
+        QuotaDiff* quota_diff  = request->mutable_diffs()->Add();
+        quota_diff->set_qid(quota_it->second.qid());
+        quota_diff->set_version(quota_it->second.version());
+    }
+}
+
+void Scheduler::SyncQuota(const SyncQuotaResponse* response) {
+    MutexLock lock(&sched_mutex_);
+    for (int i = 0; i < response->qids_to_be_del_size(); ++i) {
+        quotas_->erase(response->qids_to_be_del(i));
+    }
+    for (int i = 0; i < response->quotas_size(); ++i) {
+        boost::unordered_map<std::string, Quota>::iterator quota_it = quotas_->begin();
+        if (quota_it == quotas_->end()) {
+            LOG(INFO, "new add quota %lld cpu %lld mem %s uid", response->quotas(i).cpu_quota(),
+                    response->quotas(i).memory_quota(),
+                    response->quotas(i).target().c_str());
+            quotas_->insert(std::make_pair(response->quotas(i).target(), response->quotas(i)));
+        }else {
+            quota_it->second.CopyFrom(response->quotas(i));
+        }
+    }
+    LOG(INFO, "sync quota del count %u, update count %u", response->qids_to_be_del_size(),
+            response->quotas_size());
+
 }
 
 }// galaxy

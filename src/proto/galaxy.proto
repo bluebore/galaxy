@@ -221,5 +221,6 @@ message Quota {
     optional int64 cpu_assigned = 8;
     optional int64 memory_assigned = 9;
     optional QuotaType type = 10;
+    optional uint32 version = 11;
 }
 

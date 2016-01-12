@@ -535,6 +535,7 @@ void JobManager::ProcessUpdateJob(JobInfoList* need_update_jobs,
                 pod_desc->CopyFrom(v_it->second);
             }
             job_info->mutable_desc()->CopyFrom(job->desc_);
+            job_info->set_uid(job->uid_);
             job_info->set_update_state(kUpdateNormal);
             job->update_state_ = kUpdateNormal;
         }else {
@@ -600,6 +601,7 @@ void JobManager::ProcessScaleDown(JobInfoList* scale_down_pods,
             JobInfo* job_info = scale_down_pods->Add();
             job_info->mutable_desc()->CopyFrom(job_it->second->desc_);
             job_info->set_jobid(job_it->second->id_);
+            job_info->set_uid(job_it->second->uid_);
             std::map<PodId, PodStatus*>::const_iterator jt;
             for (jt = job->pods_.begin();
                  jt != job->pods_.end(); ++jt) {
@@ -666,6 +668,7 @@ void JobManager::ProcessScaleUp(JobInfoList* scale_up_pods,
         }
         JobInfo* job_info = scale_up_pods->Add();
         job_info->set_jobid(job->id_);
+        job_info->set_uid(job->uid_);
         job_info->mutable_desc()->CopyFrom(job->desc_);
         std::map<Version, PodDescriptor>::iterator v_it = job->pod_desc_.begin();
         for (; v_it != job->pod_desc_.end(); ++v_it) {

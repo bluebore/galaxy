@@ -370,13 +370,70 @@ void MasterImpl::Propose(::google::protobuf::RpcController* /*controller*/,
                          const ::baidu::galaxy::ProposeRequest* request,
                          ::baidu::galaxy::ProposeResponse* response,
                          ::google::protobuf::Closure* done) {
+    // TODO 
+    boost::unordered_map<std::string, PodDescriptor> desc_cache;
     for (int i = 0; i < request->schedule_size(); i++) {
         const ScheduleInfo& sche_info = request->schedule(i);
-        response->set_status(job_manager_.Propose(sche_info));
+
+        Status status = job_manager_.Propose(sche_info);
+        if (status == kOk) {
+         boost::unordered_map<std::string, PodDescriptor>::iterator desc_cache_it = desc_cache.find(sche_info.jobid());
+            if (desc_cache_it == desc_cache.end()) {
+                JobInfo job_info;
+                status = job_manager_.GetJobInfo(sche_info.jobid(), &job_info);
+                if (status != kOk) {
+                    LOG(WARNING, "fail to get job %s", sche_info.jobid().c_str());
+                    continue;
+                }
+                PodDescriptor desc;
+                for (int j = 0; j < job_info.pod_descs_size(); ++j) {
+                    if (job_info.pod_descs(j).version() != job_info.latest_version())  {
+                        continue;
+                    }
+                    desc.CopyFrom(job_info.pod_descs(j));
+                }
+                desc_cache.insert(std::make_pair(sche_info.jobid(), desc));
+            }
+           }
     }
     done->Run();
 }
 
+bool MasterImpl::ConsumeQuota(const std::string& uid, const std::string& podid,
+                              const std::string& jobid,
+                              boost::unordered_map<std::string, PodDescriptor>& desc_cache) {
+    boost::unordered_map<std::string, PodDescriptor>::iterator desc_cache_it = desc_cache.find(jobid);
+    if (desc_cache_it == desc_cache.end()) {
+        JobInfo job_info;
+        Status status = job_manager_.GetJobInfo(jobid, &job_info);
+        if (status != kOk) {
+            LOG(WARNING, "fail to get job %s", jobid.c_str());
+            return false;
+        }
+        PodDescriptor desc;
+        for (int j = 0; j < job_info.pod_descs_size(); ++j) {
+            if (job_info.pod_descs(j).version() != job_info.latest_version())  {
+                continue;
+            }
+            desc.CopyFrom(job_info.pod_descs(j));
+        }
+    }
+    return true;
+}
+
+void MasterImpl::SyncQuota(::google::protobuf::RpcController* controller,
+                           const SyncQuotaRequest* request,
+                           SyncQuotaResponse* response,
+                           ::google::protobuf::Closure* done) {
+    response->set_status(kOk);
+    bool ok = user_manager_->SyncQuota(request->diffs(), 
+                                       response->mutable_qids_to_be_del(),
+                                       response->mutable_quotas()); 
+    if (!ok) {
+       response->set_status(kUnknown); 
+    }
+    done->Run();
+}
 
 void MasterImpl::ListAgents(::google::protobuf::RpcController* /*controller*/,
                             const ::baidu::galaxy::ListAgentsRequest* /*request*/,

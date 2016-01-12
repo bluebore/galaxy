@@ -14,6 +14,7 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/unordered_map.hpp>
 #include "proto/galaxy.pb.h"
+#include "proto/master.pb.h"
 #include "mutex.h"
 #include "ins_sdk.h"
 #include "thread_pool.h"
@@ -22,6 +23,10 @@
 using ::galaxy::ins::sdk::InsSDK;
 namespace baidu {
 namespace galaxy {
+
+typedef google::protobuf::RepeatedPtrField<baidu::galaxy::QuotaDiff> QuotaDiffList;
+typedef google::protobuf::RepeatedPtrField<std::string> QuotaIdList;
+typedef google::protobuf::RepeatedPtrField<baidu::galaxy::Quota> QuotaList;
 
 struct UserIndex {
     std::string uid;
@@ -99,6 +104,9 @@ public:
     // assign quota from root
     bool AssignQuota(const std::string& uid, const std::string& op, const Quota& quota);
     bool AcquireQuota(const std::string& uid, int64_t millicores, int64_t memory);
+    bool SyncQuota(const QuotaDiffList& diff, 
+                   QuotaIdList* id_list, 
+                   QuotaList* quota_list);
 private:
     std::string GenUuid();
     bool SaveUser(const User& user);

@@ -3,8 +3,10 @@
 // found in the LICENSE file.
 
 #include "master/user_manager.h"
+
 #include <gflags/gflags.h>
 #include <boost/bind.hpp>
+
 #include "master/master_util.h"
 #include "logging.h"
 #include "timer.h"
@@ -342,6 +344,40 @@ bool UserManager::GetUserById(const std::string& uid, User* user) {
         return true;
     }
     return false;
+}
+
+bool UserManager::SyncQuota(const QuotaDiffList& diff,
+                            QuotaIdList* id_list,
+                            QuotaList* quota_list) {
+    MutexLock lock(&mutex_);
+    boost::unordered_map<std::string, uint32_t> hash_diff;
+    for (int32_t i = 0; i < diff.size(); ++i) {
+        hash_diff.insert(std::make_pair(diff.Get(i).qid(),
+                                        diff.Get(i).version()));
+    }
+    const QuotaIdIndex& id_index = quota_set_->get<id_tag>();
+    QuotaIdIndex::const_iterator id_index_it = id_index.begin();
+    for (; id_index_it != id_index.end(); ++id_index_it) {
+        boost::unordered_map<std::string, uint32_t>::iterator hash_it =  hash_diff.find(id_index_it->qid);
+        // newly add quota
+        if (hash_it == hash_diff.end()) {
+            Quota* quota = quota_list->Add();
+            quota->CopyFrom(id_index_it->quota);
+            continue;
+        }
+        uint32_t old_version = hash_it->second;
+        hash_diff.erase(hash_it);
+        // need update quota
+        if (old_version != id_index_it->quota.version()) {
+            Quota* quota = quota_list->Add();
+            quota->CopyFrom(id_index_it->quota);
+        }
+    }
+    boost::unordered_map<std::string, uint32_t>::iterator left_it = hash_diff.begin();
+    for (; left_it != hash_diff.end(); ++left_it) {
+        id_list->Add()->assign(left_it->first);
+    }
+    return true;
 }
 
 }

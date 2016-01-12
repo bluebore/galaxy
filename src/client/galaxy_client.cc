@@ -51,12 +51,12 @@ const std::string kGalaxyUsage = "galaxy client.\n"
                                  "    galaxy pods -e <endpoint>\n"
                                  "    galaxy tasks -j <jobid>\n"
                                  "    galaxy tasks -e <endpoint>\n"
-                                 "    galaxy kill -j <jobid>\n"
                                  "    galaxy update -j <jobid> -f <jobconfig>\n"
                                  "    galaxy label -l <label> -f <lableconfig>\n"
                                  "    galaxy preempt -f <config>\n"
                                  "    galaxy offline -e <endpoint>\n"
                                  "    galaxy online -e <endpoint>\n"
+                                 "    galaxy quota \n"
                                  "    galaxy status \n"
                                  "    galaxy enter safemode \n"
                                  "    galaxy leave safemode \n"
@@ -810,13 +810,12 @@ int ListJob() {
     baidu::galaxy::Galaxy* galaxy = baidu::galaxy::Galaxy::ConnectGalaxy(FLAGS_nexus_servers, master_key);
     while(true) {
         std::vector<baidu::galaxy::JobInformation> infos;
-        baidu::common::TPrinter tp(12);
-        tp.AddRow(12, "", "id", "name", "state", "stat(r/p/d/e)", "replica", "batch", "cpu", "memory","disk(r/w)","create", "update");
+        baidu::common::TPrinter tp(11);
+        tp.AddRow(11, "", "name", "state", "stat(r/p/d/e)", "replica", "batch", "cpu", "memory","disk(r/w)","create", "update");
         if (galaxy->ListJobs(&infos)) {
             for (uint32_t i = 0; i < infos.size(); i++) {
                 std::vector<std::string> vs;
                 vs.push_back(baidu::common::NumToString(i + 1));
-                vs.push_back(infos[i].job_id);
                 vs.push_back(infos[i].job_name);
                 vs.push_back(infos[i].state);
                 vs.push_back(baidu::common::NumToString(infos[i].running_num) + "/" + 
