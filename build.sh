@@ -100,14 +100,14 @@ else
     cd ..
 fi
 
-if [ -f "zookeeper-3.4.7.tar.gz" ]
+if [ -f "zookeeper-3.4.6.tar.gz" ]
 then
-    echo "zookeeper-3.4.7.tar.gz exist"
+    echo "zookeeper-3.4.6.tar.gz exist"
 else
     # zookeeper
-    wget http://www.us.apache.org/dist/zookeeper/stable/zookeeper-3.4.7.tar.gz
-    tar zxf zookeeper-3.4.7.tar.gz
-    cd zookeeper-3.4.7/src/c
+    wget http://apache.arvixe.com/zookeeper/zookeeper-3.4.6/zookeeper-3.4.6.tar.gz
+    tar zxf zookeeper-3.4.6.tar.gz
+    cd zookeeper-3.4.6/src/c
     ./configure ${DEPS_CONFIG} >/dev/null
     make -j4 >/dev/null
     make install
@@ -253,16 +253,16 @@ else
     # tera
     git clone https://github.com/baidu/tera
     cd tera
-    sed -i 's/^SOFA_PBRPC_PREFIX=.*/SOFA_PBRPC_PREFIX=..\/..\/thirdparty/' depends.mk
-    sed -i 's/^PROTOBUF_PREFIX=.*/PROTOBUF_PREFIX=..\/..\/thirdparty/' depends.mk
-    sed -i 's/^SNAPPY_PREFIX=.*/SNAPPY_PREFIX=..\/..\/thirdparty/' depends.mk
-    sed -i 's/^ZOOKEEPER_PREFIX=.*/ZOOKEEPER_PREFIX=..\/..\/thirdparty/' depends.mk
-    sed -i 's/^GFLAGS_PREFIX=.*/GFLAGS_PREFIX=..\/..\/thirdparty/' depends.mk
-    sed -i 's/^GLOG_PREFIX=.*/GLOG_PREFIX=..\/..\/thirdparty/' depends.mk
-    sed -i 's/^GTEST_PREFIX=.*/GTEST_PREFIX=..\/..\/thirdparty/' depends.mk
-    sed -i 's/^GPERFTOOLS_PREFIX=.*/GPERFTOOLS_PREFIX=..\/..\/thirdparty/' depends.mk
-    sed -i 's/^BOOST_INCDIR=.*/BOOST_INCDIR=..\/..\/thirdparty\/boost_1_57_0/' depends.mk
-    sed -i 's/^INS_PREFIX=.*/INS_PREFIX=..\/..\/thirdparty/' depends.mk
+    sed -i 's#^SOFA_PBRPC_PREFIX=.*#SOFA_PBRPC_PREFIX='${DEPS_PREFIX}'#' depends.mk
+    sed -i 's#^PROTOBUF_PREFIX=.*#PROTOBUF_PREFIX='${DEPS_PREFIX}'#' depends.mk
+    sed -i 's#^SNAPPY_PREFIX=.*#SNAPPY_PREFIX='${DEPS_PREFIX}'#' depends.mk
+    sed -i 's#^ZOOKEEPER_PREFIX=.*#ZOOKEEPER_PREFIX='${DEPS_PREFIX}'#' depends.mk
+    sed -i 's#^GFLAGS_PREFIX=.*#GFLAGS_PREFIX='${DEPS_PREFIX}'#' depends.mk
+    sed -i 's#^GLOG_PREFIX=.*#GLOG_PREFIX='${DEPS_PREFIX}'#' depends.mk
+    sed -i 's#^GTEST_PREFIX=.*#GTEST_PREFIX='${DEPS_PREFIX}'#' depends.mk
+    sed -i 's#^GPERFTOOLS_PREFIX=.*#GPERFTOOLS_PREFIX='${DEPS_PREFIX}'#' depends.mk
+    sed -i 's#^BOOST_INCDIR=.*#BOOST_INCDIR='${DEPS_PREFIX}'\/boost_1_57_0#' depends.mk
+    sed -i 's#^INS_PREFIX=.*#INS_PREFIX='${DEPS_PREFIX}'#' depends.mk
     sed -e '$ c -lgtest_main -lgtest -lglog -lgflags -ltcmalloc_minimal -lunwind' depends.mk > depends.mk.new
     mv depends.mk.new depends.mk
     make -j8 >/dev/null
