@@ -411,15 +411,27 @@ bool MasterImpl::ConsumeQuota(const std::string& uid, const std::string& podid,
             return false;
         }
         PodDescriptor desc;
+        bool find_desc = false;
         for (int j = 0; j < job_info.pod_descs_size(); ++j) {
             if (job_info.pod_descs(j).version() != job_info.latest_version())  {
                 continue;
             }
             desc.CopyFrom(job_info.pod_descs(j));
+            find_desc = true;
         }
+        if (!find_desc) {
+            return false;
+        }
+        bool ok = user_manager_->AcquireQuota(job_info.uid(), desc.requirement().millicores(),
+                                              desc.requirement().memory());
+        if (!ok) {
+            LOG(WARNING, "user with uid %s has no enough quota to user", job_info.uid().c_str());
+        }
+        return ok;
     }
     return true;
 }
+
 
 void MasterImpl::SyncQuota(::google::protobuf::RpcController* controller,
                            const SyncQuotaRequest* request,
