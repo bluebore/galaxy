@@ -1,4 +1,5 @@
 #! /bin/bash
+SANDBOX_DIR=`pwd`
 set -e
 
 ./clear.sh >/dev/null 2>&1 
@@ -27,10 +28,11 @@ mkdir work_dir
 ./start_all.sh
 sleep 3
 
+cd ../optools && python galaxy_admin.py -a user.json
 tar zcf batch.tar.gz ../galaxy
 echo "sleep 10000000000" > longrun.sh
 tar zcf longrun.tar.gz longrun.sh
-../galaxy submit -f sample.json
+../galaxy submit -f sample.json -u root -p root
 
 ../galaxy jobs
 ../galaxy agents
