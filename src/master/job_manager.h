@@ -290,7 +290,7 @@ private:
     // nexus
     ::galaxy::ins::sdk::InsSDK* nexus_;
 
-    CondVar pod_cv_; 
+    CondVar pod_cv_;
 };
 
 }

@@ -46,10 +46,6 @@ private:
                                    GetJobDescriptorResponse* response,
                                    bool failed, int);
 
-    void SyncQuota();
-    void SyncQuotaCallBack(const SyncQuotaRequest* request,
-                          SyncQuotaResponse* response,
-                          bool failed, int);
 private:
     std::string master_addr_;
     RpcClient rpc_client_;

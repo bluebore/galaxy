@@ -1741,11 +1741,9 @@ void JobManager::TraceClusterStat() {
         } else {
             agent_live_count++;
             cpu_total += a_it->second->total().millicores();
-            mem_total += a_it->second->total().memory();
-            
+            mem_total += a_it->second->total().memory(); 
             cpu_used += a_it->second->used().millicores();
             mem_used += a_it->second->used().memory();
-
             cpu_assigned += a_it->second->assigned().millicores();
             mem_assigned += a_it->second->assigned().memory();
         }

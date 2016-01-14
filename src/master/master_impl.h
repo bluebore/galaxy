@@ -117,10 +117,6 @@ public:
                                 ::baidu::galaxy::OnlineAgentResponse* response,
                                 ::google::protobuf::Closure* done);
 
-      virtual void SyncQuota(::google::protobuf::RpcController* controller,
-                             const SyncQuotaRequest* request,
-                             SyncQuotaResponse* response,
-                             ::google::protobuf::Closure* done);
       void OnSessionTimeout();
       void OnLockChange(std::string lock_session_id);
 private:
@@ -129,9 +125,8 @@ private:
       void ReloadJobInfo();
       void ReloadLabelInfo();
       void ReloadAgent();
-      bool ConsumeQuota(const std::string& uid, const std::string& podid, 
-                        const std::string& jobid,
-                        boost::unordered_map<std::string, PodDescriptor>& desc_cache);
+      bool PrePropose(const ScheduleInfo& sched_info);
+      bool PostPropose(const ScheduleInfo& sched_info);
 private:
       JobManager job_manager_;
       InsSDK* nexus_;

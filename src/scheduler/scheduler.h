@@ -93,12 +93,10 @@ public:
     Scheduler() {
         jobs_ = new boost::unordered_map<std::string, JobDescriptor>();
         resources_ = new boost::unordered_map<std::string, AgentInfo>();
-        quotas_ = new boost::unordered_map<std::string, Quota>();
     }
     ~Scheduler() {
         delete jobs_;
         delete resources_;
-        delete quotas_;
     }
 
     void ScheduleScaleUp(const std::string& master_addr,
@@ -120,8 +118,6 @@ public:
     void BuildSyncJobRequest(GetJobDescriptorRequest* request);
     void SyncJobDescriptor(const GetJobDescriptorResponse* response);
 
-    void BuildSyncQuotaRequest(SyncQuotaRequest* request);
-    void SyncQuota(const SyncQuotaResponse* response);
 private:
 
     bool CanPreempt(const AgentInfo& agent_info);
@@ -133,9 +129,6 @@ private:
 
     int32_t ChooseReducingPod(std::vector<JobInfo>& reducing_jobs,
                               std::vector<boost::shared_ptr<PodScaleDownCell> >& reducing_pods);
-    void ConsumeQuota(const PodDescriptor& pod_desc,
-                         const Quota& quota,
-                         std::vector<std::string>& podids);
     template<class T>
     void Shuffle(std::vector<T>& list) {
         for (size_t i = list.size(); i > 1; i--) {
@@ -161,7 +154,6 @@ private:
     boost::unordered_map<std::string, AgentInfo>* resources_;
     boost::unordered_map<std::string, JobDescriptor>* jobs_;
     // uid and quota pair
-    boost::unordered_map<std::string, Quota>* quotas_;
     RpcClient rpc_client_;
     ThreadPool thread_pool_;
 };

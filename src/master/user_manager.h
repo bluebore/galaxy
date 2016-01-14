@@ -104,9 +104,7 @@ public:
     // assign quota from root
     bool AssignQuota(const std::string& uid, const std::string& op, const Quota& quota);
     bool AcquireQuota(const std::string& uid, int64_t millicores, int64_t memory);
-    bool SyncQuota(const QuotaDiffList& diff, 
-                   QuotaIdList* id_list, 
-                   QuotaList* quota_list);
+    bool HasEnoughQuota(const std::string& uid, int64_t millicores, int64_t memory);
 private:
     std::string GenUuid();
     bool SaveUser(const User& user);

@@ -194,6 +194,14 @@ void MasterImpl::SubmitJob(::google::protobuf::RpcController* /*controller*/,
         return;
     }
     const JobDescriptor& job_desc = request->job();
+    int64_t total_millicores = job_desc.pod().requirement().millicores() * job_desc.replica();
+    int64_t total_memory = job_desc.pod().requirement().memory() * job_desc.replica();
+    ok = user_manager_->HasEnoughQuota(user.uid(), total_millicores, total_memory);
+    if (!ok) {
+        response->set_status(kQuota);
+        done->Run();
+        return;
+    }
     std::string exist_job_id;
     ok = job_manager_.GetJobIdByName(job_desc.name(), &exist_job_id);
     if (ok) { 
@@ -207,6 +215,13 @@ void MasterImpl::SubmitJob(::google::protobuf::RpcController* /*controller*/,
     response->set_status(status);
     if (status == kOk) {
         response->set_jobid(job_id);
+        ok = user_manager_->AcquireQuota(user.uid(), total_millicores, total_memory);
+        if (!ok) {
+            LOG(WARNING, "acquire quota from user %s fails, require cpu %lld, require mem %lld",
+                    user.name().c_str(),
+                    total_millicores,
+                    total_memory);
+        }
     }
     done->Run();
 }
@@ -370,82 +385,89 @@ void MasterImpl::Propose(::google::protobuf::RpcController* /*controller*/,
                          const ::baidu::galaxy::ProposeRequest* request,
                          ::baidu::galaxy::ProposeResponse* response,
                          ::google::protobuf::Closure* done) {
-    // TODO 
-    boost::unordered_map<std::string, PodDescriptor> desc_cache;
     for (int i = 0; i < request->schedule_size(); i++) {
-        const ScheduleInfo& sche_info = request->schedule(i);
-
-        Status status = job_manager_.Propose(sche_info);
+        const ScheduleInfo& sched_info = request->schedule(i);
+        //TODO prepropose ,propopse and postpropose need transaction
+        bool ok = PrePropose(sched_info);
+        if (!ok) {
+            continue;
+        }
+        Status status = job_manager_.Propose(sched_info);
         if (status == kOk) {
-         boost::unordered_map<std::string, PodDescriptor>::iterator desc_cache_it = desc_cache.find(sche_info.jobid());
-            if (desc_cache_it == desc_cache.end()) {
-                JobInfo job_info;
-                status = job_manager_.GetJobInfo(sche_info.jobid(), &job_info);
-                if (status != kOk) {
-                    LOG(WARNING, "fail to get job %s", sche_info.jobid().c_str());
-                    continue;
-                }
-                PodDescriptor desc;
-                for (int j = 0; j < job_info.pod_descs_size(); ++j) {
-                    if (job_info.pod_descs(j).version() != job_info.latest_version())  {
-                        continue;
-                    }
-                    desc.CopyFrom(job_info.pod_descs(j));
-                }
-                desc_cache.insert(std::make_pair(sche_info.jobid(), desc));
+            ok = PostPropose(sched_info);
+            if (!ok) {
+                LOG(WARNING, "run pod %s  of job %s successfully but consume quota fails ",
+                        sched_info.podid().c_str(),
+                        sched_info.jobid().c_str());
             }
-           }
+        }
     }
     done->Run();
 }
 
-bool MasterImpl::ConsumeQuota(const std::string& uid, const std::string& podid,
-                              const std::string& jobid,
-                              boost::unordered_map<std::string, PodDescriptor>& desc_cache) {
-    boost::unordered_map<std::string, PodDescriptor>::iterator desc_cache_it = desc_cache.find(jobid);
-    if (desc_cache_it == desc_cache.end()) {
-        JobInfo job_info;
-        Status status = job_manager_.GetJobInfo(jobid, &job_info);
-        if (status != kOk) {
-            LOG(WARNING, "fail to get job %s", jobid.c_str());
-            return false;
+bool MasterImpl::PrePropose(const ScheduleInfo& sched_info) {
+    // only launch a pending will do quota calculation
+    if (sched_info.action() != kLaunch) {
+        return true;
+    }
+    JobInfo job_info;
+    Status status = job_manager_.GetJobInfo(sched_info.jobid(), &job_info);
+    if (status != kOk) {
+        return false;
+    }
+    PodDescriptor desc;
+    bool find_desc = false;
+    for (int j = 0; j < job_info.pod_descs_size(); ++j) {
+        if (job_info.pod_descs(j).version() != job_info.latest_version())  {
+            continue;
         }
-        PodDescriptor desc;
-        bool find_desc = false;
-        for (int j = 0; j < job_info.pod_descs_size(); ++j) {
-            if (job_info.pod_descs(j).version() != job_info.latest_version())  {
-                continue;
-            }
-            desc.CopyFrom(job_info.pod_descs(j));
-            find_desc = true;
-        }
-        if (!find_desc) {
-            return false;
-        }
-        bool ok = user_manager_->AcquireQuota(job_info.uid(), desc.requirement().millicores(),
-                                              desc.requirement().memory());
-        if (!ok) {
-            LOG(WARNING, "user with uid %s has no enough quota to user", job_info.uid().c_str());
-        }
-        return ok;
+        desc.CopyFrom(job_info.pod_descs(j));
+        find_desc = true;
+    }
+    if (!find_desc) {
+        return false;
+    }
+    bool ok = user_manager_->HasEnoughQuota(job_info.uid(),
+                                            desc.requirement().millicores(),
+                                            desc.requirement().memory());
+    if (!ok) {
+        LOG(WARNING, "user %s has no enough quota to use", job_info.uid().c_str());
+        return false;
     }
     return true;
 }
 
-
-void MasterImpl::SyncQuota(::google::protobuf::RpcController* controller,
-                           const SyncQuotaRequest* request,
-                           SyncQuotaResponse* response,
-                           ::google::protobuf::Closure* done) {
-    response->set_status(kOk);
-    bool ok = user_manager_->SyncQuota(request->diffs(), 
-                                       response->mutable_qids_to_be_del(),
-                                       response->mutable_quotas()); 
-    if (!ok) {
-       response->set_status(kUnknown); 
+bool MasterImpl::PostPropose(const ScheduleInfo& sched_info) {
+    // only launch a pending will do quota calculation when run pod successfully
+    if (sched_info.action() != kLaunch) {
+        return true;
     }
-    done->Run();
+    JobInfo job_info;
+    Status status = job_manager_.GetJobInfo(sched_info.jobid(), &job_info);
+    if (status != kOk) {
+        LOG(WARNING, "fail to get job %s", sched_info.jobid().c_str());
+        return false;
+    }
+    PodDescriptor desc;
+    bool find_desc = false;
+    for (int j = 0; j < job_info.pod_descs_size(); ++j) {
+        if (job_info.pod_descs(j).version() != job_info.latest_version())  {
+            continue;
+        }
+        desc.CopyFrom(job_info.pod_descs(j));
+        find_desc = true;
+    }
+    if (!find_desc) {
+        return false;
+    }
+    bool ok = user_manager_->AcquireQuota(job_info.uid(), desc.requirement().millicores(),
+                                              desc.requirement().memory());
+    if (!ok) {
+        LOG(WARNING, "user with uid %s has no enough quota to user", job_info.uid().c_str());
+    }
+    return ok;
 }
+
 
 void MasterImpl::ListAgents(::google::protobuf::RpcController* /*controller*/,
                             const ::baidu::galaxy::ListAgentsRequest* /*request*/,

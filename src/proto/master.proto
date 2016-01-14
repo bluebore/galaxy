@@ -383,15 +383,6 @@ message QuotaDiff {
     optional uint32 version = 3;
 }
 
-message SyncQuotaRequest {
-    repeated QuotaDiff diffs = 1;
-}
-
-message SyncQuotaResponse {
-    repeated Quota quotas = 1;
-    repeated string qids_to_be_del = 2; 
-    optional Status status = 3;
-}
 
 service Master {
     rpc SubmitJob(SubmitJobRequest) returns (SubmitJobResponse);
@@ -412,7 +403,6 @@ service Master {
     rpc GetPendingJobs(GetPendingJobsRequest) returns (GetPendingJobsResponse);
     rpc GetResourceSnapshot(GetResourceSnapshotRequest) returns (GetResourceSnapshotResponse);
     rpc GetJobDescriptor(GetJobDescriptorRequest) returns (GetJobDescriptorResponse);
-    rpc SyncQuota(SyncQuotaRequest) returns (SyncQuotaResponse);
     rpc Propose(ProposeRequest) returns (ProposeResponse);
     rpc Preempt(PreemptRequest) returns (PreemptResponse);
 

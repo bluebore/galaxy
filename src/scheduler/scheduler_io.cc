@@ -56,7 +56,6 @@ void SchedulerIO::Sync() {
     SyncResources();
     SyncPendingJob();
     SyncJobDescriptor();
-    SyncQuota();
 }
 
 void SchedulerIO::SyncJobDescriptor() {
@@ -165,35 +164,6 @@ void SchedulerIO::SyncResourcesCallBack(const GetResourceSnapshotRequest* reques
     delete request;
     delete response;
     thread_pool_.DelayTask(FLAGS_scheduler_sync_resource_period, boost::bind(&SchedulerIO::SyncResources, this));
-}
-
-void SchedulerIO::SyncQuota() {
-    MutexLock lock(&master_mutex_);
-    LOG(INFO, "sync quota from master %s", master_addr_.c_str());
-    SyncQuotaRequest* request = new SyncQuotaRequest();
-    scheduler_.BuildSyncQuotaRequest(request);
-    SyncQuotaResponse* response = new SyncQuotaResponse();
-    boost::function<void (const SyncQuotaRequest*, SyncQuotaResponse*, bool, int)> call_back;
-    call_back = boost::bind(&SchedulerIO::SyncQuotaCallBack, this, _1, _2, _3, _4);
-    rpc_client_.AsyncRequest(master_stub_,
-                             &Master_Stub::SyncQuota,
-                             request, response,
-                             call_back,
-                             FLAGS_scheduler_sync_quota_timeout, 0);
-
-}
-
-void SchedulerIO::SyncQuotaCallBack(const SyncQuotaRequest* request,
-                                   SyncQuotaResponse* response,
-                                   bool failed, int) {
-    boost::scoped_ptr<const SyncQuotaRequest> request_ptr(request);
-    boost::scoped_ptr<SyncQuotaResponse> response_ptr(response);
-    if (!failed) {
-        scheduler_.SyncQuota(response);
-        LOG(INFO, "sync quota from master successfully");
-    }
-    thread_pool_.DelayTask(FLAGS_scheduler_sync_quota_period,
-                    boost::bind(&SchedulerIO::SyncQuota, this));
 }
 
 

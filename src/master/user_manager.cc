@@ -33,6 +33,30 @@ UserManager::UserManager(){
 
 UserManager::~UserManager(){}
 
+/*void UserManager::HandleReleaseQuota() {
+    const std::string op = "sys";
+    while (true) {
+        Quota* quota = release_queue_->Pop();
+        if (quota == NULL) {
+            LOG(WARNING, "invalid quota ");
+            continue;
+        }
+        MutexLock lock(&mutex_);
+        QuotaTargetIndex& target_index = quota_set_->get<target_tag>();
+        QuotaTargetIndex::iterator target_it = target_index.find(quota->target());
+        if (target_it == target_index.end()) {
+            LOG(WARNING, " user %s is missing", quota->target().c_str());
+            continue;
+        }
+        QuotaIndex quota_index = *target_it;
+        quota_index.quota.set_cpu_assigned(quota_index.quota.cpu_assigned() -  quota->cpu_quota());
+        quota_index.quota.set_memory_assigned(quota_index.quota.memory_assigned() - quota->memory_quota());
+        quota_index.quota.set_version(quota_index.quota.version() + 1);
+        // TODO replace is low efficent , user pointer 
+        target_index.replace(target_it, quota_index);
+    }
+}*/
+
 bool UserManager::Init() {
     MutexLock lock(&mutex_);
     std::string start_key = FLAGS_nexus_root_path  + FLAGS_users_store_path + "/";
@@ -233,6 +257,23 @@ bool UserManager::GetQuota(const std::string& uid, Quota* quota) {
     return GetQuotaByIndex(uid, quota);
 }
 
+bool UserManager::HasEnoughQuota(const std::string& uid,
+                                 int64_t millicores,
+                                 int64_t memory) {
+    MutexLock lock(&mutex_);
+    QuotaTargetIndex& target_index = quota_set_->get<target_tag>();
+    QuotaTargetIndex::iterator target_it = target_index.find(uid);
+    if (target_it == target_index.end()) {
+        return false;
+    } 
+    int64_t cpu_free = target_it->quota.cpu_quota() - target_it->quota.cpu_assigned();
+    int64_t mem_free = target_it->quota.memory_quota() - target_it->quota.memory_assigned(); 
+    if (cpu_free < millicores || mem_free < memory) {
+        return false;
+    }
+    return true;
+}
+
 bool UserManager::AcquireQuota(const std::string& uid, 
                                int64_t millicores,
                                int64_t memory) {
@@ -252,7 +293,9 @@ bool UserManager::AcquireQuota(const std::string& uid,
         copied.quota.set_cpu_quota(copied.quota.cpu_quota() - millicores);
         copied.quota.set_memory_quota(copied.quota.memory_quota() - memory);
         copied.quota.set_cpu_assigned(copied.quota.cpu_assigned() + millicores);
-        copied.quota.set_memory_assigned(copied.quota.memory_quota() + memory);
+        copied.quota.set_memory_assigned(copied.quota.memory_assigned() + memory);
+        copied.quota.set_version(copied.quota.version() + 1);
+        // TODO replace is low efficent , user pointer 
         target_index.replace(target_it, copied);
         return true;
     }
@@ -344,40 +387,6 @@ bool UserManager::GetUserById(const std::string& uid, User* user) {
         return true;
     }
     return false;
-}
-
-bool UserManager::SyncQuota(const QuotaDiffList& diff,
-                            QuotaIdList* id_list,
-                            QuotaList* quota_list) {
-    MutexLock lock(&mutex_);
-    boost::unordered_map<std::string, uint32_t> hash_diff;
-    for (int32_t i = 0; i < diff.size(); ++i) {
-        hash_diff.insert(std::make_pair(diff.Get(i).qid(),
-                                        diff.Get(i).version()));
-    }
-    const QuotaIdIndex& id_index = quota_set_->get<id_tag>();
-    QuotaIdIndex::const_iterator id_index_it = id_index.begin();
-    for (; id_index_it != id_index.end(); ++id_index_it) {
-        boost::unordered_map<std::string, uint32_t>::iterator hash_it =  hash_diff.find(id_index_it->qid);
-        // newly add quota
-        if (hash_it == hash_diff.end()) {
-            Quota* quota = quota_list->Add();
-            quota->CopyFrom(id_index_it->quota);
-            continue;
-        }
-        uint32_t old_version = hash_it->second;
-        hash_diff.erase(hash_it);
-        // need update quota
-        if (old_version != id_index_it->quota.version()) {
-            Quota* quota = quota_list->Add();
-            quota->CopyFrom(id_index_it->quota);
-        }
-    }
-    boost::unordered_map<std::string, uint32_t>::iterator left_it = hash_diff.begin();
-    for (; left_it != hash_diff.end(); ++left_it) {
-        id_list->Add()->assign(left_it->first);
-    }
-    return true;
 }
 
 }
