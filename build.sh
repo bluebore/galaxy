@@ -122,9 +122,11 @@ else
     echo "PROTOBUF_DIR=${DEPS_PREFIX}" >> depends.mk
     echo "SNAPPY_DIR=${DEPS_PREFIX}" >> depends.mk
     echo "PREFIX=${DEPS_PREFIX}" >> depends.mk
-    cd src
+    cd -
+    cd sofa-pbrpc-1.0.0/src
     PROTOBUF_DIR=${DEPS_PREFIX} sh compile_proto.sh
     cd -
+    cd sofa-pbrpc-1.0.0
     make -j4 >/dev/null
     make install
     cd python
