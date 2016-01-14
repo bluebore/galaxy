@@ -30,6 +30,7 @@ else
 fi
 
 if [ -f "Python-2.7.11.tgz" ]
+then
     echo "python exist"
 else
     echo "start download python"
