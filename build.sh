@@ -124,10 +124,9 @@ else
     echo "PREFIX=${DEPS_PREFIX}" >> depends.mk
     cd src
     PROTOBUF_DIR=${DEPS_PREFIX} sh compile_proto.sh
-    cd ..
+    cd -
     make -j4 >/dev/null
     make install
-    cd ..
     cd python
     python setup.py install
     cd -
