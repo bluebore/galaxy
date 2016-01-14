@@ -44,6 +44,7 @@ else
 fi
 
 if [ -f "setuptools-19.2.tar.gz" ]
+then
     echo "setuptools exist"
 else
     echo "start download setuptools"
