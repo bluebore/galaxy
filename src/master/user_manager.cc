@@ -33,29 +33,29 @@ UserManager::UserManager(){
 
 UserManager::~UserManager(){}
 
-/*void UserManager::HandleReleaseQuota() {
-    const std::string op = "sys";
-    while (true) {
-        Quota* quota = release_queue_->Pop();
-        if (quota == NULL) {
-            LOG(WARNING, "invalid quota ");
-            continue;
-        }
-        MutexLock lock(&mutex_);
-        QuotaTargetIndex& target_index = quota_set_->get<target_tag>();
-        QuotaTargetIndex::iterator target_it = target_index.find(quota->target());
-        if (target_it == target_index.end()) {
-            LOG(WARNING, " user %s is missing", quota->target().c_str());
-            continue;
-        }
-        QuotaIndex quota_index = *target_it;
-        quota_index.quota.set_cpu_assigned(quota_index.quota.cpu_assigned() -  quota->cpu_quota());
-        quota_index.quota.set_memory_assigned(quota_index.quota.memory_assigned() - quota->memory_quota());
-        quota_index.quota.set_version(quota_index.quota.version() + 1);
-        // TODO replace is low efficent , user pointer 
-        target_index.replace(target_it, quota_index);
+bool UserManager::ReleaseQuota(const std::string& uid,
+                               int64_t millicores,
+                               int64_t memory) {
+    MutexLock lock(&mutex_);
+    QuotaTargetIndex& target_index = quota_set_->get<target_tag>();
+    QuotaTargetIndex::iterator target_it = target_index.find(uid);
+    if (target_it == target_index.end()) {
+        LOG(WARNING, " user %s is missing", uid.c_str());
+        return false;
     }
-}*/
+    if (target_it == target_index.end()) {
+        LOG(WARNING, " user %s is missing", uid.c_str());
+        return false;
+    }
+    QuotaIndex quota_index = *target_it;
+    quota_index.quota.set_cpu_assigned(quota_index.quota.cpu_assigned() - millicores);
+    quota_index.quota.set_memory_assigned(quota_index.quota.memory_assigned() - memory);
+    quota_index.quota.set_version(quota_index.quota.version() + 1);
+    // TODO replace is low efficent , user pointer 
+    target_index.replace(target_it, quota_index);
+    return true;
+}
+
 
 bool UserManager::Init() {
     MutexLock lock(&mutex_);
@@ -127,6 +127,7 @@ bool UserManager::Auth(const std::string& sid, User* user) {
     MutexLock lock(&mutex_);
     Sessions::iterator sit = sessions_->find(sid);
     if (sit != sessions_->end()) {
+        sit->second.last_update_time = ::baidu::common::timer::get_micros();
         if (user == NULL) {
             return true;
         }
@@ -290,8 +291,6 @@ bool UserManager::AcquireQuota(const std::string& uid,
         LOG(INFO, "account %s assigned millicores %ld memory %ld",
                 uid.c_str(), millicores, memory);
         QuotaIndex copied = *target_it;
-        copied.quota.set_cpu_quota(copied.quota.cpu_quota() - millicores);
-        copied.quota.set_memory_quota(copied.quota.memory_quota() - memory);
         copied.quota.set_cpu_assigned(copied.quota.cpu_assigned() + millicores);
         copied.quota.set_memory_assigned(copied.quota.memory_assigned() + memory);
         copied.quota.set_version(copied.quota.version() + 1);
@@ -359,12 +358,28 @@ bool UserManager::AssignNoneExistQuota(const std::string& uid, const Quota& quot
     return false;
 }
 
-bool UserManager::AssignQuota(const std::string& uid, const std::string& op, const Quota& quota) {
+bool UserManager::AssignQuotaByUid(const std::string& uid, const Quota& quota) {
     MutexLock lock(&mutex_);
-    // check if uid has quota
     const QuotaTargetIndex& target_index = quota_set_->get<target_tag>();
     QuotaTargetIndex::const_iterator target_it = target_index.find(uid);
     if (target_it == target_index.end()) {
+        return AssignExistQuota(uid, quota);
+    }else {
+        return AssignNoneExistQuota(uid, quota);
+    }
+}
+
+bool UserManager::AssignQuotaByName(const std::string& name, const Quota& quota) {
+    MutexLock lock(&mutex_);
+    const UserSetNameIndex& name_index = user_set_->get<name_tag>();
+    UserSetNameIndex::const_iterator name_index_it = name_index.find(name);
+    if (name_index_it == name_index.end()) {
+        return false;
+    }
+    std::string uid = name_index_it->user.uid();
+    const QuotaTargetIndex& target_index = quota_set_->get<target_tag>();
+    QuotaTargetIndex::const_iterator target_it = target_index.find(uid);
+    if (target_it != target_index.end()) {
         return AssignExistQuota(uid, quota);
     }else {
         return AssignNoneExistQuota(uid, quota);

@@ -21,6 +21,7 @@ enum Status {
     kSessionTimeout = 23;
     kPermissionDenied = 24;
     kNameExists = 25;
+    kNoQuota = 26;
 }
 
 enum PodState {

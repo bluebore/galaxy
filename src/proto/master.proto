@@ -378,11 +378,28 @@ message OnlineAgentResponse {
     optional Status status = 1;
 }
 
-message QuotaDiff {
-    optional string qid = 1;
-    optional uint32 version = 3;
+message ShowQuotaRequest {
+    optional string sid = 1;
 }
 
+message ShowQuotaResponse {
+    optional Status status = 1;
+    optional int64 cpu_quota = 2;
+    optional int64 memory_quota = 3;
+    optional int64 cpu_assigned = 4;
+    optional int64 memory_assigned = 5;
+}
+
+message AssignQuotaRequest {
+    optional string sid = 1;
+    optional int64 cpu_quota = 2;
+    optional int64 memory_quota = 3;
+    optional string name = 4;
+}
+
+message AssignQuotaResponse {
+    optional Status status = 1;
+}
 
 service Master {
     rpc SubmitJob(SubmitJobRequest) returns (SubmitJobResponse);
@@ -413,4 +430,7 @@ service Master {
     rpc AddUser(AddUserRequest) returns (AddUserResponse);
     rpc OfflineAgent(OfflineAgentRequest) returns (OfflineAgentResponse);
     rpc OnlineAgent(OnlineAgentRequest) returns (OnlineAgentResponse);
+
+    rpc AssignQuota(AssignQuotaRequest) returns (AssignQuotaResponse);
+    rpc ShowQuota(ShowQuotaRequest) returns (ShowQuotaResponse);
 }

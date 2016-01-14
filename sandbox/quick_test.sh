@@ -1,4 +1,5 @@
 #! /bin/bash
+export PATH=../thirdparty/bin:$PATH
 SANDBOX_DIR=`pwd`
 set -e
 

@@ -158,7 +158,7 @@ public:
     void ReloadAgent(const AgentPersistenceInfo& agent);
     Status SetSafeMode(bool mode);
     Status LabelAgents(const LabelCell& label_cell);
-    bool GetJobIdByName(const std::string& job_name, std::string* jobid);
+    bool GetJobByName(const std::string& job_name, JobInfo* job);
     Status GetPods(const std::string& jobid, PodOverviewList* pods);
     Status GetTaskByJob(const std::string& jobid, TaskOverviewList* tasks);
     Status GetTaskByAgent(const std::string& endpoint, TaskOverviewList* tasks);

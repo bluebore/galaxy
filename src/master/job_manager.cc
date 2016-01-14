@@ -439,9 +439,9 @@ void JobManager::ReloadJobInfo(const JobInfo& job_info,
                           boost::bind(&JobManager::TraceJobStat, this, job_id));
 }
 
-bool JobManager::GetJobIdByName(const std::string& job_name, 
-                                std::string* jobid) {
-    if (jobid == NULL) {
+bool JobManager::GetJobByName(const std::string& job_name, 
+                              JobInfo* job_info) {
+    if (job_info == NULL) {
         return false;
     }
     MutexLock lock(&mutex_);
@@ -450,7 +450,30 @@ bool JobManager::GetJobIdByName(const std::string& job_name,
     if (it == name_index.end()) {
         return false;
     }
-    *jobid = it->id_;
+    std::string jobid = it->id_;
+    std::map<JobId, Job*>::iterator job_it = jobs_.find(jobid);
+    if (job_it == jobs_.end()) {
+        LOG(WARNING, "get job info failed, no such job: %s", jobid.c_str());
+        return kJobNotFound;
+    }
+
+    Job* job = job_it->second;
+    job_info->set_uid(job->uid_);
+    job_info->set_jobid(jobid);
+    job_info->set_state(job->state_);
+    job_info->mutable_desc()->CopyFrom(job->desc_);
+    std::map<PodId, PodStatus*>::iterator pod_it = job->pods_.begin();
+    for (; pod_it != job->pods_.end(); ++pod_it) {
+        PodStatus* pod = pod_it->second;
+        job_info->add_pods()->CopyFrom(*pod);
+    }
+    job_info->set_latest_version(job->latest_version);
+    job_info->set_uid(job->uid_);
+    std::map<Version, PodDescriptor>::const_iterator pod_desc_it = job->pod_desc_.begin();
+    for(; pod_desc_it != job->pod_desc_.end(); ++pod_desc_it) {
+        PodDescriptor* pod_desc = job_info->add_pod_descs();
+        pod_desc->CopyFrom(pod_desc_it->second);
+    }
     return true;
 }
 
@@ -1310,15 +1333,22 @@ Status JobManager::GetJobInfo(const JobId& jobid, JobInfo* job_info) {
         LOG(WARNING, "get job info failed, no such job: %s", jobid.c_str());
         return kJobNotFound;
     }
-
     Job* job = job_it->second;
     job_info->set_jobid(jobid);
+    job_info->set_uid(job->uid_);
     job_info->set_state(job->state_);
     job_info->mutable_desc()->CopyFrom(job->desc_);
     std::map<PodId, PodStatus*>::iterator pod_it = job->pods_.begin();
     for (; pod_it != job->pods_.end(); ++pod_it) {
         PodStatus* pod = pod_it->second;
         job_info->add_pods()->CopyFrom(*pod);
+    }
+    job_info->set_latest_version(job->latest_version);
+    job_info->set_uid(job->uid_);
+    std::map<Version, PodDescriptor>::const_iterator it = job->pod_desc_.begin();
+    for(; it != job->pod_desc_.end(); ++it) {
+        PodDescriptor* pod_desc = job_info->add_pod_descs();
+        pod_desc->CopyFrom(it->second);
     }
     return kOk;
 }

@@ -202,9 +202,9 @@ void MasterImpl::SubmitJob(::google::protobuf::RpcController* /*controller*/,
         done->Run();
         return;
     }
-    std::string exist_job_id;
-    ok = job_manager_.GetJobIdByName(job_desc.name(), &exist_job_id);
-    if (ok) { 
+    JobInfo exist_job;
+    ok = job_manager_.GetJobByName(job_desc.name(), &exist_job);
+    if (ok) {
         response->set_status(kNameExists);
         done->Run();
         return;
@@ -226,6 +226,33 @@ void MasterImpl::SubmitJob(::google::protobuf::RpcController* /*controller*/,
     done->Run();
 }
 
+void MasterImpl::ShowQuota(::google::protobuf::RpcController* controller,
+                           const ::baidu::galaxy::ShowQuotaRequest* request,
+                           ::baidu::galaxy::ShowQuotaResponse* response,
+                           ::google::protobuf::Closure* done) {
+    std::string sid = request->sid();
+    User user;
+    bool ok = user_manager_->Auth(sid, &user);
+    if (!ok) {
+        response->set_status(kSessionTimeout);
+        done->Run();
+        return;
+    }
+    Quota quota;
+    ok = user_manager_->GetQuota(user.uid(), &quota);
+    if (!ok) {
+        response->set_status(kNoQuota);
+        done->Run();
+        return;
+    }
+    response->set_status(kOk);
+    response->set_cpu_quota(quota.cpu_quota());
+    response->set_memory_quota(quota.memory_quota());
+    response->set_cpu_assigned(quota.cpu_assigned());
+    response->set_memory_assigned(quota.memory_assigned());
+    done->Run();
+}
+
 void MasterImpl::UpdateJob(::google::protobuf::RpcController* /*controller*/,
                            const ::baidu::galaxy::UpdateJobRequest* request,
                            ::baidu::galaxy::UpdateJobResponse* response,
@@ -244,10 +271,52 @@ void MasterImpl::UpdateJob(::google::protobuf::RpcController* /*controller*/,
         done->Run();
         return;
     }
+    JobInfo job;
+    Status status = job_manager_.GetJobInfo(job_id, &job);
+    if (status != kOk) {
+        response->set_status(kJobNotFound);
+        done->Run();
+        return;
+    }
+    ok = UpdateQuotaWithNewJob(job, request->job());
+    if (!ok) {
+        response->set_status(kQuota);
+        done->Run();
+        return;
+    }
     LOG(INFO, "update job %s replica %d", job_id.c_str(), request->job().replica());
-    Status status = job_manager_.Update(job_id, request->job());
+    status = job_manager_.Update(job_id, request->job());
     response->set_status(status);
     done->Run();
+}
+
+bool MasterImpl::UpdateQuotaWithNewJob(const JobInfo& job,
+                                       const JobDescriptor& new_desc) {
+    PodDescriptor old;
+    bool find_desc = false;
+    for (int j = 0; j < job.pod_descs_size(); ++j) {
+        if (job.pod_descs(j).version() != job.latest_version())  {
+            continue;
+        }
+        old.CopyFrom(job.pod_descs(j));
+        find_desc = true;
+    }
+    if (!find_desc) {
+        return false;
+    }
+    int64_t total_old_millicores = old.requirement().millicores() * job.desc().replica();
+    int64_t total_old_memory = old.requirement().memory() * job.desc().replica();
+    int64_t total_new_millicores = new_desc.replica() * new_desc.pod().requirement().millicores();
+    int64_t total_new_memory = new_desc.replica() * new_desc.pod().requirement().memory();
+    int64_t need_millicores = total_new_millicores - total_old_millicores;
+    int64_t need_memory = total_new_memory - total_old_memory;
+    bool ok = user_manager_->HasEnoughQuota(job.uid(), need_millicores, need_memory);
+    if (!ok) {
+        return false;
+    }
+    ok = user_manager_->ReleaseQuota(job.uid(), total_old_millicores, total_old_memory);
+    ok = user_manager_->AcquireQuota(job.uid(), total_new_millicores, total_new_memory);
+    return ok;
 }
 
 void MasterImpl::SuspendJob(::google::protobuf::RpcController* controller,
@@ -278,21 +347,48 @@ void MasterImpl::TerminateJob(::google::protobuf::RpcController* ,
         done->Run();
         return;
     }
-    std::string exist_job_id;
-    ok = job_manager_.GetJobIdByName(request->job_name(), &exist_job_id);
+    JobInfo exist_job;
+    ok = job_manager_.GetJobByName(request->job_name(), &exist_job);
     if (!ok) { 
+        LOG(WARNING, "fail to get job name %s ", request->job_name().c_str());
         response->set_status(kJobNotFound);
         done->Run();
         return;
     }
 
-    if (!job_manager_.IsOwner(exist_job_id, user.uid())) {
+    if (exist_job.uid() != user.uid()) {
         response->set_status(kPermissionDenied);
+        done->Run();
+        LOG(WARNING, "user % has no permission to kill job %s ", user.uid().c_str(),
+                request->job_name().c_str());
+        return;
+    }
+    PodDescriptor pod_desc;
+    bool find_desc = false;
+    LOG(INFO, "POD DESC SIZE %d", exist_job.pod_descs_size());
+    for (int j = 0; j < exist_job.pod_descs_size(); ++j) {
+        if (exist_job.pod_descs(j).version() != exist_job.latest_version())  {
+            continue;
+        }
+        pod_desc.CopyFrom(exist_job.pod_descs(j));
+        find_desc = true;
+    }
+    if (!find_desc) {
+        LOG(WARNING, "fail to pod desc for job %s", exist_job.jobid().c_str());
+        response->set_status(kJobNotFound);
         done->Run();
         return;
     }
-    LOG(INFO, "terminate job %s", exist_job_id.c_str());
-    Status status= job_manager_.Terminte(exist_job_id);
+    int64_t total_millicores = pod_desc.requirement().millicores() * exist_job.desc().replica();
+    int64_t total_memory = pod_desc.requirement().memory() * exist_job.desc().replica();
+    ok = user_manager_->ReleaseQuota(user.uid(), total_millicores, total_memory);
+    if (!ok) {
+        LOG(WARNING, "fail to release quota for job %s", request->job_name().c_str());
+        response->set_status(kQuota);
+        return;
+    }
+    LOG(INFO, "terminate job %s", exist_job.jobid().c_str());
+    Status status= job_manager_.Terminte(exist_job.jobid());
     response->set_status(status);
     done->Run();
 }
@@ -387,20 +483,8 @@ void MasterImpl::Propose(::google::protobuf::RpcController* /*controller*/,
                          ::google::protobuf::Closure* done) {
     for (int i = 0; i < request->schedule_size(); i++) {
         const ScheduleInfo& sched_info = request->schedule(i);
-        //TODO prepropose ,propopse and postpropose need transaction
-        bool ok = PrePropose(sched_info);
-        if (!ok) {
-            continue;
-        }
         Status status = job_manager_.Propose(sched_info);
-        if (status == kOk) {
-            ok = PostPropose(sched_info);
-            if (!ok) {
-                LOG(WARNING, "run pod %s  of job %s successfully but consume quota fails ",
-                        sched_info.podid().c_str(),
-                        sched_info.jobid().c_str());
-            }
-        }
+        response->set_status(status);
     }
     done->Run();
 }
@@ -500,10 +584,12 @@ void MasterImpl::ShowPod(::google::protobuf::RpcController* /*controller*/,
         if (request->has_jobid()) {
             job_id = request->jobid();
         } else if (request->has_name()) {
-            bool ok = job_manager_.GetJobIdByName(request->name(), &job_id);
+            JobInfo job;
+            bool ok = job_manager_.GetJobByName(request->name(), &job);
             if (!ok) {
                 break;
             }
+            job_id = job.jobid();
         } else if (request->has_endpoint()) {
             agent_addr = request->endpoint();
         }
@@ -519,7 +605,6 @@ void MasterImpl::ShowPod(::google::protobuf::RpcController* /*controller*/,
     }while(0);
     done->Run(); 
 }
-
 
 void MasterImpl::ShowTask(::google::protobuf::RpcController* controller,
                            const ::baidu::galaxy::ShowTaskRequest* request,
@@ -627,6 +712,34 @@ void MasterImpl::AddUser(::google::protobuf::RpcController*,
     done->Run();
 }
 
+
+void MasterImpl::AssignQuota(::google::protobuf::RpcController* controller,
+                             const ::baidu::galaxy::AssignQuotaRequest* request,
+                             ::baidu::galaxy::AssignQuotaResponse* response,
+                             ::google::protobuf::Closure* done) {
+    User user;
+    bool ok = user_manager_->Auth(request->sid(), &user);
+    if (!ok) {
+        response->set_status(kSessionTimeout);
+        done->Run();
+        return;
+    }
+    if (!user.super_user()) {
+        response->set_status(kPermissionDenied);
+        done->Run();
+        return;
+    }
+    Quota quota;
+    quota.set_cpu_quota(request->cpu_quota());
+    quota.set_memory_quota(request->memory_quota());
+    ok = user_manager_->AssignQuotaByName(request->name(), quota);
+    if (!ok) {
+        response->set_status(kQuota);
+    }else  {
+        response->set_status(kOk);
+    }
+    done->Run();
+}
 
 void MasterImpl::OfflineAgent(::google::protobuf::RpcController* controller,
                               const ::baidu::galaxy::OfflineAgentRequest* request,

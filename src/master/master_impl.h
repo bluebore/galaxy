@@ -116,6 +116,15 @@ public:
                                 const ::baidu::galaxy::OnlineAgentRequest* request,
                                 ::baidu::galaxy::OnlineAgentResponse* response,
                                 ::google::protobuf::Closure* done);
+      
+      virtual void ShowQuota(::google::protobuf::RpcController* controller,
+                             const ::baidu::galaxy::ShowQuotaRequest* request,
+                             ::baidu::galaxy::ShowQuotaResponse* response,
+                             ::google::protobuf::Closure* done);
+      virtual void AssignQuota(::google::protobuf::RpcController* controller,
+                             const ::baidu::galaxy::AssignQuotaRequest* request,
+                             ::baidu::galaxy::AssignQuotaResponse* response,
+                             ::google::protobuf::Closure* done);
 
       void OnSessionTimeout();
       void OnLockChange(std::string lock_session_id);
@@ -127,6 +136,7 @@ private:
       void ReloadAgent();
       bool PrePropose(const ScheduleInfo& sched_info);
       bool PostPropose(const ScheduleInfo& sched_info);
+      bool UpdateQuotaWithNewJob(const JobInfo& job, const JobDescriptor& new_desc);
 private:
       JobManager job_manager_;
       InsSDK* nexus_;

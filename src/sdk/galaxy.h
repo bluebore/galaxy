@@ -155,10 +155,24 @@ struct MasterStatus {
     need_update_job_count(0){}
 };
 
+struct QuotaStatus {
+    int64_t cpu_quota;
+    int64_t cpu_assigned;
+    int64_t memory_quota;
+    int64_t memory_assigned;
+};
+
 struct PreemptPropose {
     std::pair<std::string, std::string> pending_pod;
     std::vector<std::pair<std::string, std::string> > preempted_pods;
     std::string addr;
+};
+
+struct UserInformation {
+    std::string uid;
+    std::string name;
+    std::string password;
+    std::string workspace;
 };
 
 class Galaxy {
@@ -202,6 +216,10 @@ public:
                        std::string* sid) = 0;
     virtual bool OfflineAgent(const std::string& agent_addr) = 0;
     virtual bool OnlineAgent(const std::string& agent_addr) = 0;
+    virtual bool GetQuota(const std::string& sid, QuotaStatus* quota) = 0;
+    virtual bool AssignQuota(const std::string& sid, const std::string& name,
+                             int64_t cpu_quota, int64_t memory_quota) = 0;
+    virtual bool AddUser(const std::string& sid, const UserInformation& user) = 0;
 };
 
 } // namespace galaxy

@@ -37,6 +37,9 @@ DEFINE_string(u, "", "specify user to login galaxy");
 DEFINE_string(P, "", "specify pod id");
 DEFINE_string(p, "", "specify password to login galaxy");
 DEFINE_string(e, "", "specify agent endpoint");
+DEFINE_string(t, "", "specify target to assign quota");
+DEFINE_int64(c, 0, "specify cpu millicores to assign");
+DEFINE_string(m, "", "specify memory to assign");
 DEFINE_int32(d, 0, "specify delay time to query");
 DEFINE_int32(cli_server_port, 8775, "cli server listen port");
 DECLARE_string(flagfile);
@@ -58,6 +61,8 @@ const std::string kGalaxyUsage = "galaxy client.\n"
                                  "    galaxy online -e <endpoint>\n"
                                  "    galaxy quota \n"
                                  "    galaxy status \n"
+                                 "    galaxy adduser -f \n"
+                                 "    galaxy assign -t <target> -c <cpu_millicores> -m <memory> \n"
                                  "    galaxy enter safemode \n"
                                  "    galaxy leave safemode \n"
                                  "Options:\n"
@@ -67,7 +72,9 @@ const std::string kGalaxyUsage = "galaxy client.\n"
                                  "    -l label     Add label to list of agents.\n"
                                  "    -u username  Specify username to login in galaxy.\n"
                                  "    -p password  Specify password to login in galaxy.\n"
-                                 "    -n name      Specify job name to query pods or kill\n"
+                                 "    -t target    Specify user to assign\n"
+                                 "    -c cpu       Specify cpu millicores to assign\n"
+                                 "    -m memory    Specify memory to assign\n"
                                  "    -e agent     Specify endpoint.\n";
 
 std::string FormatDate(int64_t datetime) {
@@ -866,6 +873,34 @@ int PreemptPod() {
     return -1;
 }
 
+int ShowQuota () {
+    std::string master_key = FLAGS_nexus_root_path + FLAGS_master_path; 
+    baidu::galaxy::Galaxy* galaxy = baidu::galaxy::Galaxy::ConnectGalaxy(FLAGS_nexus_servers, master_key);
+    std::string sid;
+    bool ok = Login(&sid);
+    if (!ok) {
+        fprintf(stderr, "fail to login galaxy \n");
+        return -1;
+    };
+    ::baidu::galaxy::QuotaStatus quota;
+    ok = galaxy->GetQuota(sid, &quota);
+    if (!ok) {
+        fprintf(stderr, "fail to get quota\n");
+        return -1;
+    }
+    baidu::common::TPrinter tp(5);
+    tp.AddRow(5, "", "cpu total", "cpu free", "mem total", "mem free");
+    std::vector<std::string> vs;
+    vs.push_back(baidu::common::NumToString(1));
+    vs.push_back(::baidu::common::NumToString(quota.cpu_quota));
+    vs.push_back(::baidu::common::NumToString(quota.cpu_quota - quota.cpu_assigned));
+    vs.push_back(::baidu::common::HumanReadableString(quota.memory_quota));
+    vs.push_back(::baidu::common::HumanReadableString(quota.memory_quota - quota.memory_assigned));
+    tp.AddRow(vs);
+    printf("%s\n", tp.ToString().c_str());
+    return 0;
+}
+
 int KillJob() {
     std::string master_key = FLAGS_nexus_root_path + FLAGS_master_path; 
     baidu::galaxy::Galaxy* galaxy = baidu::galaxy::Galaxy::ConnectGalaxy(FLAGS_nexus_servers, master_key);
@@ -918,6 +953,96 @@ int OfflineAgent() {
     return -1;
 }
 
+bool BuildUserFromConfig(const std::string& config,
+                        ::baidu::galaxy::UserInformation* user) {
+    FILE* fd = fopen(config.c_str(), "r");
+    if (fd == NULL) {
+        return false;
+    }
+    char buffer[5120];
+    rapidjson::FileReadStream frs(fd, buffer, sizeof(buffer));
+    rapidjson::Document document;
+    document.ParseStream<0>(frs);
+    fclose(fd);
+    if (!document.IsObject()) {
+        return false; 
+    }
+    if (!document.HasMember("name")) {
+        return false;
+    }
+    user->name = document["name"].GetString();
+    if (!document.HasMember("password")) {
+        return false;
+    }
+    user->password = document["password"].GetString();
+    return true;
+}
+
+int AddUser() {
+    std::string master_key = FLAGS_nexus_root_path + FLAGS_master_path; 
+    baidu::galaxy::Galaxy* galaxy = baidu::galaxy::Galaxy::ConnectGalaxy(FLAGS_nexus_servers, master_key);
+    if (FLAGS_f.empty()) {
+        fprintf(stderr, "-f is required when add user\n");
+        return -1;
+    }
+    std::string sid;
+    bool ok = Login(&sid);
+    if (!ok) {
+        fprintf(stderr, "fail to login galaxy \n");
+        return -1;
+    };
+    ::baidu::galaxy::UserInformation user;
+    ok = BuildUserFromConfig(FLAGS_f, &user);
+    if (!ok) {
+        fprintf(stderr, "fail to parse user config \n");
+        return -1;
+    }
+    ok = galaxy->AddUser(sid, user);
+    if (ok) {
+        fprintf(stdout, "add user %s successfully \n", user.name.c_str());
+        return 0;
+    }else {
+        fprintf(stdout, "add user %s fails \n", user.name.c_str());
+        return -1;
+    }
+}
+
+int AssignQuota() {
+    std::string master_key = FLAGS_nexus_root_path + FLAGS_master_path; 
+    baidu::galaxy::Galaxy* galaxy = baidu::galaxy::Galaxy::ConnectGalaxy(FLAGS_nexus_servers, master_key);
+    if (FLAGS_t.empty()) {
+        fprintf(stderr, "-t is required \n");
+        return -1;
+    }
+    if (FLAGS_c <= 0) {
+        fprintf(stderr, "-c should be greater than 0\n");
+        return -1;
+    }
+    if (FLAGS_m.empty()) {
+        fprintf(stderr, "-m is required like 100G\n");
+        return -1;
+    }
+    int64_t memory;
+    int ret = ReadableStringToInt(FLAGS_m, &memory);
+    if (ret !=0 ) {
+        fprintf(stderr, "-m is wrong format");
+        return -1;
+    }
+    std::string sid;
+    bool ok = Login(&sid);
+    if (!ok) {
+        fprintf(stderr, "fail to login galaxy \n");
+        return -1;
+    };
+    ok = galaxy->AssignQuota(sid, FLAGS_t, FLAGS_c, memory);
+    if (!ok) {
+        fprintf(stderr, "fail to assign quota to %s\n", FLAGS_t.c_str());
+        return -1;
+    }
+    fprintf(stdout, "assign quota to %s successfully\n", FLAGS_t.c_str());
+    return 0;
+}
+
 int main(int argc, char* argv[]) {
     FLAGS_flagfile = "./galaxy.flag";
     ::google::SetUsageMessage(kGalaxyUsage);
@@ -957,6 +1082,12 @@ int main(int argc, char* argv[]) {
         return OnlineAgent();
     } else if (strcmp(argv[1], "offline") == 0) {
         return OfflineAgent();
+    } else if (strcmp(argv[1], "quota") == 0) {
+        return ShowQuota();
+    } else if (strcmp(argv[1], "adduser") == 0) {
+        return AddUser();
+    } else if (strcmp(argv[1], "assign") == 0) {
+        return AssignQuota();
     } else {
         fprintf(stderr,"%s", kGalaxyUsage.c_str());
         return -1;

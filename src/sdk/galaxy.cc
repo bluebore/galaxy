@@ -53,6 +53,10 @@ public:
                std::string* sid);
     bool OfflineAgent(const std::string& agent_addr);
     bool OnlineAgent(const std::string& agent_addr);
+    bool GetQuota(const std::string& sid, QuotaStatus* quota);
+    bool AssignQuota(const std::string& sid, const std::string& name,
+                     int64_t cpu_quota, int64_t memory_quota);
+    bool AddUser(const std::string& sid, const UserInformation& user);
 private:
     bool FillJobDescriptor(const JobDescription& sdk_job, JobDescriptor* job);
     void FillResource(const Resource& res, ResDescription* res_desc);
@@ -62,6 +66,56 @@ private:
     std::string master_key_;
     ::galaxy::ins::sdk::InsSDK* nexus_;
 };
+
+bool GalaxyImpl::AssignQuota(const std::string& sid, const std::string& name,
+                             int64_t cpu_quota, int64_t memory_quota) {
+
+    AssignQuotaRequest request;
+    AssignQuotaResponse response;
+    request.set_sid(sid);
+    request.set_name(name);
+    request.set_cpu_quota(cpu_quota);
+    request.set_memory_quota(memory_quota);
+    Master_Stub* master = NULL;
+    bool  ok = BuildMasterClient(&master);
+    if (!ok) {
+        return false;
+    }
+    boost::scoped_ptr<Master_Stub> scoped_master(master);
+    bool ret = rpc_client_->SendRequest(master, &Master_Stub::AssignQuota,
+                                        &request, &response, 5, 1);
+    if (!ret || 
+        (response.has_status() 
+        && response.status() != kOk)) {
+        return false;
+    }
+    return true;
+
+}
+
+bool GalaxyImpl::AddUser(const std::string& sid, const UserInformation& user) {
+    AddUserRequest request;
+    AddUserResponse response;
+    User* guser = request.mutable_user();
+    guser->set_name(user.name);
+    guser->set_password(user.password);
+    guser->set_workspace(user.workspace);
+    request.set_sid(sid);
+    Master_Stub* master = NULL;
+    bool  ok = BuildMasterClient(&master);
+    if (!ok) {
+        return false;
+    }
+    boost::scoped_ptr<Master_Stub> scoped_master(master);
+    bool ret = rpc_client_->SendRequest(master, &Master_Stub::AddUser,
+                                        &request, &response, 5, 1);
+    if (!ret || 
+        (response.has_status() 
+        && response.status() != kOk)) {
+        return false;
+    }
+    return true;
+}
 
 bool GalaxyImpl::Login(const std::string& name,
                        const std::string& password,
@@ -78,6 +132,7 @@ bool GalaxyImpl::Login(const std::string& name,
     if (!ok) {
         return false;
     }
+    boost::scoped_ptr<Master_Stub> scoped_master(master);
     bool ret = rpc_client_->SendRequest(master, &Master_Stub::Login,
                                         &request, &response, 5, 1);
     if (!ret || 
@@ -98,6 +153,7 @@ bool GalaxyImpl::OnlineAgent(const std::string& agent_addr) {
     if (!ok) {
         return false;
     }
+    boost::scoped_ptr<Master_Stub> scoped_master(master);
     bool ret = rpc_client_->SendRequest(master, &Master_Stub::OnlineAgent,
                                         &request, &response, 5, 1);
     if (!ret || 
@@ -117,6 +173,7 @@ bool GalaxyImpl::OfflineAgent(const std::string& agent_addr) {
     if (!ok) {
         return false;
     }
+    boost::scoped_ptr<Master_Stub> scoped_master(master);
     bool ret = rpc_client_->SendRequest(master, &Master_Stub::OfflineAgent,
                                         &request, &response, 5, 1);
     if (!ret || 
@@ -143,6 +200,7 @@ bool GalaxyImpl::Preempt(const PreemptPropose& propose) {
     if (!ok) {
         return false;
     }
+    boost::scoped_ptr<Master_Stub> scoped_master(master);
     request.set_addr(propose.addr);
     bool ret = rpc_client_->SendRequest(master, &Master_Stub::Preempt,
                                         &request, &response, 5, 1);
@@ -220,6 +278,7 @@ bool GalaxyImpl::TerminateJob(const std::string& job_name,
     boost::scoped_ptr<Master_Stub> scoped_master(master);
     rpc_client_->SendRequest(master, &Master_Stub::TerminateJob,
                              &request,&response,5,1);
+    fprintf(stdout, "%s \n", Status_Name(response.status()).c_str());
     if (response.status() == kOk) {
         return true;
     }
@@ -411,10 +470,33 @@ bool GalaxyImpl::SubmitJob(const JobDescription& job,
     boost::scoped_ptr<Master_Stub> scoped_master(master);
     rpc_client_->SendRequest(master, &Master_Stub::SubmitJob,
                              &request,&response,5,1);
+    fprintf(stdout, "%s \n", Status_Name(response.status()).c_str());
     if (response.status() != kOk) {
         return false;
     }
     *job_id = response.jobid();
+    return true;
+}
+
+bool GalaxyImpl::GetQuota(const std::string& sid, QuotaStatus* quota) {
+    ShowQuotaRequest request;
+    ShowQuotaResponse response;
+    request.set_sid(sid);
+    Master_Stub* master = NULL;
+    bool ok = BuildMasterClient(&master);
+    if (!ok) {
+        return false;
+    }
+    boost::scoped_ptr<Master_Stub> scoped_master(master);
+    rpc_client_->SendRequest(master, &Master_Stub::ShowQuota,
+                             &request, &response, 5, 1);
+    if (response.status() != kOk) {
+        return false;
+    }
+    quota->cpu_quota = response.cpu_quota();
+    quota->cpu_assigned = response.cpu_assigned();
+    quota->memory_quota = response.memory_quota();
+    quota->memory_assigned = response.memory_assigned();
     return true;
 }
 

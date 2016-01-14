@@ -24,9 +24,6 @@ using ::galaxy::ins::sdk::InsSDK;
 namespace baidu {
 namespace galaxy {
 
-typedef google::protobuf::RepeatedPtrField<baidu::galaxy::QuotaDiff> QuotaDiffList;
-typedef google::protobuf::RepeatedPtrField<std::string> QuotaIdList;
-typedef google::protobuf::RepeatedPtrField<baidu::galaxy::Quota> QuotaList;
 
 struct UserIndex {
     std::string uid;
@@ -102,9 +99,11 @@ public:
     bool Auth(const std::string& sid, User* user);
     bool GetQuota(const std::string& uid, Quota* quota);
     // assign quota from root
-    bool AssignQuota(const std::string& uid, const std::string& op, const Quota& quota);
+    bool AssignQuotaByUid(const std::string& uid,  const Quota& quota);
+    bool AssignQuotaByName(const std::string& name,  const Quota& quota);
     bool AcquireQuota(const std::string& uid, int64_t millicores, int64_t memory);
     bool HasEnoughQuota(const std::string& uid, int64_t millicores, int64_t memory);
+    bool ReleaseQuota(const std::string& uid, int64_t millicores, int64_t memory);
 private:
     std::string GenUuid();
     bool SaveUser(const User& user);
