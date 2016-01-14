@@ -38,7 +38,7 @@ else
     tar zxf Python-2.7.11.tgz >/dev/null
     cd Python-2.7.11
     ./configure --prefix=${DEPS_PREFIX}  --disable-shared >/dev/null
-    make -j4 >/dev/null
+    make -j4 && make install>/dev/null
     echo "install python done"
     cd -
 fi
