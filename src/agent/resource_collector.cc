@@ -781,7 +781,7 @@ bool GetCgroupMemoryUsage(const std::string& group_path,
 
         if (name == "rss") {
             mem_count++;
-            statistics->memory_rss_in_bytes = val; 
+            statistics->memory_rss_in_bytes += val; 
         } else if (name == "cache") {
             mem_count++;
             statistics->memory_rss_in_bytes += val;

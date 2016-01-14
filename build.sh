@@ -252,18 +252,19 @@ else
 
     # tera
     git clone https://github.com/baidu/tera
+    depends_file=depends.mk.template
     cd tera
-    sed -i 's#^SOFA_PBRPC_PREFIX=.*#SOFA_PBRPC_PREFIX='${DEPS_PREFIX}'#' depends.mk
-    sed -i 's#^PROTOBUF_PREFIX=.*#PROTOBUF_PREFIX='${DEPS_PREFIX}'#' depends.mk
-    sed -i 's#^SNAPPY_PREFIX=.*#SNAPPY_PREFIX='${DEPS_PREFIX}'#' depends.mk
-    sed -i 's#^ZOOKEEPER_PREFIX=.*#ZOOKEEPER_PREFIX='${DEPS_PREFIX}'#' depends.mk
-    sed -i 's#^GFLAGS_PREFIX=.*#GFLAGS_PREFIX='${DEPS_PREFIX}'#' depends.mk
-    sed -i 's#^GLOG_PREFIX=.*#GLOG_PREFIX='${DEPS_PREFIX}'#' depends.mk
-    sed -i 's#^GTEST_PREFIX=.*#GTEST_PREFIX='${DEPS_PREFIX}'#' depends.mk
-    sed -i 's#^GPERFTOOLS_PREFIX=.*#GPERFTOOLS_PREFIX='${DEPS_PREFIX}'#' depends.mk
-    sed -i 's#^BOOST_INCDIR=.*#BOOST_INCDIR='${DEPS_PREFIX}'\/boost_1_57_0#' depends.mk
-    sed -i 's#^INS_PREFIX=.*#INS_PREFIX='${DEPS_PREFIX}'#' depends.mk
-    sed -e '$ c -lgtest_main -lgtest -lglog -lgflags -ltcmalloc_minimal -lunwind' depends.mk > depends.mk.new
+    sed -i 's#^SOFA_PBRPC_PREFIX=.*#SOFA_PBRPC_PREFIX='${DEPS_PREFIX}'#' ${depends_file}
+    sed -i 's#^PROTOBUF_PREFIX=.*#PROTOBUF_PREFIX='${DEPS_PREFIX}'#' ${depends_file}
+    sed -i 's#^SNAPPY_PREFIX=.*#SNAPPY_PREFIX='${DEPS_PREFIX}'#' ${depends_file}
+    sed -i 's#^ZOOKEEPER_PREFIX=.*#ZOOKEEPER_PREFIX='${DEPS_PREFIX}'#' ${depends_file}
+    sed -i 's#^GFLAGS_PREFIX=.*#GFLAGS_PREFIX='${DEPS_PREFIX}'#' ${depends_file}
+    sed -i 's#^GLOG_PREFIX=.*#GLOG_PREFIX='${DEPS_PREFIX}'#' ${depends_file}
+    sed -i 's#^GTEST_PREFIX=.*#GTEST_PREFIX='${DEPS_PREFIX}'#' ${depends_file}
+    sed -i 's#^GPERFTOOLS_PREFIX=.*#GPERFTOOLS_PREFIX='${DEPS_PREFIX}'#' ${depends_file}
+    sed -i 's#^BOOST_INCDIR=.*#BOOST_INCDIR='${DEPS_PREFIX}'\/boost_1_57_0#' ${depends_file}
+    sed -i 's#^INS_PREFIX=.*#INS_PREFIX='${DEPS_PREFIX}'#' ${depends_file}
+    sed -e '$ c -lgtest_main -lgtest -lglog -lgflags -ltcmalloc_minimal -lunwind' ${depends_file} > depends.mk.new
     mv depends.mk.new depends.mk
     make -j8 >/dev/null
     cp -a build/lib/*.a ${DEPS_PREFIX}/lib
