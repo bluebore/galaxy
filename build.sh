@@ -129,8 +129,6 @@ else
     cd sofa-pbrpc-1.0.0
     make -j4 >/dev/null
     make install
-    cd python
-    python setup.py install
     cd -
 fi
 
