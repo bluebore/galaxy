@@ -278,7 +278,6 @@ bool GalaxyImpl::TerminateJob(const std::string& job_name,
     boost::scoped_ptr<Master_Stub> scoped_master(master);
     rpc_client_->SendRequest(master, &Master_Stub::TerminateJob,
                              &request,&response,5,1);
-    fprintf(stdout, "%s \n", Status_Name(response.status()).c_str());
     if (response.status() == kOk) {
         return true;
     }
@@ -361,10 +360,10 @@ bool GalaxyImpl::FillJobDescriptor(const JobDescription& sdk_job,
     return true;
 }
 
-bool GalaxyImpl::GetTasksByJob(const std::string& jobid,
+bool GalaxyImpl::GetTasksByJob(const std::string& jobname,
                                std::vector<TaskInformation>* tasks) {
     ShowTaskRequest request;
-    request.set_jobid(jobid);
+    request.set_name(jobname);
     ShowTaskResponse response;
     Master_Stub* master = NULL;
     bool ok = BuildMasterClient(&master);
@@ -470,7 +469,6 @@ bool GalaxyImpl::SubmitJob(const JobDescription& job,
     boost::scoped_ptr<Master_Stub> scoped_master(master);
     rpc_client_->SendRequest(master, &Master_Stub::SubmitJob,
                              &request,&response,5,1);
-    fprintf(stdout, "%s \n", Status_Name(response.status()).c_str());
     if (response.status() != kOk) {
         return false;
     }
@@ -500,10 +498,11 @@ bool GalaxyImpl::GetQuota(const std::string& sid, QuotaStatus* quota) {
     return true;
 }
 
-bool GalaxyImpl::UpdateJob(const std::string& jobid, const JobDescription& job) {
+bool GalaxyImpl::UpdateJob(const std::string& name, 
+                           const JobDescription& job) {
     UpdateJobRequest request;
     UpdateJobResponse response;
-    request.set_jobid(jobid);
+    request.set_name(name);
     bool ok = FillJobDescriptor(job, request.mutable_job());
     if (!ok) {
         return false;

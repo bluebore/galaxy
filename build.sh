@@ -197,7 +197,7 @@ else
     export PBRPC_PATH=${DEPS_PREFIX}/
     make -j4 ins >/dev/null && make -j4 install_sdk >/dev/null  && make python >/dev/null
     mkdir -p output/bin && cp ins output/bin
-    cp -rf output/python/ ../../optools/
+    cp -rf output/python/* ../../optools/
     cd -
 fi
 

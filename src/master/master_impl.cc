@@ -265,27 +265,30 @@ void MasterImpl::UpdateJob(::google::protobuf::RpcController* /*controller*/,
         done->Run();
         return;
     }
-    JobId job_id = request->jobid();
-    if (!job_manager_.IsOwner(job_id, user.uid())) {
-        response->set_status(kPermissionDenied);
-        done->Run();
-        return;
-    }
-    JobInfo job;
-    Status status = job_manager_.GetJobInfo(job_id, &job);
-    if (status != kOk) {
+    JobInfo exist_job;
+    ok = job_manager_.GetJobByName(request->name(), &exist_job);
+    if (!ok) { 
+        LOG(WARNING, "fail to get job name %s ", request->name().c_str());
         response->set_status(kJobNotFound);
         done->Run();
         return;
     }
-    ok = UpdateQuotaWithNewJob(job, request->job());
+
+    if (exist_job.uid() != user.uid()) {
+        response->set_status(kPermissionDenied);
+        done->Run();
+        LOG(WARNING, "user % has no permission to kill job %s ", user.uid().c_str(),
+                request->name().c_str());
+        return;
+    }  
+    ok = UpdateQuotaWithNewJob(exist_job, request->job());
     if (!ok) {
         response->set_status(kQuota);
         done->Run();
         return;
     }
-    LOG(INFO, "update job %s replica %d", job_id.c_str(), request->job().replica());
-    status = job_manager_.Update(job_id, request->job());
+    LOG(INFO, "update job %s replica %d", request->name().c_str(), request->job().replica());
+    Status status = job_manager_.Update(exist_job.jobid(), request->job());
     response->set_status(status);
     done->Run();
 }
@@ -612,15 +615,15 @@ void MasterImpl::ShowTask(::google::protobuf::RpcController* controller,
                            ::google::protobuf::Closure* done) {
     response->set_status(kInputError);
     do {
-        std::string job_id;
+        std::string jobname;
         std::string agent_addr;
-        if (request->has_jobid()) {
-            job_id = request->jobid();
+        if (request->has_name()) {
+            jobname = request->name();
         }else if (request->has_endpoint()) {
             agent_addr = request->endpoint();
         }
-        if (!job_id.empty()) {
-            Status ok = job_manager_.GetTaskByJob(job_id, 
+        if (!jobname.empty()) {
+            Status ok = job_manager_.GetTaskByJob(jobname, 
                                      response->mutable_tasks());
             response->set_status(ok);
         }else if (!agent_addr.empty()) {

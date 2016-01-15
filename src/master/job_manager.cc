@@ -2244,9 +2244,15 @@ void JobManager::ReloadAgent(const AgentPersistenceInfo& agent) {
     agent_custom_infos_.insert(std::make_pair(agent.endpoint(), agent_info));
 }
 
-Status JobManager::GetTaskByJob(const std::string& jobid,
+Status JobManager::GetTaskByJob(const std::string& jobname,
                                 TaskOverviewList* tasks) { 
     MutexLock lock(&mutex_);
+    const JobSetNameIndex& name_index = job_index_->get<name_tag>();
+    JobSetNameIndex::const_iterator it = name_index.find(jobname);
+    if (it == name_index.end()) {
+        return kJobNotFound;
+    }
+    std::string jobid = it->id_;
     std::map<JobId, Job*>::iterator job_it = jobs_.find(jobid);
     if (job_it == jobs_.end()) {
         return kJobNotFound;

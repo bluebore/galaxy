@@ -160,7 +160,7 @@ public:
     Status LabelAgents(const LabelCell& label_cell);
     bool GetJobByName(const std::string& job_name, JobInfo* job);
     Status GetPods(const std::string& jobid, PodOverviewList* pods);
-    Status GetTaskByJob(const std::string& jobid, TaskOverviewList* tasks);
+    Status GetTaskByJob(const std::string& name, TaskOverviewList* tasks);
     Status GetTaskByAgent(const std::string& endpoint, TaskOverviewList* tasks);
     Status GetPodsByAgent(const std::string& endpoint, PodOverviewList* pods);
     Status GetStatus(::baidu::galaxy::GetMasterStatusResponse* response);

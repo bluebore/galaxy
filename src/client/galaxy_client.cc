@@ -31,7 +31,6 @@ DEFINE_string(nexus_root_path, "/baidu/galaxy", "root path of galaxy cluster on 
 DEFINE_string(master_path, "/master", "master path on nexus");
 DEFINE_string(f, "", "specify config file ,job config file or label config file");
 DEFINE_string(n, "", "specify job name to query pods");
-DEFINE_string(j, "", "specify job id");
 DEFINE_string(l, "", "add a label to agent");
 DEFINE_string(u, "", "specify user to login galaxy");
 DEFINE_string(P, "", "specify pod id");
@@ -49,12 +48,12 @@ const std::string kGalaxyUsage = "galaxy client.\n"
                                  "    galaxy submit -f <jobconfig>\n" 
                                  "    galaxy jobs \n"
                                  "    galaxy agents\n"
-                                 "    galaxy pods -j <jobid>\n"
+                                 "    galaxy pods -n <jobname>\n"
                                  "    galaxy kill -n <jobname>\n"
                                  "    galaxy pods -e <endpoint>\n"
-                                 "    galaxy tasks -j <jobid>\n"
+                                 "    galaxy tasks -n <jobname>\n"
                                  "    galaxy tasks -e <endpoint>\n"
-                                 "    galaxy update -j <jobid> -f <jobconfig>\n"
+                                 "    galaxy update -n <jobname> -f <jobconfig>\n"
                                  "    galaxy label -l <label> -f <lableconfig>\n"
                                  "    galaxy preempt -f <config>\n"
                                  "    galaxy offline -e <endpoint>\n"
@@ -67,7 +66,6 @@ const std::string kGalaxyUsage = "galaxy client.\n"
                                  "    galaxy leave safemode \n"
                                  "Options:\n"
                                  "    -f config    Specify config file ,eg job config file , label config file.\n"
-                                 "    -j jobid     Specify job id to kill or update.\n"
                                  "    -d delay     Specify delay in second to update infomation.\n"
                                  "    -l label     Add label to list of agents.\n"
                                  "    -u username  Specify username to login in galaxy.\n"
@@ -459,12 +457,12 @@ int UpdateJob() {
         fprintf(stderr, "Fail to build job\n");
         return -1;
     }
-    bool ok = galaxy->UpdateJob(FLAGS_j, job);
+    bool ok = galaxy->UpdateJob(FLAGS_n, job);
     if (ok) {
-        printf("Update job %s ok\n", FLAGS_j.c_str());
+        printf("Update job %s ok\n", FLAGS_n.c_str());
         return 0;
     }else {
-        printf("Fail to update job %s\n", FLAGS_j.c_str());
+        printf("Fail to update job %s\n", FLAGS_n.c_str());
         return 1;
     }
 }
@@ -508,16 +506,16 @@ int ListAgent() {
     return 0;
 }
 int ShowTask() {
-     if (FLAGS_j.empty() && FLAGS_e.empty()) {
-        fprintf(stderr, "-j or -e option is required\n");
+     if (FLAGS_n.empty() && FLAGS_e.empty()) {
+        fprintf(stderr, "-n or -e option is required\n");
         return -1;
     }
     std::string master_key = FLAGS_nexus_root_path + FLAGS_master_path; 
     baidu::galaxy::Galaxy* galaxy = baidu::galaxy::Galaxy::ConnectGalaxy(FLAGS_nexus_servers, master_key);
     while (true) {
         std::vector<baidu::galaxy::TaskInformation> tasks;
-        if (!FLAGS_j.empty()) {
-            bool ok = galaxy->GetTasksByJob(FLAGS_j, &tasks);
+        if (!FLAGS_n.empty()) {
+            bool ok = galaxy->GetTasksByJob(FLAGS_n, &tasks);
             if (!ok) {
                 fprintf(stderr, "Fail to get tasks\n");
                 return -1;
@@ -560,21 +558,15 @@ int ShowTask() {
 }
 
 int ShowPod() {
-    if (FLAGS_j.empty() && FLAGS_n.empty() && FLAGS_e.empty()) {
-        fprintf(stderr, "-j ,-n or -e  option is required\n");
+    if (FLAGS_n.empty() && FLAGS_e.empty()) {
+        fprintf(stderr, "-n or -e  option is required\n");
         return -1;
     }
     std::string master_key = FLAGS_nexus_root_path + FLAGS_master_path; 
     baidu::galaxy::Galaxy* galaxy = baidu::galaxy::Galaxy::ConnectGalaxy(FLAGS_nexus_servers, master_key);
     while (true) {
         std::vector<baidu::galaxy::PodInformation> pods;
-        if (!FLAGS_j.empty()) {
-            bool ok = galaxy->ShowPod(FLAGS_j, &pods);
-            if (!ok) {
-                fprintf(stderr, "Fail to get pods\n");
-                return -1;
-            }
-        } else if (!FLAGS_n.empty()) {
+        if (!FLAGS_n.empty()) {
             bool ok = galaxy->GetPodsByName(FLAGS_n, &pods);
             if (!ok) {
                 fprintf(stderr, "Fail to get pods\n");
@@ -623,121 +615,6 @@ int ShowPod() {
     return 0;
 }
 
-std::string GetAgentById(std::string job_id, std::string pod_id) {
-    if (FLAGS_p.empty()) {
-        fprintf(stderr, "-p option is required\n");
-        return "";
-    }
-    if (FLAGS_j.empty()) {
-        fprintf(stderr, "-j option is required\n");
-        return "";
-    }
-    std::string master_key = FLAGS_nexus_root_path + FLAGS_master_path; 
-    baidu::galaxy::Galaxy* galaxy = baidu::galaxy::Galaxy::ConnectGalaxy(FLAGS_nexus_servers, master_key);
-    std::vector<baidu::galaxy::PodInformation> pods;
-    bool ok = galaxy->ShowPod(job_id, &pods);
-    if (!ok) {
-        fprintf(stderr, "Fail to query job\n");
-        return "";
-    }
-    std::vector<baidu::galaxy::PodInformation>::iterator it = pods.begin();
-    std::string agent_endpoint = "";
-    for (; it != pods.end(); ++it) {
-        if (it->podid == pod_id) {
-            agent_endpoint = it->endpoint;
-            break;
-        }
-    }
-    if (agent_endpoint == "") {
-        fprintf(stderr, "Fail to find pod\n");
-        return "";
-    }
-    return agent_endpoint.substr(0, agent_endpoint.find_last_of(":"));
-}
-
-int AttachPod() {
-    std::string agent_endpoint = GetAgentById(FLAGS_j, FLAGS_p);
-    if (agent_endpoint == "") {
-        return -1;
-    }
-    int sockfd = 0;
-    const int BUFFER_LEN = 1024 * 10;
-    char buffer[BUFFER_LEN];
-    struct sockaddr_in serv_addr;
-    if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        fprintf(stderr, "Fail to create socket\n");
-        return -1;
-    }
-    memset(&serv_addr, 0, sizeof(serv_addr));
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(FLAGS_cli_server_port);
-
-    if (inet_pton(AF_INET, agent_endpoint.c_str(), &serv_addr.sin_addr) < 0) {
-        fprintf(stderr, "Wrong server address\n");
-        return -1;
-    }
-    if (connect(sockfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
-        fprintf(stderr, "Fail to connect cli server\n");
-        return -1;
-    }
-    
-    struct termios temp_termios;
-    struct termios orig_termios;
-    ::signal(SIGINT, SIG_IGN);
-    ::signal(SIGTERM, SIG_IGN);
-    ::tcgetattr(0, &orig_termios);
-    temp_termios = orig_termios;
-    temp_termios.c_lflag &= ~(ICANON | ECHO | ECHOE | ECHOK | ECHONL | ECHOPRT | ECHOKE | ICRNL);
-    temp_termios.c_cc[VTIME] = 1;   // 终端等待延迟时间（十分之一秒为单位）
-    temp_termios.c_cc[VMIN] = 1;    // 终端接收字符数
-    ::tcsetattr(0, TCSANOW, &temp_termios);
-    
-    fd_set fd_in;
-    int ret = 0;
-    write(sockfd, FLAGS_p.c_str(), 36); //send pod id
-
-    fprintf(stderr, "send: %s\n", FLAGS_p.c_str());
-    
-    while (1) {
-        FD_ZERO(&fd_in);
-        FD_SET(sockfd, &fd_in);
-        FD_SET(0, &fd_in);
-
-        ret = ::select(sockfd + 1, &fd_in, NULL, NULL, NULL);
-        if (ret < 0) {
-            fprintf(stderr, "Select error\n");
-            break;
-        } else {
-            if (FD_ISSET(0, &fd_in)) {
-                ret = ::read(0, buffer, sizeof(buffer));
-                if (ret > 0) {
-                    write(sockfd, buffer, ret);
-                } else if (ret < 0) {
-                    fprintf(stderr, "Read error\n");
-                    break;
-                }
-            }
-            if (FD_ISSET(sockfd, &fd_in)) {
-                ret = ::read(sockfd, buffer, sizeof(buffer));
-                if (ret > 0) {
-                    write(1, buffer, ret);
-                } else if (ret < 0) {
-                    fprintf(stderr, "Read error\n");
-                } else {
-                    fprintf(stdout, "Attach pod finished!\n");
-                    break;
-                }
-            }
-        }
-    }
-
-    close(sockfd);
-    ::tcsetattr(0, TCSANOW, &orig_termios);
-    if (ret < 0) {
-        return -1;
-    }
-    return 0;
-}
 int SwitchSafeMode(bool mode) { 
     std::string master_key = FLAGS_nexus_root_path + FLAGS_master_path; 
     baidu::galaxy::Galaxy* galaxy = baidu::galaxy::Galaxy::ConnectGalaxy(FLAGS_nexus_servers, master_key);
@@ -817,12 +694,13 @@ int ListJob() {
     baidu::galaxy::Galaxy* galaxy = baidu::galaxy::Galaxy::ConnectGalaxy(FLAGS_nexus_servers, master_key);
     while(true) {
         std::vector<baidu::galaxy::JobInformation> infos;
-        baidu::common::TPrinter tp(11);
-        tp.AddRow(11, "", "name", "state", "stat(r/p/d/e)", "replica", "batch", "cpu", "memory","disk(r/w)","create", "update");
+        baidu::common::TPrinter tp(12);
+        tp.AddRow(12, "","id","name", "state", "stat(r/p/d/e)", "replica", "batch", "cpu", "memory","disk(r/w)","create", "update");
         if (galaxy->ListJobs(&infos)) {
             for (uint32_t i = 0; i < infos.size(); i++) {
                 std::vector<std::string> vs;
                 vs.push_back(baidu::common::NumToString(i + 1));
+                vs.push_back(infos[i].job_id);
                 vs.push_back(infos[i].job_name);
                 vs.push_back(infos[i].state);
                 vs.push_back(baidu::common::NumToString(infos[i].running_num) + "/" + 
@@ -1074,8 +952,6 @@ int main(int argc, char* argv[]) {
             return SwitchSafeMode(true);
         else if (strcmp(argv[1], "leave") == 0) 
             return SwitchSafeMode(false);
-    } else if (strcmp(argv[1], "attach") == 0) {
-        return AttachPod();
     } else if (strcmp(argv[1], "preempt") == 0) {
         return PreemptPod();
     } else if (strcmp(argv[1], "online") == 0) {

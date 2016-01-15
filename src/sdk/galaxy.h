@@ -187,7 +187,7 @@ public:
                            const std::string& sid,
                            std::string* job_id) = 0;
     //update job for example update the replicate_count
-    virtual bool UpdateJob(const std::string& jobid, const JobDescription& job) = 0;
+    virtual bool UpdateJob(const std::string& jobname, const JobDescription& job) = 0;
     //list all jobs in galaxys
     virtual bool ListJobs(std::vector<JobInformation>* jobs) = 0;
     //termintate job
@@ -203,7 +203,7 @@ public:
                                std::vector<PodInformation>* pods) = 0;
     virtual bool GetPodsByAgent(const std::string& endpoint,
                                 std::vector<PodInformation>* pods) = 0;
-    virtual bool GetTasksByJob(const std::string& jobid,
+    virtual bool GetTasksByJob(const std::string& name,
                                std::vector<TaskInformation>* tasks) = 0;
     virtual bool GetTasksByAgent(const std::string& endpoint,
                                  std::vector<TaskInformation>* tasks) = 0;
