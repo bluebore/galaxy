@@ -26,7 +26,8 @@ public:
                    const std::string& sid,
                    std::string* job_id);
     bool UpdateJob(const std::string& jobname,
-                   const JobDescription& job);
+                   const JobDescription& job,
+                   const std::string& sid);
     bool ListJobs(std::vector<JobInformation>* jobs);
     bool ListAgents(std::vector<NodeDescription>* nodes);
     bool TerminateJob(const std::string& jobname, 
@@ -499,9 +500,11 @@ bool GalaxyImpl::GetQuota(const std::string& sid, QuotaStatus* quota) {
 }
 
 bool GalaxyImpl::UpdateJob(const std::string& name, 
-                           const JobDescription& job) {
+                           const JobDescription& job,
+                           const std::string& sid) {
     UpdateJobRequest request;
     UpdateJobResponse response;
+    request.set_sid(sid);
     request.set_name(name);
     bool ok = FillJobDescriptor(job, request.mutable_job());
     if (!ok) {

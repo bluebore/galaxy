@@ -139,14 +139,33 @@ void MasterImpl::ReloadJobInfo() {
             LOG(WARNING, "faild to parse job_info: %s", key.c_str());
             assert(0);
         }
+        PodDescriptor pod_desc;
+        bool find_desc = false;
+        for (int j = 0; j < job_info.pod_descs_size(); ++j) {
+            if (job_info.pod_descs(j).version() != job_info.latest_version())  {
+                continue;
+            }
+            pod_desc.CopyFrom(job_info.pod_descs(j));
+            find_desc = true;
+        }
+        if (!find_desc) {
+            continue;
+        }
+        int64_t total_millicores = pod_desc.requirement().millicores() * job_info.desc().replica();
+        int64_t total_memory = pod_desc.requirement().memory() * job_info.desc().replica();
+ 
         User owner;
         ok = user_manager_->GetUserById(job_info.uid(), &owner); 
         if (ok) {
             LOG(INFO, "reload job: %s", job_info.jobid().c_str());
             job_manager_.ReloadJobInfo(job_info, owner);
+            // TODO check return
+            user_manager_->AcquireQuota(owner.uid(), total_millicores, total_memory);
         } else {
             LOG(WARNING, "faild to get user with id %s, assigned to root user", job_info.uid().c_str());
             job_manager_.ReloadJobInfo(job_info, root);
+            // TODO check return
+            user_manager_->AcquireQuota(root.uid(), total_millicores, total_memory);
         }
         result->Next();
         job_amount ++;

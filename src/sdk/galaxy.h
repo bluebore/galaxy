@@ -187,7 +187,8 @@ public:
                            const std::string& sid,
                            std::string* job_id) = 0;
     //update job for example update the replicate_count
-    virtual bool UpdateJob(const std::string& jobname, const JobDescription& job) = 0;
+    virtual bool UpdateJob(const std::string& jobname, const JobDescription& job,
+                           const std::string& sid) = 0;
     //list all jobs in galaxys
     virtual bool ListJobs(std::vector<JobInformation>* jobs) = 0;
     //termintate job

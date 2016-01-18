@@ -448,7 +448,14 @@ int AddJob() {
     return 0;
 }
 
-int UpdateJob() {  
+int UpdateJob() { 
+    std::string sid;
+    bool ok = Login(&sid);
+    if (!ok) {
+        fprintf(stderr, "fail to login galaxy\n");
+        return -1;
+    }
+
     std::string master_key = FLAGS_nexus_root_path + FLAGS_master_path; 
     baidu::galaxy::Galaxy* galaxy = baidu::galaxy::Galaxy::ConnectGalaxy(FLAGS_nexus_servers, master_key);
     baidu::galaxy::JobDescription job;
@@ -457,7 +464,7 @@ int UpdateJob() {
         fprintf(stderr, "Fail to build job\n");
         return -1;
     }
-    bool ok = galaxy->UpdateJob(FLAGS_n, job);
+    ok = galaxy->UpdateJob(FLAGS_n, job, sid);
     if (ok) {
         printf("Update job %s ok\n", FLAGS_n.c_str());
         return 0;

@@ -107,12 +107,14 @@ public:
 private:
     std::string GenUuid();
     bool SaveUser(const User& user);
+    bool SaveQuota(const Quota& quota);
     void CleanSession();
     void ReloadUser(const User& user);
     void ReloadQuota(const Quota& quota);
     bool GetQuotaByIndex(const std::string& sid, Quota* quota);
     bool AssignExistQuota(const std::string& uid, const Quota& quota);
     bool AssignNoneExistQuota(const std::string& uid, const Quota& quota);
+    void RecalcRootQuota();
 private:
     ::baidu::common::Mutex mutex_;
     UserSet* user_set_;

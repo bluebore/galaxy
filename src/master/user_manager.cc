@@ -59,25 +59,6 @@ bool UserManager::ReleaseQuota(const std::string& uid,
 
 bool UserManager::Init() {
     MutexLock lock(&mutex_);
-    std::string start_key = FLAGS_nexus_root_path  + FLAGS_users_store_path + "/";
-    std::string end_key = start_key + "~";
-    ::galaxy::ins::sdk::ScanResult* result = nexus_->Scan(start_key, end_key);
-    User user;
-    int32_t user_count = 0;
-    while (!result->Done()) {
-        if (result->Error() != ::galaxy::ins::sdk::kOK) {
-            assert(0);
-        }
-        std::string key = result->Key();
-        std::string value = result->Value(); 
-        bool ok = user.ParseFromString(value);
-        if (ok) {
-            ReloadUser(user);
-        }
-        result->Next();
-        user_count ++;
-    }
-    LOG(INFO, "reload user count %d", user_count);
     std::string q_start_key = FLAGS_nexus_root_path  + FLAGS_quotas_store_path + "/";
     std::string q_end_key = q_start_key + "~";
     ::galaxy::ins::sdk::ScanResult* qresult = nexus_->Scan(q_start_key, q_end_key);
@@ -97,6 +78,27 @@ bool UserManager::Init() {
         quota_count ++;
     }
     LOG(INFO, "reload quota count %d", quota_count);
+
+    std::string start_key = FLAGS_nexus_root_path  + FLAGS_users_store_path + "/";
+    std::string end_key = start_key + "~";
+    ::galaxy::ins::sdk::ScanResult* result = nexus_->Scan(start_key, end_key);
+    User user;
+    int32_t user_count = 0;
+    while (!result->Done()) {
+        if (result->Error() != ::galaxy::ins::sdk::kOK) {
+            assert(0);
+        }
+        std::string key = result->Key();
+        std::string value = result->Value(); 
+        bool ok = user.ParseFromString(value);
+        if (ok) {
+            ReloadUser(user);
+        }
+        result->Next();
+        user_count ++;
+    }
+    LOG(INFO, "reload user count %d", user_count);
+    RecalcRootQuota();
     return true;
 }
 
@@ -121,6 +123,35 @@ void UserManager::ReloadUser(const User& user) {
     if (user.super_user()) {
         super_uid_ = user.uid();
     }
+}
+
+void UserManager::RecalcRootQuota() {
+    mutex_.AssertHeld();
+    QuotaTargetIndex& target_index = quota_set_->get<target_tag>();
+    QuotaTargetIndex::iterator target_it = target_index.find(super_uid_);
+    if (target_it == target_index.end()) {
+        assert(0);
+    }
+    const UserSetIdIndex& id_index = user_set_->get<id_tag>();
+
+    QuotaIndex root_quota_index = *target_it;
+    QuotaTargetIndex::iterator all_it = target_index.begin();
+    int64_t cpu_used = 0;
+    int64_t mem_used = 0;
+    for (; all_it != target_index.end(); ++all_it) {
+        if (all_it->quota.qid() == root_quota_index.quota.qid()) {
+            continue;
+        }
+        if (id_index.find(all_it->quota.target()) == id_index.end()) {
+            LOG(WARNING, "dirty quota with qid %s", all_it->quota.qid().c_str());
+            continue;
+        }
+        cpu_used += all_it->quota.cpu_quota();
+        mem_used += all_it->quota.memory_quota();
+    }
+    root_quota_index.quota.set_cpu_assigned(cpu_used);
+    root_quota_index.quota.set_memory_assigned(mem_used);
+    target_index.replace(target_it, root_quota_index);
 }
 
 bool UserManager::Auth(const std::string& sid, User* user) {
@@ -205,6 +236,20 @@ bool UserManager::SaveUser(const User& user) {
     bool ok = nexus_->Put(key, value, &err);
     if (!ok) {
         LOG(INFO, "fail to save user %s", user.name().c_str());
+        return false;
+    }
+    return true;
+}
+
+bool UserManager::SaveQuota(const Quota& quota) {
+    std::string key = FLAGS_nexus_root_path + FLAGS_quotas_store_path +
+         "/" + quota.qid();
+    std::string value;
+    quota.SerializeToString(&value);
+    ::galaxy::ins::sdk::SDKError err;
+    bool ok = nexus_->Put(key, value, &err);
+    if (!ok) {
+        LOG(INFO, "fail to save quota %s", quota.qid().c_str());
         return false;
     }
     return true;
@@ -359,14 +404,26 @@ bool UserManager::AssignNoneExistQuota(const std::string& uid, const Quota& quot
 }
 
 bool UserManager::AssignQuotaByUid(const std::string& uid, const Quota& quota) {
-    MutexLock lock(&mutex_);
-    const QuotaTargetIndex& target_index = quota_set_->get<target_tag>();
-    QuotaTargetIndex::const_iterator target_it = target_index.find(uid);
-    if (target_it == target_index.end()) {
-        return AssignExistQuota(uid, quota);
-    }else {
-        return AssignNoneExistQuota(uid, quota);
+    bool ok = false ;
+    Quota new_quota;
+    {
+        MutexLock lock(&mutex_);
+        const QuotaTargetIndex& target_index = quota_set_->get<target_tag>();
+        QuotaTargetIndex::const_iterator target_it = target_index.find(uid);
+        if (target_it == target_index.end()) {
+            ok = AssignExistQuota(uid, quota);
+        }else {
+            ok = AssignNoneExistQuota(uid, quota);
+        }
+        if (ok) {
+            target_it = target_index.find(uid);
+            new_quota = target_it->quota;
+        } 
     }
+    if (ok) {
+        SaveQuota(new_quota);
+    }
+    return ok;
 }
 
 bool UserManager::AssignQuotaByName(const std::string& name, const Quota& quota) {
