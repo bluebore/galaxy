@@ -36,7 +36,7 @@ SCHEDULER_HEADER = $(wildcard src/scheduler/*.h)
 AGENT_SRC = $(wildcard src/agent/agent*.cc) src/agent/pod_manager.cc src/agent/task_manager.cc src/agent/utils.cc src/agent/persistence_handler.cc src/agent/cgroups.cc src/agent/resource_collector.cc 
 AGENT_OBJ = $(patsubst %.cc, %.o, $(AGENT_SRC))
 AGENT_HEADER = $(wildcard src/agent/*.h) 
-TEST_AGENT_SRC = src/agent/test_agent.cc src/agent/resource_collector.cc 
+TEST_AGENT_SRC = src/agent/test_agent.cc src/agent/resource_collector.cc src/agent/cgroups.cc src/agent/utils.cc 
 TEST_AGENT_OBJ = $(patsubst %.cc, %.o, $(TEST_AGENT_SRC))
 
 INITD_SRC = src/gce/initd_impl.cc src/gce/initd_main.cc src/agent/utils.cc src/flags.cc  src/agent/cgroups.cc
@@ -45,6 +45,10 @@ INITD_HEADER = $(wildcard src/gce/*.h) src/agent/utils.h
 
 INITD_CLI_SRC = src/gce/initd_cli.cc 
 INITD_CLI_OBJ = $(patsubst %.cc, %.o, $(INITD_CLI_SRC))
+
+INITD_SERVER_SRC = src/gce/initd_cli_server.cc
+INITD_SERVER_OBJ = $(patsubst %.cc, %.o, $(INITD_CLI_SRC))
+
 
 TEST_INITD_SRC = src/gce/test_initd.cc
 TEST_INITD_OBJ = $(patsubst %.cc, %.o, $(TEST_INITD_SRC))
@@ -64,18 +68,15 @@ WATCHER_SRC = $(wildcard src/master/master_watcher.cc)
 WATCHER_OBJ = $(patsubst %.cc, %.o, $(WATCHER_SRC))
 WATCHER_HEADER = $(wildcard src/master/master_watcher.h)
 
-TEST_TRACE_SRC=test_main.cc
-TEST_TRACE_OBJ=test_main.o
-
 CLIENT_OBJ = $(patsubst %.cc, %.o, $(wildcard src/client/*.cc))
 
 FLAGS_OBJ = $(patsubst %.cc, %.o, $(wildcard src/*.cc))
 OBJS = $(FLAGS_OBJ) $(PROTO_OBJ)
 
 LIBS = libgalaxy.a
-BIN = master agent scheduler galaxy initd 
-
-all: $(BIN) $(LIBS)
+BIN = master agent scheduler galaxy initd initd_cli initd_cli_server 
+TEST_BIN = test_agent test_initd
+all: $(BIN) $(LIBS) $(TEST_BIN)
 
 # Depends
 $(MASTER_OBJ) $(AGENT_OBJ) $(PROTO_OBJ) $(SDK_OBJ) $(SCHED_TEST_OBJ): $(PROTO_HEADER)
@@ -94,14 +95,8 @@ scheduler: $(SCHEDULER_OBJ) $(OBJS) $(WATCHER_OBJ) $(UTILS_OBJ)
 agent: $(AGENT_OBJ) $(WATCHER_OBJ) $(OBJS)
 	$(CXX) $(UTILS_OBJ) $(AGENT_OBJ) $(WATCHER_OBJ) $(OBJS) -o $@ $(LDFLAGS)
 
-test_agent: $(TEST_AGENT_OBJ) $(LIBS) $(OBJS)
-	$(CXX) $(TEST_AGENT_OBJ) $(LIBS) -o $@ $(LDFLAGS)
-
 libgalaxy.a: $(SDK_OBJ) $(OBJS) $(PROTO_HEADER)
 	$(AR) -rs $@ $(SDK_OBJ) $(OBJS)
-
-test_main: $(TEST_TRACE_OBJ) 
-	$(CXX) $(TEST_TRACE_OBJ) -o $@ $(FTRACE_LIBDIR)/libftrace.a $(LDFLAGS)
 
 galaxy: $(CLIENT_OBJ) $(LIBS)
 	$(CXX) $(CLIENT_OBJ) $(LIBS) -o $@ $(LDFLAGS)
@@ -111,6 +106,15 @@ initd: $(INITD_OBJ) $(LIBS) $(OBJS)
 
 initd_cli: $(INITD_CLI_OBJ) $(LIBS) $(OBJS)
 	$(CXX) $(INITD_CLI_OBJ) $(LIBS) -o $@ $(LDFLAGS)
+
+initd_cli_server: $(INITD_SERVER_OBJ) $(LIBS) $(OBJS)
+	$(CXX) $(INITD_SERVER_OBJ) $(LIBS) -o $@ $(LDFLAGS)
+
+test_main: $(TEST_TRACE_OBJ) 
+	$(CXX) $(TEST_TRACE_OBJ) -o $@ $(FTRACE_LIBDIR)/libftrace.a $(LDFLAGS)
+
+test_agent: $(TEST_AGENT_OBJ) $(LIBS) $(OBJS)
+	$(CXX) $(TEST_AGENT_OBJ) $(UTILS_OBJ) $(LIBS) -o $@ $(LDFLAGS)
 
 test_initd: $(TEST_INITD_OBJ) $(LIBS) $(OBJS)
 	$(CXX) $(TEST_INITD_OBJ) $(LIBS) -o $@ $(LDFLAGS)
@@ -126,6 +130,7 @@ test_sched: $(SCHED_TEST_OBJ) $(LIBS) $(OBJS)
 
 clean:
 	rm -rf $(BIN)
+	rm -rf $(TEST_BIN)
 	rm -rf $(MASTER_OBJ) $(SCHEDULER_OBJ) $(AGENT_OBJ) $(SDK_OBJ) $(CLIENT_OBJ) $(SCHED_TEST_OBJ) $(UTILS_OBJ) $(OBJS)
 	rm -rf $(PROTO_SRC) $(PROTO_HEADER)
 	rm -rf $(PREFIX)
@@ -133,9 +138,11 @@ clean:
 
 install: $(BIN) $(LIBS)
 	mkdir -p $(PREFIX)/bin
+	mkdir -p $(PREFIX)/test_bin
 	mkdir -p $(PREFIX)/lib
 	mkdir -p $(PREFIX)/include/sdk
 	cp $(BIN) $(PREFIX)/bin
+	cp $(TEST_BIN) $(PREFIX)/test_bin
 	cp $(LIBS) $(PREFIX)/lib
 	cp src/sdk/*.h $(PREFIX)/include/sdk
 

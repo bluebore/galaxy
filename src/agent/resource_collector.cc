@@ -574,11 +574,14 @@ bool GlobalResourceCollector::GetGlobalNetStat() {
     boost::split(lines, content, boost::is_any_of("\n"));
     for (size_t n = 0; n < lines.size(); n++) {
         std::string line = lines[n];
-        if (line.find("eth0") != std::string::npos || 
-                line.find("xgbe0") != std::string::npos) {
+        if (line.find("eth") != std::string::npos || 
+                line.find("xgbe") != std::string::npos) {
             boost::trim(line);
             std::vector<std::string> parts;
             boost::split(parts, line, boost::is_any_of(" "), boost::token_compress_on);
+            if (boost::lexical_cast<int64_t>(parts[1]) == 0) {
+                continue;
+            }
             std::vector<std::string> tokens;
             boost::split(tokens, parts[0], boost::is_any_of(":"));
             stat_->cur_stat_.net_in_bits = boost::lexical_cast<int64_t>(tokens[1]);
@@ -781,7 +784,8 @@ bool GetCgroupMemoryUsage(const std::string& group_path,
 
         if (name == "rss") {
             mem_count++;
-            statistics->memory_rss_in_bytes += val; 
+            statistics->memory_rss_in_bytes = val; 
+            //statistics->memory_rss_in_bytes += val; 
         } else if (name == "cache") {
             mem_count++;
             statistics->memory_rss_in_bytes += val;

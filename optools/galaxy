@@ -8,11 +8,90 @@
 #
 # processname: galaxy
 
-PROD_ADDR=ftp://xxxxxx/tmp/galaxy.tar.gz
+PROD_ADDR=xxxxx
 . /etc/rc.d/init.d/functions
 AGENT_IP=`hostname -i`
 AGENT_HOME=/home/galaxy/agent
 RETVAL=0
+
+netCards=$(/sbin/ifconfig | awk '/Ethernet/{a=$0; getline; b=$0; print a,b}' | grep "inet addr" | awk '{print $1}')
+
+readd_mod() {
+    local DEV=$1
+    local IP=$(cat /etc/sysconfig/network-scripts/ifcfg-${DEV} | grep IPADDR | cut -d "=" -f 2)
+    local GATEWAY=$(ip route | grep ${DEV} | grep via | awk '{print $3}' | head -1)
+    if ! grep "GATEWAY" /etc/sysconfig/network-scripts/ifcfg-${DEV} > /dev/null; then
+        echo "GATEWAY=${GATEWAY}" >> /etc/sysconfig/network-scripts/ifcfg-${DEV}
+    fi
+    local ETH=${DEV}
+    local driver=`ethtool -i ${ETH} | grep driver | awk '{print $2}'`
+
+    if [[ ${driver} == "igb" ]] && ! grep "RSS=8,8" /etc/modprobe.conf | grep "igb" &>/dev/null ;then
+        sed -i '/options igb.*/d' /etc/modprobe.conf
+        sed -i '/^$/d' /etc/modprobe.conf
+        echo "options igb RSS=8,8" >> /etc/modprobe.conf
+
+        rmmod igb && modprobe igb && /etc/init.d/network start && /etc/rc.local
+    fi
+}
+
+set_affinity() {
+    MASK=$((1<<$VEC))
+    printf "%s mask=%X for /proc/irq/%d/smp_affinity\n" $DEV $MASK $IRQ 2>/dev/null
+    printf "%X" $MASK > /proc/irq/$IRQ/smp_affinity 2>/dev/null
+    #echo $DEV mask=$MASK for /proc/irq/$IRQ/smp_affinity
+    #echo $MASK > /proc/irq/$IRQ/smp_affinity
+}
+
+if [[ ${#netCards} -eq 0 ]]; then
+    exit 1
+fi
+# check for irqbalance running
+IRQBALANCE_ON=`ps ax | grep -v grep | grep -q irqbalance; echo $?`
+if [ "$IRQBALANCE_ON" == "0" ] ; then
+        echo " WARNING: irqbalance is running and will"
+        echo "          likely override this script's affinitization."
+        echo "          Please stop the irqbalance service and/or execute"
+        echo "          'killall irqbalance'"
+fi
+
+for DEV in $(echo ${netCards}); do
+    #
+    # Set up the desired devices.
+    #
+    eth_interrputs=$(cat /proc/interrupts | grep "${DEV}" | wc -l )
+    if [[ ${eth_interrputs} -le 2 ]]; then
+        readd_mod ${DEV}
+    fi
+    for DIR in rx tx TxRx fp ''; do
+        MAX=`grep $DEV-$DIR /proc/interrupts | wc -l`
+        if [ "$MAX" == "0" ] ; then
+          MAX=`egrep -i "$DEV:.*$DIR" /proc/interrupts | wc -l`
+        fi
+        if [ "$MAX" == "0" ] ; then
+          echo no $DIR vectors found on $DEV
+          continue
+          #exit 1
+        fi
+        for VEC in `seq 0 1 $MAX`; do
+        if [ "x$DIR" = "x" ]; then
+              IRQ=`cat /proc/interrupts | grep -i $DEV-$DIR$VEC"$"  | cut  -d:  -f1 | sed "s/ //g"`
+        else
+          IRQ=`cat /proc/interrupts | grep -i $DEV-$DIR-$VEC"$"  | cut  -d:  -f1 | sed "s/ //g"`
+        fi
+
+        if [ -n  "$IRQ" ]; then
+          set_affinity
+        else
+           IRQ=`cat /proc/interrupts | egrep -i $DEV:v$VEC-$DIR"$"  | cut  -d:  -f1 | sed "s/ //g"`
+           if [ -n  "$IRQ" ]; then
+             set_affinity
+           fi
+        fi
+       done
+    done
+done
+
 init() {
     // config core dump dir
     mkdir -p /home/disk2/coresave
@@ -34,6 +113,7 @@ init() {
     mkdir -p $AGENT_HOME/gc_dir
     mkdir -p $AGENT_HOME/log
     echo 0 > /proc/sys/kernel/printk
+    ulimit -n 65536
 }
 
 download_pkg() {
@@ -48,6 +128,7 @@ download_pkg() {
     echo "--agent_ip=$AGENT_IP" >> conf/galaxy.flag
     df -h | grep ssd | awk '{print $6}' >> conf/mount_bind.template
     df -h | grep disk | awk '{print $6}' >> conf/mount_bind.template
+    echo "/home/opt" >> conf/mount_bind.template
 }
 
 start() {
