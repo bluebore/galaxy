@@ -72,11 +72,13 @@ protected:
                                         + "_stop"); 
     }
     bool InitCpuSubSystem();
+    bool InitBlkSubSystem();
     bool HandleHardlimitChange(int32_t hardlimit_cores);
     bool HandleInitTaskCpuCgroup(std::string& subsystem, TaskInfo* task);
     bool HandleInitTaskMemCgroup(std::string& subsystem, TaskInfo* task);
     bool HandleInitTaskComCgroup(std::string& subsystem, TaskInfo* task);
     bool HandleInitTaskTcpCgroup(std::string& subsystem, TaskInfo* task);
+    bool HandleInitTaskBlkCgroup(std::string& subsystem, TaskInfo* task);
     int InitTcpthrotEnv();
 
     bool KillTask(TaskInfo* task);

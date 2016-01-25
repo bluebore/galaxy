@@ -55,6 +55,11 @@ DEFINE_int32(agent_background_threads_num, 2, "agent background threads");
 DEFINE_int32(agent_heartbeat_interval, 1000, "agent haertbeat interval ms");
 DEFINE_string(agent_ip, "127.0.0.1", "agent host ip");
 DEFINE_int32(agent_millicores_share, 15000, "agent millicores");
+// work_dir write io share 100M/s
+DEFINE_int64(agent_work_dir_write_io_share, 104857600, "agent work dir write io share");
+// work_dir read io share 50M/s 
+DEFINE_int64(agent_work_dir_read_io_share, 52428800, "agent work dir read io share");
+
 DEFINE_int32(agent_download_package_timeout, 20, "agent download package timeout in seconds");
 DEFINE_int32(agent_download_package_retry_times, 10, "agent download package retry times");
 DEFINE_int64(agent_mem_share, 68719476736, "agent memory");

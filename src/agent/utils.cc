@@ -505,6 +505,16 @@ bool SymbolLink(const std::string& old_path, const std::string& new_path) {
     return true;
 }
 
+bool GetDeviceMajorNumberByPath(const std::string& path, int32_t& major_number) {
+    struct stat sb;
+    if (stat(path.c_str(), &sb) == -1) {
+        return false;
+    }
+    major_number = major(sb.st_dev);
+    return true;
+}
+
+
 }   // ending namespace file
 }   // ending namespace galaxy
 }   // ending namespace baidu

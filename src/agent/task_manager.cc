@@ -26,6 +26,7 @@
 #include "agent/resource_collector.h"
 #include "logging.h"
 #include "timer.h"
+#include "string_util.h"
 #include "utils/trace.h"
 
 DECLARE_string(gce_cgroup_root);
@@ -43,6 +44,8 @@ DECLARE_int64(agent_mem_share);
 DECLARE_string(agent_default_user);
 DECLARE_int32(agent_download_package_timeout);
 DECLARE_int32(agent_download_package_retry_times);
+DECLARE_int64(agent_work_dir_write_io_share);
+DECLARE_int64(agent_work_dir_read_io_share);
 DECLARE_bool(agent_namespace_isolation_switch);
 DECLARE_bool(agent_use_galaxy_oom_killer);
 DECLARE_int32(send_bps_quota);
@@ -99,6 +102,15 @@ int TaskManager::Init() {
             InitTcpthrotEnv();
             cgroup_funcs_.insert(std::make_pair("tcp_throt",
                         boost::bind(&TaskManager::HandleInitTaskTcpCgroup, this, sub_systems[i], _1)));
+        } else if (sub_systems[i] == "blkio") {
+            bool ok = InitBlkSubSystem();
+            if (!ok) {
+                LOG(WARNING, "fail to init blk sub system");
+                return -1;
+            }
+            cgroup_funcs_.insert(std::make_pair("blkio",
+                        boost::bind(&TaskManager::HandleInitTaskBlkCgroup,
+                            this, sub_systems[i], _1)));
         } else {
             cgroup_funcs_.insert(std::make_pair(sub_systems[i], 
              boost::bind(&TaskManager::HandleInitTaskComCgroup, this, sub_systems[i], _1)));
@@ -123,6 +135,69 @@ int TaskManager::Init() {
 
     LOG(INFO, "support cgroups types %u", sub_systems.size());
     return 0;
+}
+
+bool TaskManager::InitBlkSubSystem() {
+    std::vector<std::string> sub_systems; 
+    boost::split(sub_systems,
+            FLAGS_gce_support_subsystems,
+            boost::is_any_of(","),
+            boost::token_compress_on);
+    if (std::find(sub_systems.begin(), sub_systems.end(), "blkio") == sub_systems.end()) { 
+        LOG(WARNING, "blkio sub system is disable");
+        return true;
+    }
+    std::string hierarchy = FLAGS_gce_cgroup_root + "/blkio";
+    if (!file::IsExists(hierarchy)) {
+        LOG(WARNING, "blkio subfolder does not exist");
+        return false;
+    }
+    hierarchies_["blkio"] = hierarchy;
+    std::string galaxy_blkio_folder = hierarchy + "/" + FLAGS_agent_global_cgroup_path;
+    if (!file::IsExists(galaxy_blkio_folder)) {
+        bool mkdir_ok = file::Mkdir(galaxy_blkio_folder);
+        if (!mkdir_ok) {
+            LOG(WARNING, "mkdir global blkio path %s failed", galaxy_blkio_folder.c_str());
+            return false;
+        } 
+    }
+    int32_t major_number;
+    bool get_ok = file::GetDeviceMajorNumberByPath(FLAGS_agent_work_dir, major_number);
+    if (!get_ok) {
+        LOG(WARNING, "fail to get %s major device number", FLAGS_agent_work_dir.c_str());
+        return false;
+    }
+    if (FLAGS_agent_work_dir_read_io_share <= 0) {
+        LOG(WARNING, "invalidate read io share %d", FLAGS_agent_work_dir_read_io_share);
+        return false;
+    }
+
+    if (FLAGS_agent_work_dir_write_io_share <= 0) {
+        LOG(WARNING, "invalidate write io share %d", FLAGS_agent_work_dir_write_io_share);
+        return false;
+    }
+    // 
+	std::string read_limit_string = boost::lexical_cast<std::string>(major_number) + ":0 "
+        + boost::lexical_cast<std::string>(FLAGS_agent_work_dir_read_io_share);
+    if (cgroups::Write(galaxy_blkio_folder,
+            "blkio.throttle.read_bps_device",
+            read_limit_string) != 0) {
+        LOG(WARNING, "set read_bps fail for %s", galaxy_blkio_folder.c_str());
+        return false;
+    };
+    LOG(INFO, "set device which work dir is on read limit %s/s",
+            ::baidu::common::HumanReadableString(FLAGS_agent_work_dir_read_io_share).c_str());
+    std::string write_limit_string = boost::lexical_cast<std::string>(major_number) + ":0"
+        + boost::lexical_cast<std::string>(FLAGS_agent_work_dir_write_io_share);
+    if (cgroups::Write(galaxy_blkio_folder,
+            "blkio.throttle.blkio.throttle.write_bps_device",
+            read_limit_string) != 0) {
+        LOG(WARNING, "set write_bps fail for %s", galaxy_blkio_folder.c_str());
+        return false;
+    };
+    LOG(INFO, "set device which work dir is on write limit %s/s",
+            ::baidu::common::HumanReadableString(FLAGS_agent_work_dir_write_io_share).c_str());
+    return true;
 }
 
 bool TaskManager::InitCpuSubSystem() {
@@ -1036,6 +1111,20 @@ void TaskManager::DelayCheckTaskStageChange(const std::string& task_id) {
                         this, task_id));
 }
 
+bool TaskManager::HandleInitTaskBlkCgroup(std::string& subsystem, TaskInfo* task) {
+    tasks_mutex_.AssertHeld();
+    if (task == NULL) {
+        return false;
+    }
+    if (hierarchies_.find(subsystem) == hierarchies_.end()) {
+        LOG(WARNING, "%s subsystem is disabled", subsystem.c_str());
+        return true;
+    }
+    std::string path = hierarchies_[subsystem] + "/" + FLAGS_agent_global_cgroup_path;
+    task->cgroups[subsystem] = path;
+    return true;
+}
+
 bool TaskManager::HandleInitTaskComCgroup(std::string& subsystem, TaskInfo* task) {
     tasks_mutex_.AssertHeld();
     if (task == NULL) {
@@ -1293,7 +1382,8 @@ int TaskManager::CleanCgroupEnv(TaskInfo* task) {
     }
     std::map<std::string, std::string>::iterator it = task->cgroups.begin();
     for (;it != task->cgroups.end(); ++it) {
-        if (it->first == "tcp_throt") {
+        if (it->first == "tcp_throt"
+            || it->first == "blkio") {
             continue; 
         }
         std::string cgroup_dir = it->second; 
