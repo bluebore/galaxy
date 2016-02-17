@@ -965,10 +965,12 @@ int main(int argc, char* argv[]) {
         fprintf(stderr,"%s", kGalaxyUsage.c_str());
         return -1;
     }
-    bool load_ok = LoadFromCookies(&sid);
-    if (!load_ok) {
-        fprintf(stderr, "please use ./galaxy login to login galaxy system");
-        return -1;
+    if (strcmp(argv[1], "login") != 0) {
+        bool load_ok = LoadFromCookies(&sid);
+        if (!load_ok) {
+            fprintf(stderr, "please use ./galaxy login to login galaxy system");
+            return -1;
+        }
     }
     if (strcmp(argv[1], "submit") == 0) {
         return AddJob();

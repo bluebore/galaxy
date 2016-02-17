@@ -32,7 +32,8 @@ sleep 3
 tar zcf batch.tar.gz ../galaxy
 echo "sleep 10000000000" > longrun.sh
 tar zcf longrun.tar.gz longrun.sh
-../galaxy submit -f sample.json -u root -p root
+../galaxy login -u root -p root
+../galaxy submit -f sample.json
 
 ../galaxy jobs
 ../galaxy agents
