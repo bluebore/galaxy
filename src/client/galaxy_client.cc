@@ -74,6 +74,7 @@ const std::string kGalaxyUsage = "galaxy client.\n"
                                  "    -c cpu       Specify cpu millicores to assign\n"
                                  "    -m memory    Specify memory to assign\n"
                                  "    -e agent     Specify endpoint.\n";
+std::string sid = "";
 
 std::string FormatDate(int64_t datetime) {
     if (datetime < 100) {
@@ -88,23 +89,55 @@ std::string FormatDate(int64_t datetime) {
     return ret;
 }
 
-bool Login(std::string* sid) {
+bool LoadFromCookies(std::string* sid) {
+    FILE* fd = fopen("/tmp/.galaxy_cookies", "r");
+    if (fd == NULL) {
+        return false;
+    }
+    char buf[1024];
+    int len = 0;
+    while ((len = fread(buf, 1, sizeof(buf), fd)) > 0) {
+        sid->append(buf, len);
+    }
+    fclose(fd);
+    return true;
+}
+
+bool SaveCookies(const std::string& sid) {
+    FILE* fd = fopen("/tmp/.galaxy_cookies", "w");
+    if (fd == NULL) {
+        return false;
+    }
+    fputs(sid.c_str(), fd);
+    return true;
+}
+
+int Login() {
     if (FLAGS_u.empty()) {
         fprintf(stderr, "-u is required\n");
-        return false;
+        return -1;
     }
     if (FLAGS_p.empty()) {
         fprintf(stderr, "-p is required\n");
-        return false;
+        return -1;
     }
     std::string master_key = FLAGS_nexus_root_path + FLAGS_master_path; 
     baidu::galaxy::Galaxy* galaxy = baidu::galaxy::Galaxy::ConnectGalaxy(FLAGS_nexus_servers, master_key);
     if (galaxy == NULL) {
         fprintf(stderr, "fail to connect to galaxy\n");
-        return false;
+        return -1;
     }
-    return galaxy->Login(FLAGS_u, FLAGS_p, sid);
+    bool ok = galaxy->Login(FLAGS_u, FLAGS_p, &sid);
+    if (ok) {
+        SaveCookies(sid);
+        fprintf(stdout, "login galaxy successfully\n");
+        return 0;
+    } else {
+        fprintf(stderr, "fail to login galaxy\n");
+    }
+    return -1;
 }
+
 int ReadableStringToInt(const std::string& input, int64_t* output) {
     if (output == NULL) {
         return -1;
@@ -456,13 +489,7 @@ int AddJob() {
     if (FLAGS_f.empty()) {
         fprintf(stderr, "-f is required\n");
         return -1;
-    }
-    std::string sid;
-    bool ok = Login(&sid);
-    if (!ok) {
-        fprintf(stderr, "fail to login galaxy\n");
-        return -1;
-    }
+    } 
     std::string master_key = FLAGS_nexus_root_path + FLAGS_master_path; 
     baidu::galaxy::Galaxy* galaxy = baidu::galaxy::Galaxy::ConnectGalaxy(FLAGS_nexus_servers, master_key);
     baidu::galaxy::JobDescription job;
@@ -472,7 +499,7 @@ int AddJob() {
         return -1;
     }
     std::string jobid;
-    ok = galaxy->SubmitJob(job, sid, &jobid);
+    bool ok = galaxy->SubmitJob(job, sid, &jobid);
     if (!ok) {
         fprintf(stderr, "Submit job fail\n");
         return 1;
@@ -482,13 +509,6 @@ int AddJob() {
 }
 
 int UpdateJob() { 
-    std::string sid;
-    bool ok = Login(&sid);
-    if (!ok) {
-        fprintf(stderr, "fail to login galaxy\n");
-        return -1;
-    }
-
     std::string master_key = FLAGS_nexus_root_path + FLAGS_master_path; 
     baidu::galaxy::Galaxy* galaxy = baidu::galaxy::Galaxy::ConnectGalaxy(FLAGS_nexus_servers, master_key);
     baidu::galaxy::JobDescription job;
@@ -497,7 +517,7 @@ int UpdateJob() {
         fprintf(stderr, "Fail to build job\n");
         return -1;
     }
-    ok = galaxy->UpdateJob(FLAGS_n, job, sid);
+    bool ok = galaxy->UpdateJob(FLAGS_n, job, sid);
     if (ok) {
         printf("Update job %s ok\n", FLAGS_n.c_str());
         return 0;
@@ -793,15 +813,9 @@ int PreemptPod() {
 
 int ShowQuota () {
     std::string master_key = FLAGS_nexus_root_path + FLAGS_master_path; 
-    baidu::galaxy::Galaxy* galaxy = baidu::galaxy::Galaxy::ConnectGalaxy(FLAGS_nexus_servers, master_key);
-    std::string sid;
-    bool ok = Login(&sid);
-    if (!ok) {
-        fprintf(stderr, "fail to login galaxy \n");
-        return -1;
-    };
+    baidu::galaxy::Galaxy* galaxy = baidu::galaxy::Galaxy::ConnectGalaxy(FLAGS_nexus_servers, master_key); 
     ::baidu::galaxy::QuotaStatus quota;
-    ok = galaxy->GetQuota(sid, &quota);
+    bool ok = galaxy->GetQuota(sid, &quota);
     if (!ok) {
         fprintf(stderr, "fail to get quota\n");
         return -1;
@@ -824,13 +838,7 @@ int KillJob() {
     baidu::galaxy::Galaxy* galaxy = baidu::galaxy::Galaxy::ConnectGalaxy(FLAGS_nexus_servers, master_key);
     if (FLAGS_n.empty()) {
         return 1;
-    }
-    std::string sid;
-    bool ok = Login(&sid);
-    if (!ok) {
-        fprintf(stderr, "fail to login galaxy \n");
-        return -1;
-    }
+    } 
     if (galaxy->TerminateJob(FLAGS_n, sid)) {
         printf("terminate job %s successfully\n", FLAGS_n.c_str());
         return 0;
@@ -902,15 +910,9 @@ int AddUser() {
     if (FLAGS_f.empty()) {
         fprintf(stderr, "-f is required when add user\n");
         return -1;
-    }
-    std::string sid;
-    bool ok = Login(&sid);
-    if (!ok) {
-        fprintf(stderr, "fail to login galaxy \n");
-        return -1;
-    };
+    } 
     ::baidu::galaxy::UserInformation user;
-    ok = BuildUserFromConfig(FLAGS_f, &user);
+    bool ok = BuildUserFromConfig(FLAGS_f, &user);
     if (!ok) {
         fprintf(stderr, "fail to parse user config \n");
         return -1;
@@ -945,14 +947,8 @@ int AssignQuota() {
     if (ret !=0 ) {
         fprintf(stderr, "-m is wrong format");
         return -1;
-    }
-    std::string sid;
-    bool ok = Login(&sid);
-    if (!ok) {
-        fprintf(stderr, "fail to login galaxy \n");
-        return -1;
-    };
-    ok = galaxy->AssignQuota(sid, FLAGS_t, FLAGS_c, memory);
+    } 
+    bool ok = galaxy->AssignQuota(sid, FLAGS_t, FLAGS_c, memory);
     if (!ok) {
         fprintf(stderr, "fail to assign quota to %s\n", FLAGS_t.c_str());
         return -1;
@@ -967,6 +963,11 @@ int main(int argc, char* argv[]) {
     ::google::ParseCommandLineFlags(&argc, &argv, true);
     if(argc < 2){
         fprintf(stderr,"%s", kGalaxyUsage.c_str());
+        return -1;
+    }
+    bool load_ok = LoadFromCookies(&sid);
+    if (!load_ok) {
+        fprintf(stderr, "please use ./galaxy login to login galaxy system");
         return -1;
     }
     if (strcmp(argv[1], "submit") == 0) {
@@ -1004,6 +1005,8 @@ int main(int argc, char* argv[]) {
         return AddUser();
     } else if (strcmp(argv[1], "assign") == 0) {
         return AssignQuota();
+    } else if (strcmp(argv[1], "login") == 0) {
+        return Login();
     } else {
         fprintf(stderr,"%s", kGalaxyUsage.c_str());
         return -1;
