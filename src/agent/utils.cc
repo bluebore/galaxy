@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <string.h>
 #include <pwd.h>
+#include <linux/kdev_t.h>
 
 #include <set>
 #include <boost/bind.hpp>
@@ -503,6 +504,15 @@ bool SymbolLink(const std::string& old_path, const std::string& new_path) {
         return false;
     } 
     return true;
+}
+
+bool GetDeviceMajorNumberByPath(const std::string& path, int32_t& major_number) {
+    struct stat sb;
+    if (stat(path.c_str(), &sb) == -1) {
+        return false;
+     }
+     major_number = major(sb.st_dev);
+     return true;
 }
 
 }   // ending namespace file

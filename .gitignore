@@ -27,3 +27,19 @@ _testmain.go
 *.pb.cc
 
 output/*
+
+# bin files
+master
+scheduler
+agent
+initd
+thirdsrc
+thirdparty
+sandbox/*.log
+galaxy
+initd_cli
+initd_cli_server
+sandbox/data/
+sandbox/work_dir/
+test_agent
+test_initd

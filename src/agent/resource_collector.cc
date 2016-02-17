@@ -12,6 +12,7 @@
 #include <string>
 #include <iostream>
 #include <fstream>
+#include <sys/stat.h>
 #include "gflags/gflags.h"
 #include "boost/lexical_cast.hpp"
 #include "boost/algorithm/string.hpp"
@@ -22,6 +23,21 @@
 
 DECLARE_string(gce_cgroup_root);
 DECLARE_int32(stat_check_period);
+DECLARE_double(max_cpu_usage);
+DECLARE_double(max_mem_usage);
+DECLARE_double(max_disk_r_kbps);
+DECLARE_double(max_disk_w_kbps);
+DECLARE_double(max_disk_r_rate);
+DECLARE_double(max_disk_w_rate);
+DECLARE_double(max_disk_util);
+DECLARE_double(max_net_in_bps);
+DECLARE_double(max_net_out_bps);
+DECLARE_double(max_net_in_pps);
+DECLARE_double(max_net_out_pps);
+DECLARE_double(max_intr_rate);
+DECLARE_double(max_soft_intr_rate);
+DECLARE_int32(max_ex_time);
+DECLARE_string(agent_work_dir);
 
 namespace baidu {
 namespace galaxy {
@@ -283,45 +299,103 @@ SysStat* GlobalResourceCollector::GetStat() {
     return stat_;
 }
 
+bool GlobalResourceCollector::IsItemBusy(const double value, 
+                    const double threshold,
+                    int& ex_time,
+                    const int max_ex_time,
+                    bool& busy,
+                    const std::string title) {
+    if (fabs(threshold) < 1e-6) {
+        return false;
+    }
+    if (value > threshold) {
+        ex_time++;
+        LOG(WARNING, "%s usage %f reach threshold %f ex %d", title.c_str(),
+                value, threshold, ex_time);
+        if (ex_time >= max_ex_time) {
+            ex_time = max_ex_time;
+            busy = true;
+            LOG(WARNING, "item %s set busy", title.c_str());
+        }
+    } else {
+        ex_time--;
+        LOG(WARNING, "%s usage %f under threshold %f ex %d", title.c_str(),
+                value, threshold, ex_time);
+        if (ex_time <= 0) {
+            busy = false;
+            ex_time = 0;
+            LOG(WARNING, "item %s set idle", title.c_str());
+        }
+    }
+    return busy;
+}
+
 int GlobalResourceCollector::CollectStatistics() {
-    bool ret = -1;
-    do {
-        LOG(INFO, "start collect sys stat");
-        stat_->last_stat_ = stat_->cur_stat_;        
-        bool ok = GetGlobalCpuStat();
-        if (!ok) {
-            LOG(WARNING, "fail to get cpu usage");
-            break;
-        }
-        ok = GetGlobalMemStat();
-        if (!ok) {
-            LOG(WARNING, "fail to get mem usage");
-            break;
-        }
-        ok = GetGlobalIntrStat();
-        if (!ok) {
-            LOG(WARNING, "fail to get interupt usage");
-            break;
-        }
-        ok = GetGlobalIOStat();
-        if (!ok) {
-            LOG(WARNING, "fail to get IO usage");
-            break;
-        }
-        ok = GetGlobalNetStat();
-        if (!ok) {
-            LOG(WARNING, "fail to get Net usage");
-            break;
-        }
-        stat_->collect_times_++;
-        if (stat_->collect_times_ < MIN_COLLECT_TIME) {
-            LOG(WARNING, "collect times not reach %d", MIN_COLLECT_TIME);
-            ret = 1;
-            break;
-        }
-        ret = 0;
-    } while(0); 
-    return ret;
+    LOG(INFO, "start collect sys stat");
+    stat_->last_stat_ = stat_->cur_stat_;        
+    bool ok = GetGlobalCpuStat();
+    if (!ok) {
+        LOG(WARNING, "fail to get cpu usage");
+        return 1;
+    }
+    ok = GetGlobalMemStat();
+    if (!ok) {
+        LOG(WARNING, "fail to get mem usage");
+        return 1;
+    }
+    ok = GetGlobalIntrStat();
+    if (!ok) {
+        LOG(WARNING, "fail to get interupt usage");
+        return 1;
+    }
+    ok = GetGlobalIOStat();
+    if (!ok) {
+        LOG(WARNING, "fail to get IO usage");
+        return 1;    
+    }
+    ok = GetGlobalNetStat();
+    if (!ok) {
+        LOG(WARNING, "fail to get Net usage");
+        return 1;
+    }
+    stat_->collect_times_++;
+    if (stat_->collect_times_ < MIN_COLLECT_TIME) {
+        LOG(WARNING, "collect times not reach %d", MIN_COLLECT_TIME);
+        return 2;
+    }
+
+    bool ret = false;
+    ret |= IsItemBusy(stat_->cpu_used_, FLAGS_max_cpu_usage, stat_->cpu_used_ex_,
+                      FLAGS_max_ex_time, stat_->cpu_used_busy_, "cpu");
+    ret |= IsItemBusy(stat_->mem_used_, FLAGS_max_mem_usage, stat_->mem_used_ex_,
+                      FLAGS_max_ex_time, stat_->mem_used_busy_, "mem");
+    ret |= IsItemBusy(stat_->disk_read_Bps_, FLAGS_max_disk_r_kbps, stat_->disk_read_Bps_ex_,
+                      FLAGS_max_ex_time, stat_->disk_read_Bps_busy_, "disk read kBps");
+    ret |= IsItemBusy(stat_->disk_write_Bps_, FLAGS_max_disk_w_kbps, stat_->disk_write_Bps_ex_,
+                      FLAGS_max_ex_time, stat_->disk_write_Bps_busy_, "disk write kBps");
+    ret |= IsItemBusy(stat_->disk_read_times_, FLAGS_max_disk_r_rate, stat_->disk_read_times_ex_,
+                      FLAGS_max_ex_time, stat_->disk_read_times_busy_, "disk read rate");
+    ret |= IsItemBusy(stat_->disk_write_times_, FLAGS_max_disk_w_rate, stat_->disk_write_times_ex_,
+                      FLAGS_max_ex_time, stat_->disk_write_times_busy_, "disk write rate");
+    ret |= IsItemBusy(stat_->disk_io_util_, FLAGS_max_disk_util, stat_->disk_io_util_ex_,
+                      FLAGS_max_ex_time, stat_->disk_io_util_busy_, "disk io util");
+    ret |= IsItemBusy(stat_->net_in_bps_, FLAGS_max_net_in_bps, stat_->net_in_bps_ex_,
+                      FLAGS_max_ex_time, stat_->net_in_bps_busy_, "net in bps");
+    ret |= IsItemBusy(stat_->net_out_bps_, FLAGS_max_net_out_bps, stat_->net_out_bps_ex_,
+                      FLAGS_max_ex_time, stat_->net_out_bps_busy_, "net out bps");
+    ret |= IsItemBusy(stat_->net_in_pps_, FLAGS_max_net_in_pps, stat_->net_in_pps_ex_,
+                      FLAGS_max_ex_time, stat_->net_in_pps_busy_, "net in pps");
+    ret |= IsItemBusy(stat_->net_out_pps_, FLAGS_max_net_out_pps, stat_->net_out_pps_ex_,
+                      FLAGS_max_ex_time, stat_->net_out_pps_busy_, "net out pps");
+    ret |= IsItemBusy(stat_->intr_rate_, FLAGS_max_intr_rate, stat_->intr_rate_ex_,
+                      FLAGS_max_ex_time, stat_->intr_rate_busy_, "interupt rate");
+    ret |= IsItemBusy(stat_->soft_intr_rate_, FLAGS_max_soft_intr_rate, stat_->soft_intr_rate_ex_,
+                      FLAGS_max_ex_time, stat_->soft_intr_rate_busy_, "soft interupt rate");
+    if (ret) {
+        return 3;
+    } else {
+        return 0;
+    }
 }
 
 bool GlobalResourceCollector::GetGlobalCpuStat() {
@@ -535,15 +609,57 @@ bool GlobalResourceCollector::GetGlobalIntrStat() {
 }
 
 bool GlobalResourceCollector::GetGlobalIOStat() {
-    std::string path = "/sys/block/sda/stat";
+    struct stat stat_buf;
+    if (stat(FLAGS_agent_work_dir.c_str(), &stat_buf) != 0) {
+        return false;
+    }
+    int dev_major = major(stat_buf.st_dev);
+    int dev_minor = minor(stat_buf.st_dev);
+    std::ifstream partition("/proc/partitions");
+    if (!partition.is_open()) {
+        LOG(WARNING, "open partitions file fail.");
+        return false;
+    }
+    std::vector<std::string> lines;
+    std::string dev_name;
+    std::ostringstream tmp;
+    tmp << partition.rdbuf();
+    std::string content = tmp.str();
+    partition.close();
+    boost::split(lines, content, boost::is_any_of("\n"));
+    for (size_t n = 0; n < lines.size(); n++) {
+        if (n < 2) {
+            continue;
+        }
+        std::string line = lines[n];
+        boost::trim(line);
+        std::vector<std::string> parts;
+        boost::split(parts, line, boost::is_any_of(" "), boost::token_compress_on);
+        if (boost::lexical_cast<int64_t>(parts[0]) == dev_major
+                && boost::lexical_cast<int64_t>(parts[1]) == dev_minor) {
+            if (parts[3].find("sda") != std::string::npos) {
+                dev_name = "sda";
+                break;
+            } else if (parts[3].find("cciss") != std::string::npos) {
+                dev_name = "cciss!c0d0";
+                break;
+            } else {
+                LOG(WARNING, "can not find dev name");
+                return false;
+            }
+        } else {
+            continue;
+        }
+    }
+    std::string path = "/sys/block/" + dev_name + "/stat";
     std::ifstream stat(path.c_str());
     if (!stat.is_open()) {
         LOG(WARNING, "open proc stat fail.");
         return false;
     }
-    std::ostringstream tmp;
+    tmp.str("");
     tmp << stat.rdbuf(); 
-    std::string content = tmp.str();
+    content = tmp.str();
     stat.close();
     boost::trim(content);
     std::vector<std::string> parts;

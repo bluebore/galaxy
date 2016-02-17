@@ -29,19 +29,6 @@ DECLARE_int64(agent_mem_share);
 DECLARE_string(agent_persistence_path);
 DECLARE_bool(enable_resource_minitor);
 DECLARE_int32(stat_check_period);
-DECLARE_double(max_cpu_usage);
-DECLARE_double(max_mem_usage);
-DECLARE_double(max_disk_r_kbps);
-DECLARE_double(max_disk_w_kbps);
-DECLARE_double(max_disk_r_rate);
-DECLARE_double(max_disk_w_rate);
-DECLARE_double(max_disk_util);
-DECLARE_double(max_net_in_bps);
-DECLARE_double(max_net_out_bps);
-DECLARE_double(max_net_in_pps);
-DECLARE_double(max_net_out_pps);
-DECLARE_double(max_intr_rate);
-DECLARE_double(max_soft_intr_rate);
 DECLARE_int32(agent_recover_threshold);
 
 namespace baidu {
@@ -149,6 +136,9 @@ void AgentImpl::CreatePodInfo(
         task_info.stage = kTaskStagePENDING;
         task_info.fail_retry_times = 0;
         task_info.max_retry_times = 10;
+        if (req->has_job_name()) {
+            task_info.job_name = req->job_name();
+        }
         pod_info->tasks[task_info.task_id] = task_info;
     }
     if (req->has_job_name()) {
@@ -347,7 +337,6 @@ bool AgentImpl::PingMaster() {
     HeartBeatRequest request;
     HeartBeatResponse response;
     request.set_endpoint(endpoint_);
-    LOG(WARNING, "agent %s ping master : %s", endpoint_.c_str(), master_endpoint_.c_str());
     return rpc_client_->SendRequest(master_,
                                     &Master_Stub::HeartBeat,
                                     &request,
@@ -524,82 +513,13 @@ void AgentImpl::ShowPods(::google::protobuf::RpcController* /*cntl*/,
 }
 
 void AgentImpl::CheckSysHealth() {
-    bool ret = true;
     int coll_rlt = resource_collector_.CollectStatistics();
-    if (coll_rlt == -1) {
-        LOG(WARNING, "Collect sys stat fail.");
-        ret = false;
-    } else if (coll_rlt == 1)  {
-        background_threads_.DelayTask(FLAGS_stat_check_period, boost::bind(&AgentImpl::CheckSysHealth, this));
-        return;
-    } else if (fabs(FLAGS_max_cpu_usage) >= 1e-6 
-            && resource_collector_.GetStat()->cpu_used_ > FLAGS_max_cpu_usage) {
-        LOG(WARNING, "cpu uage %f reach threshold %f",
-                resource_collector_.GetStat()->cpu_used_, FLAGS_max_cpu_usage);
-        ret = false;
-    } else if (fabs(FLAGS_max_mem_usage) >= 1e-6 
-            && resource_collector_.GetStat()->mem_used_ > FLAGS_max_mem_usage) {
-        LOG(WARNING, "mem usage %f reach threshold %f",
-                resource_collector_.GetStat()->mem_used_, FLAGS_max_mem_usage);
-        ret = false;
-    } else if (fabs(FLAGS_max_disk_r_kbps) >= 1e-6
-            && resource_collector_.GetStat()->disk_read_Bps_ > FLAGS_max_disk_r_kbps) {
-        LOG(WARNING, "disk read Bps %f reach threshold %f",
-                resource_collector_.GetStat()->disk_read_Bps_, FLAGS_max_disk_r_kbps);
-        ret = false;
-    } else if (fabs(FLAGS_max_disk_w_kbps) >= 1e-6 
-            && resource_collector_.GetStat()->disk_write_Bps_ > FLAGS_max_disk_w_kbps) {
-        LOG(WARNING, "disk write Bps %f reach threshold %f",
-                resource_collector_.GetStat()->disk_write_Bps_, FLAGS_max_disk_w_kbps);
-        ret = false;
-    } else if (fabs(FLAGS_max_disk_r_rate) >= 1e-6
-            && resource_collector_.GetStat()->disk_read_times_ > FLAGS_max_disk_r_rate) {
-        LOG(WARNING, "disk write rate %f reach threshold %f",
-                resource_collector_.GetStat()->disk_read_times_, FLAGS_max_disk_r_rate);
-        ret = false;
-    } else if (fabs(FLAGS_max_disk_w_rate) >= 1e-6 &&
-            resource_collector_.GetStat()->disk_write_times_ > FLAGS_max_disk_w_rate) {
-        LOG(WARNING, "disk write rate %f reach threshold %f", 
-                resource_collector_.GetStat()->disk_write_times_, FLAGS_max_disk_w_rate);
-        ret = false;
-    } else if (fabs(FLAGS_max_disk_util) >= 1e-6
-            && resource_collector_.GetStat()->disk_io_util_ > FLAGS_max_disk_util) {
-        LOG(WARNING, "disk io util %f reach threshold %f", 
-                resource_collector_.GetStat()->disk_io_util_, FLAGS_max_disk_util);
-        ret = false;
-    } else if (fabs(FLAGS_max_net_in_bps) >= 1e-6
-            && resource_collector_.GetStat()->net_in_bps_ > FLAGS_max_net_in_bps) {
-        LOG(WARNING, "net in bps %f reach threshold %f",
-                resource_collector_.GetStat()->net_in_bps_, FLAGS_max_net_in_bps);
-        ret = false;
-    } else if (fabs(FLAGS_max_net_out_bps) >= 1e-6
-            && resource_collector_.GetStat()->net_out_bps_ > FLAGS_max_net_out_bps) {
-        LOG(WARNING, "net out bps %f reach threshold %f", 
-                resource_collector_.GetStat()->net_out_bps_, FLAGS_max_net_out_bps);
-        ret = false;
-    } else if (fabs(FLAGS_max_net_in_pps) >= 1e-6 
-            && resource_collector_.GetStat()->net_in_pps_ > FLAGS_max_net_in_pps) {
-        LOG(WARNING, "net in pps %f reach threshold %f", 
-                resource_collector_.GetStat()->net_in_bps_, FLAGS_max_net_in_pps);
-        ret = false;
-    } else if (fabs(FLAGS_max_net_out_pps) >= 1e-6 &&
-            resource_collector_.GetStat()->net_out_pps_ > FLAGS_max_net_out_pps) {
-        LOG(WARNING, "net out pps %f reach threshold %f",
-                resource_collector_.GetStat()->net_out_pps_, FLAGS_max_net_out_pps);
-        ret = false;
-    } else if (fabs(FLAGS_max_intr_rate) >= 1e-6  && 
-            resource_collector_.GetStat()->intr_rate_ > FLAGS_max_intr_rate) {
-        LOG(WARNING, "interupt rate %f reach threshold %f", 
-                resource_collector_.GetStat()->intr_rate_, FLAGS_max_intr_rate);
-        ret = false;
-    } else if (fabs(FLAGS_max_soft_intr_rate) >= 1e-6 &&
-            resource_collector_.GetStat()->soft_intr_rate_ > FLAGS_max_soft_intr_rate) {
-        LOG(WARNING, "soft interupt rate %f reach threshold %f",
-                resource_collector_.GetStat()->soft_intr_rate_, FLAGS_max_soft_intr_rate);
-        ret = false;
-    }
-    recover_threshold_++;
-    if (ret) {
+    if (coll_rlt == 1) {
+        LOG(WARNING, "CollectStatistics fail");
+    } else if (coll_rlt == 2) {
+        LOG(INFO, "CollectStatistics not ready");
+    } else if (coll_rlt == 0) {
+        LOG(INFO, "CollectStatistics healthy");
         if ((recover_threshold_ > FLAGS_agent_recover_threshold 
                 && state_ == kOffline) || state_ == kInit) {
             OnlineAgentRequest request;
@@ -619,7 +539,7 @@ void AgentImpl::CheckSysHealth() {
                 LOG(WARNING, "agent state Alive.");
             }
         }
-    } else {
+    } else if (coll_rlt == 3) {
         recover_threshold_ = 0;
         if (state_ != kOffline) {
             MutexLock scope_lock(&lock_);
@@ -641,6 +561,7 @@ void AgentImpl::CheckSysHealth() {
         }
     }
     background_threads_.DelayTask(FLAGS_stat_check_period, boost::bind(&AgentImpl::CheckSysHealth, this));
+    return;
 }
 
 }   // ending namespace galaxy

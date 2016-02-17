@@ -112,6 +112,32 @@ struct SysStat {
     double net_out_pps_;
     double intr_rate_;
     double soft_intr_rate_;
+    int cpu_used_ex_;
+    int mem_used_ex_;
+    int disk_read_Bps_ex_;
+    int disk_write_Bps_ex_;
+    int disk_read_times_ex_;
+    int disk_write_times_ex_;
+    int disk_io_util_ex_;
+    int net_in_bps_ex_;
+    int net_out_bps_ex_;
+    int net_in_pps_ex_;
+    int net_out_pps_ex_;
+    int intr_rate_ex_;
+    int soft_intr_rate_ex_;
+    bool cpu_used_busy_;
+    bool mem_used_busy_;
+    bool disk_read_Bps_busy_;
+    bool disk_write_Bps_busy_;
+    bool disk_read_times_busy_;
+    bool disk_write_times_busy_;
+    bool disk_io_util_busy_;
+    bool net_in_bps_busy_;
+    bool net_out_bps_busy_;
+    bool net_in_pps_busy_;
+    bool net_out_pps_busy_;
+    bool intr_rate_busy_;
+    bool soft_intr_rate_busy_;
     int collect_times_;
     SysStat():last_stat_(),
               cur_stat_(),
@@ -128,6 +154,32 @@ struct SysStat {
               net_out_pps_(0.0),
               intr_rate_(0.0),
               soft_intr_rate_(0.0),
+              cpu_used_ex_(0),
+              mem_used_ex_(0),
+              disk_read_Bps_ex_(0),
+              disk_write_Bps_ex_(0),
+              disk_read_times_ex_(0),
+              disk_write_times_ex_(0),
+              disk_io_util_ex_(0),
+              net_in_bps_ex_(0),
+              net_out_bps_ex_(0),
+              net_in_pps_ex_(0),
+              net_out_pps_ex_(0),
+              intr_rate_ex_(0),
+              soft_intr_rate_ex_(0),
+              cpu_used_busy_(false),
+              mem_used_busy_(false),
+              disk_read_Bps_busy_(false),
+              disk_write_Bps_busy_(false),
+              disk_read_times_busy_(false),
+              disk_write_times_busy_(false),
+              disk_io_util_busy_(false),
+              net_in_bps_busy_(false),
+              net_out_bps_busy_(false),
+              net_in_pps_busy_(false),
+              net_out_pps_busy_(false),
+              intr_rate_busy_(false),
+              soft_intr_rate_busy_(false),
               collect_times_(0) {
         }
     ~SysStat(){
@@ -222,7 +274,12 @@ private:
     bool GetGlobalNetStat();
     bool GetGlobalIOStat();
     bool CheckSysHealth();
-    
+    bool IsItemBusy(const double value,
+                    const double threshold,
+                    int& ex_time,
+                    const int max_ex_time,
+                    bool& busy,
+                    const std::string title);
 private:
     SysStat* stat_;
 };

@@ -26,6 +26,7 @@
 #include "agent/resource_collector.h"
 #include "logging.h"
 #include "timer.h"
+#include "string_util.h"
 #include "utils/trace.h"
 
 DECLARE_string(gce_cgroup_root);
@@ -99,6 +100,9 @@ int TaskManager::Init() {
             InitTcpthrotEnv();
             cgroup_funcs_.insert(std::make_pair("tcp_throt",
                         boost::bind(&TaskManager::HandleInitTaskTcpCgroup, this, sub_systems[i], _1)));
+        } else if (sub_systems[i] == "blkio") {
+            cgroup_funcs_.insert(std::make_pair("blkio",
+                        boost::bind(&TaskManager::HandleInitTaskBlkioCgroup, this, sub_systems[i], _1)));
         } else {
             cgroup_funcs_.insert(std::make_pair(sub_systems[i], 
              boost::bind(&TaskManager::HandleInitTaskComCgroup, this, sub_systems[i], _1)));
@@ -368,7 +372,8 @@ void TaskManager::CollectIO(const std::string& task_id) {
     CGroupIOStatistics current;
     bool ok = CGroupIOCollector::Collect(freezer_path, &current);
     if (!ok) {
-        LOG(WARNING, "fail to collect io stat for task %s", task_id.c_str());
+        LOG(WARNING, "fail to collect io stat for task %s",
+                task_id.c_str());
     }else {
         MutexLock scope_lock(&tasks_mutex_);
         std::map<std::string, TaskInfo*>::iterator it = tasks_.find(task_id); 
@@ -397,6 +402,11 @@ void TaskManager::CollectIO(const std::string& task_id) {
             }
             task->status.mutable_resource_used()->set_read_bytes_ps(read_bytes_ps);
             task->status.mutable_resource_used()->set_write_bytes_ps(write_bytes_ps);
+            LOG(INFO, "pod %s of job %s read_bytes_ps %s/s write_bytes_ps %s/s",
+                    task->pod_id.c_str(),
+                    task->job_name.c_str(),
+                    ::baidu::common::HumanReadableString(read_bytes_ps).c_str(),
+                    ::baidu::common::HumanReadableString(write_bytes_ps).c_str());
             task->status.mutable_resource_used()->set_syscr_ps(syscr_ps);
             task->status.mutable_resource_used()->set_syscw_ps(syscw_ps);
             task->old_io_stat = current;
@@ -459,7 +469,7 @@ int TaskManager::RunTask(TaskInfo* task_info) {
     ExecuteResponse initd_response;
     initd_request.set_key(task_info->main_process.key());
     initd_request.set_commands(task_info->desc.start_command());
-    if (FLAGS_agent_namespace_isolation_switch) {
+    if (FLAGS_agent_namespace_isolation_switch && task_info->desc.namespace_isolation()) {
         initd_request.set_chroot_path(task_info->task_chroot_path); 
         std::string* chroot_path = initd_request.add_envs();
         chroot_path->append("CHROOT_PATH=");
@@ -541,7 +551,8 @@ int TaskManager::TerminateTask(TaskInfo* task_info) {
     ExecuteResponse initd_response;
     initd_request.set_key(task_info->stop_process.key());
     initd_request.set_commands(stop_command);
-    if (FLAGS_agent_namespace_isolation_switch) {
+    if (FLAGS_agent_namespace_isolation_switch
+            && task_info->desc.namespace_isolation()) {
         initd_request.set_chroot_path(task_info->task_chroot_path); 
         std::string* chroot_path = initd_request.add_envs();
         chroot_path->append("CHROOT_PATH=");
@@ -694,7 +705,8 @@ int TaskManager::DeployTask(TaskInfo* task_info) {
     ExecuteResponse initd_response;
     initd_request.set_key(task_info->deploy_process.key());
     initd_request.set_commands(deploy_command);
-    if (FLAGS_agent_namespace_isolation_switch) {
+    if (FLAGS_agent_namespace_isolation_switch
+            && task_info->desc.namespace_isolation()) {
         initd_request.set_chroot_path(task_info->task_chroot_path); 
         std::string* chroot_path = initd_request.add_envs();
         chroot_path->append("CHROOT_PATH=");
@@ -937,7 +949,7 @@ int TaskManager::RunProcessCheck(TaskInfo* task_info) {
                 task_info->task_id.c_str(),
                 task_info->main_process.exit_code()); 
         task_info->status.set_state(kTaskError);
-        Trace::TraceTaskEvent(TERROR, 
+        Trace::TraceTaskEvent(TERROR,
                               task_info,
                               "main process err exit", 
                               kTaskError,
@@ -1114,7 +1126,7 @@ bool TaskManager::HandleInitTaskMemCgroup(std::string& subsystem , TaskInfo* tas
             return false;
         }
     }
-	const int GROUP_KILL_MODE = 0;
+    const int GROUP_KILL_MODE = 0;
     if (file::IsExists(mem_path + "/memory.kill_mode") 
           && cgroups::Write(mem_path,
                 "memory.kill_mode", 
@@ -1162,7 +1174,7 @@ bool TaskManager::HandleInitTaskCpuCgroup(std::string& subsystem, TaskInfo* task
             LOG(WARNING, "disable cpu limit failed for %s", cpu_path.c_str()); 
             return false;
         } 
-    }else {
+    } else {
         LOG(INFO, "create hard limit task %s", task->task_id.c_str());
         std::string cpu_path = hierarchies_["cpu"] + "/" + FLAGS_agent_global_hardlimit_path + "/" + task->task_id;
         if (!file::Mkdir(cpu_path)) {
@@ -1186,6 +1198,62 @@ bool TaskManager::HandleInitTaskCpuCgroup(std::string& subsystem, TaskInfo* task
             hardlimit_cores_ = old_hardlimit_cores;
             return false;
         }
+    }
+    return true;
+}
+
+bool TaskManager::HandleInitTaskBlkioCgroup(std::string& subsystem, TaskInfo* task) {
+    tasks_mutex_.AssertHeld();
+    if (task == NULL) {
+        return false;
+    }
+    LOG(INFO, "create cgroup %s for task %s", subsystem.c_str(), task->task_id.c_str());
+    if (hierarchies_.find("blkio") == hierarchies_.end()) {
+        LOG(WARNING, "blkio subsystem is disabled");
+        return true;
+    }
+    std::string blkio_path = hierarchies_["blkio"] + "/" + FLAGS_agent_global_cgroup_path + "/"
+                           + task->task_id;
+    if (!file::Mkdir(blkio_path)) {
+        LOG(WARNING, "create dir %s failed for %s", blkio_path.c_str(), task->task_id.c_str());
+        return false;
+    }
+    task->cgroups["blkio"] = blkio_path;
+    int32_t major_number;
+    bool ok = file::GetDeviceMajorNumberByPath(FLAGS_agent_work_dir, major_number);
+    if (!ok) {
+        LOG(WARNING, "get device major  for task %s fail", task->task_id.c_str());
+        return false;
+    }
+    int64_t read_bytes_ps = task->desc.requirement().read_bytes_ps();
+    if (read_bytes_ps > 0) {
+        std::string read_limit_string = boost::lexical_cast<std::string>(major_number) + ":0 "
+            + boost::lexical_cast<std::string>(read_bytes_ps);
+        if (cgroups::Write(blkio_path,
+                "blkio.throttle.read_bps_device",
+                read_limit_string) != 0) {
+            LOG(WARNING, "set read_bps fail for %s", blkio_path.c_str());
+            return false;
+        };
+    } else {
+        LOG(WARNING, "ignore read bytes ps of task  podid %s of job %s",
+                task->pod_id.c_str(),
+                task->job_name.c_str());
+    }
+    int64_t write_bytes_ps = task->desc.requirement().write_bytes_ps();
+    if (write_bytes_ps > 0) {
+        std::string write_limit_string = boost::lexical_cast<std::string>(major_number) + ":0 "
+            + boost::lexical_cast<std::string>(write_bytes_ps);
+        if (cgroups::Write(blkio_path,
+            "blkio.throttle.write_bps_device",
+            write_limit_string) != 0) {
+            LOG(WARNING, "set write_bps fail for %s", blkio_path.c_str());
+            return false;
+        }; 
+    } else {
+        LOG(WARNING, "ignore write bytes ps of task podid %s of job %s",
+                task->pod_id.c_str(),
+                task->job_name.c_str());
     }
     return true;
 }

@@ -243,7 +243,8 @@ int PodManager::CleanPodEnv(const PodInfo& pod_info) {
         return 0; 
     }
 
-    LOG(WARNING, "pod gc path %s", pod_info.pod_status.pod_gc_path().c_str());
+    LOG(WARNING, "pod of job %s gc path %s", pod_info.job_name.c_str(),
+            pod_info.pod_status.pod_gc_path().c_str());
     std::string new_workspace_dir = pod_info.pod_status.pod_gc_path();
     if (::access(new_workspace_dir.c_str(), F_OK) == 0) {
         LOG(WARNING, "path %s is already exists", new_workspace_dir.c_str()); 
@@ -285,7 +286,9 @@ int PodManager::CheckPod(const std::string& pod_id) {
             int status = 0;
             pid_t pid = ::waitpid(pod_info.initd_pid, &status, WNOHANG); 
             if (pid == 0) {
-                LOG(WARNING, "fail to kill %s initd", pod_info.pod_id.c_str());
+                LOG(WARNING, "fail to kill %s of job %s initd",
+                        pod_info.pod_id.c_str(),
+                        pod_info.job_name.c_str());
                 return 0;
             }
         }
@@ -294,7 +297,8 @@ int PodManager::CheckPod(const std::string& pod_id) {
             LOG(WARNING, "fail to clean %s env", pod_info.pod_id.c_str()); 
             return 0;
         }
-        LOG(INFO, "remove pod %s", pod_info.pod_id.c_str());
+        LOG(INFO, "remove pod %s of job %s", pod_info.pod_id.c_str(),
+                pod_info.job_name.c_str());
         pods_.erase(pod_it);
         return -1;
     }
@@ -403,7 +407,9 @@ int PodManager::DeletePod(const std::string& pod_id) {
             return -1;
         }
     }
-    LOG(INFO, "pod %s to delete", pods_it->first.c_str());
+    LOG(INFO, "pod %s of job %s to delete",
+            pods_it->first.c_str(),
+            pod_info.job_name.c_str());
     return 0;
 }
 
@@ -431,15 +437,35 @@ int PodManager::AddPod(const PodInfo& info) {
         + internal_info.pod_id + "_" + time_str;
     internal_info.pod_status.set_pod_gc_path(gc_dir);
     internal_info.pod_status.set_start_time(::baidu::common::timer::get_micros());
-    LOG(WARNING, "pod gc path %s", pods_[info.pod_id].pod_status.pod_gc_path().c_str());
+    LOG(WARNING, "pod of job %s gc path %s", internal_info.job_name.c_str(),
+            pods_[info.pod_id].pod_status.pod_gc_path().c_str());
 
     if (AllocPortForInitd(internal_info.initd_port) != 0){
         LOG(WARNING, "pod %s alloc port for initd failed",
                 internal_info.pod_id.c_str()); 
         return -1;
     }
+    LOG(INFO, "run pod with namespace_isolation: [%d]", internal_info.pod_desc.namespace_isolation());
+    if (internal_info.pod_desc.requirement().read_bytes_ps() > 0) {
+        LOG(INFO, "run pod %s of job %s with read_bytes_ps: [%ld]", 
+                info.pod_id.c_str(), info.job_name.c_str(),
+                internal_info.pod_desc.requirement().read_bytes_ps());
+    } else {
+        LOG(INFO, "run pod %s of job %s without read_bytes_ps limit",
+                info.pod_id.c_str(), info.job_name.c_str());
+    }
+
+    if (internal_info.pod_desc.requirement().write_bytes_ps() > 0) {
+        LOG(INFO, "run pod %s of job %s with write bytes ps: %ld",
+                info.pod_id.c_str(), info.job_name.c_str(),
+                info.pod_desc.requirement().write_bytes_ps());
+    } else {
+        LOG(INFO, "run pod %s of job %s without write limit",
+                info.pod_id.c_str(), info.job_name.c_str());
+    }
+
     int lanuch_initd_ret = -1;
-    if (FLAGS_agent_namespace_isolation_switch) {
+    if (FLAGS_agent_namespace_isolation_switch && internal_info.pod_desc.namespace_isolation()) {
         lanuch_initd_ret = LanuchInitd(&internal_info);
     } else {
         lanuch_initd_ret = LanuchInitdByFork(&internal_info); 
@@ -487,7 +513,9 @@ int PodManager::ReloadPod(const PodInfo& info) {
     std::map<std::string, PodInfo>::iterator pods_it = 
         pods_.find(info.pod_id);
     if (pods_it != pods_.end()) {
-        LOG(WARNING, "pod %s already loaded", info.pod_id.c_str()); 
+        LOG(WARNING, "pod %s of job %s already loaded", 
+                info.pod_id.c_str(),
+                info.job_name.c_str()); 
         return 0;
     }
     pods_[info.pod_id] = info;
@@ -507,6 +535,7 @@ int PodManager::ReloadPod(const PodInfo& info) {
         task_it->second.pod_id = info.pod_id; 
         task_it->second.initd_endpoint = "127.0.0.1:";
         task_it->second.job_id = internal_info.job_id;
+        task_it->second.job_name = info.job_name;
         task_it->second.gc_dir = gc_dir;
         task_it->second.initd_endpoint.append(
                 boost::lexical_cast<std::string>(
@@ -522,7 +551,7 @@ int PodManager::ReloadPod(const PodInfo& info) {
     internal_info.pod_path = FLAGS_agent_work_dir + "/" + internal_info.pod_id;
     LOG(INFO, "reload pod %s job %s initd pid %d at %s success ", 
             internal_info.pod_id.c_str(), 
-            internal_info.job_id.c_str(),
+            internal_info.job_name.c_str(),
             internal_info.initd_pid,
             internal_info.pod_path.c_str());
     return 0;

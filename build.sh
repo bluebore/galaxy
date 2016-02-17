@@ -22,7 +22,7 @@ then
     echo "boost exist"
 else
     echo "start install boost...."
-    wget http://superb-dca2.dl.sourceforge.net/project/boost/boost/1.57.0/boost_1_57_0.tar.gz >/dev/null
+    wget -O boost_1_57_0.tar.gz https://github.com/imotai/common_deps/releases/download/boost/boost_1_57.tar.gz >/dev/null
     tar zxf boost_1_57_0.tar.gz >/dev/null
     rm -rf ${DEPS_PREFIX}/boost_1_57_0
     mv boost_1_57_0 ${DEPS_PREFIX}
@@ -161,21 +161,6 @@ else
     cd -
 fi
 
-if [ -d "leveldb" ]
-then
-    echo "leveldb exist"
-else
-
-    # leveldb
-    git clone https://github.com/imotai/leveldb.git
-    cd leveldb
-    make -j8 >/dev/null 
-    cp -rf include/* ${DEPS_PREFIX}/include
-    cp libleveldb.a ${DEPS_PREFIX}/lib
-    cd -
-fi
-
-
 if [ -d "ins" ]
 then
     echo "ins exist"
@@ -187,11 +172,9 @@ else
     sed -i 's/^PROTOBUF_PATH=.*/PROTOBUF_PATH=..\/..\/thirdparty/' Makefile
     sed -i 's/^PROTOC_PATH=.*/PROTOC_PATH=..\/..\/thirdparty\/bin/' Makefile
     sed -i 's/^PROTOC=.*/PROTOC=..\/..\/thirdparty\/bin\/protoc/' Makefile
-    sed -i 's|^PREFIX=.*|PREFIX=..\/..\/thirdparty|' Makefile
-    sed -i 's|^PROTOC=.*|PROTOC=${PREFIX}/bin/protoc|' Makefile
     sed -i 's/^GFLAGS_PATH=.*/GFLAGS_PATH=..\/..\/thirdparty/' Makefile
-    sed -i 's/^LEVELDB_PATH=.*/LEVELDB_PATH=..\/..\/thirdparty/' Makefile
     sed -i 's/^GTEST_PATH=.*/GTEST_PATH=..\/..\/thirdparty/' Makefile
+    sed -i 's/^PREFIX=.*/PREFIX=..\/..\/thirdparty/' Makefile
     export PATH=${DEPS_PREFIX}/bin:$PATH
     export BOOST_PATH=${DEPS_PREFIX}/boost_1_57_0
     export PBRPC_PATH=${DEPS_PREFIX}/
@@ -200,6 +183,21 @@ else
     cp -rf output/python/* ../../optools/
     cd -
 fi
+
+if [ -d "leveldb" ]
+then
+    echo "leveldb exist"
+else
+
+    # leveldb
+    git clone https://github.com/google/leveldb.git
+    cd leveldb
+    make -j8 >/dev/null 
+    cp -rf include/* ${DEPS_PREFIX}/include
+    cp out-static/libleveldb.a ${DEPS_PREFIX}/lib
+    cd -
+fi
+
 
 
 if [ -d "mdt" ]

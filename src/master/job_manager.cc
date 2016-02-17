@@ -366,6 +366,7 @@ void JobManager::FillPodsToJob(Job* job) {
         LOG(INFO, "move job %s to scale down queue job update_state_ %s", job->id_.c_str(), JobUpdateState_Name(job->update_state_).c_str());
         scale_down_jobs_.insert(job->id_);
     }
+    LOG(INFO, "pod namespace_isolation is: [%d]", job->desc_.pod().namespace_isolation());
     for(int i = pods_size; i < job->desc_.replica(); i++) {
         PodId pod_id = MasterUtil::UUID();
         PodStatus* pod_status = new PodStatus();

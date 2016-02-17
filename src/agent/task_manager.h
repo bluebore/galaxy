@@ -77,6 +77,7 @@ protected:
     bool HandleInitTaskMemCgroup(std::string& subsystem, TaskInfo* task);
     bool HandleInitTaskComCgroup(std::string& subsystem, TaskInfo* task);
     bool HandleInitTaskTcpCgroup(std::string& subsystem, TaskInfo* task);
+    bool HandleInitTaskBlkioCgroup(std::string& subsystem, TaskInfo* task);
     int InitTcpthrotEnv();
 
     bool KillTask(TaskInfo* task);

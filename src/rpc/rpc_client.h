@@ -28,6 +28,7 @@ public:
         _rpc_client = new sofa::pbrpc::RpcClient(options);
     }
     ~RpcClient() {
+        _rpc_client->Shutdown();
         delete _rpc_client;
     }
     template <class T>
