@@ -37,8 +37,11 @@ public:
         delete rpc_client_;
         delete nexus_;
     }
-    bool SubmitJob(const JobDescription& job, std::string* job_id);
-    bool UpdateJob(const std::string& jobid, const JobDescription& job);
+    bool SubmitJob(const JobDescription& job, const std::string& sid,
+                  std::string* job_id);
+    bool UpdateJob(const std::string& jobid,
+                   const JobDescription& job,
+                   const std::string& sid);
     bool ListJobs(std::vector<JobInformation>* jobs);
     bool ListAgents(std::vector<NodeDescription>* nodes);
     bool TerminateJob(const std::string& jobname, 
@@ -159,6 +162,8 @@ bool GalaxyImpl::Login(const std::string& name,
         return false;
     }
     *sid = response.sid();
+    return true;
+}
 
 bool GalaxyImpl::BuildMasterClient() {
     delete master_;
