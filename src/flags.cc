@@ -112,3 +112,4 @@ DEFINE_double(max_net_out_pps, 0.0, "max net out packets per second");
 DEFINE_double(max_intr_rate, 0.0, "max interupt times per second");
 DEFINE_double(max_soft_intr_rate, 0.0, "max soft interupt times per second");
 DEFINE_int32(max_ex_time, 0, "max exception time");
+DEFINE_string(loop_dev_file, "/home/.FS_on_file_galaxy_agent", "loop device file for agent");
