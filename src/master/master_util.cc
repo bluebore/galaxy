@@ -6,6 +6,7 @@
 
 #include <sstream>
 #include <sys/utsname.h>
+#include <boost/algorithm/string/replace.hpp>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
@@ -26,6 +27,15 @@ std::string MasterUtil::UUID() {
     return boost::lexical_cast<std::string>(uuid); 
 }
 
+std::string MasterUtil::ShortJobName(const JobDescriptor& job_desc) {
+    std::string job_name = "";
+    if (job_desc.has_name()) {
+        job_name = boost::replace_all_copy(job_desc.name(), " ", "-");
+        return job_name.substr(0, 20);
+    } else {
+        return job_name;
+    }
+}
 
 void MasterUtil::AddResource(const Resource& from, Resource* to) {
     to->set_millicores(to->millicores() + from.millicores());
