@@ -237,6 +237,8 @@ bool GalaxyImpl::FillJobDescriptor(const JobDescription& sdk_job,
     }
     pod_res->set_read_bytes_ps(sdk_job.pod.requirement.read_bytes_ps);
     pod_res->set_write_bytes_ps(sdk_job.pod.requirement.write_bytes_ps);
+    pod_res->set_read_io_ps(sdk_job.pod.requirement.read_io_ps);
+    pod_res->set_write_io_ps(sdk_job.pod.requirement.write_io_ps);
     for (size_t i = 0; i < sdk_job.pod.tasks.size(); i++) {
         TaskDescriptor* task = pod_pb->add_tasks();
         task->set_binary(sdk_job.pod.tasks[i].binary);
@@ -285,6 +287,9 @@ bool GalaxyImpl::FillJobDescriptor(const JobDescription& sdk_job,
         }
         task_res->set_read_bytes_ps(task_res_desc.read_bytes_ps);
         task_res->set_write_bytes_ps(task_res_desc.write_bytes_ps);
+        task_res->set_read_io_ps(task_res_desc.read_io_ps);
+        task_res->set_write_io_ps(task_res_desc.write_io_ps);
+        task_res->set_io_weight(task_res_desc.io_weight);
     }
     if (!sdk_job.label.empty()) {
         job->mutable_pod()->add_labels(sdk_job.label);

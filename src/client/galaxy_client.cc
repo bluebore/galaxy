@@ -339,6 +339,13 @@ int BuildJobFromConfig(const std::string& config, ::baidu::galaxy::JobDescriptio
             return -1;
         } 
     }
+    if (pod_require.HasMember("read_io_ps")) {
+        res->read_io_ps = pod_require["read_io_ps"].GetInt();
+    }
+    if (pod_require.HasMember("write_io_ps")) {
+        res->write_io_ps = pod_require["write_io_ps"].GetInt();
+    }
+
     std::vector< ::baidu::galaxy::TaskDescription>& tasks = pod.tasks;
     if (pod_json.HasMember("tasks")) {
         const rapidjson::Value& tasks_json = pod_json["tasks"];
@@ -417,6 +424,21 @@ int BuildJobFromConfig(const std::string& config, ::baidu::galaxy::JobDescriptio
                     return -1;
                 }
             }
+            if (tasks_json[i]["requirement"].HasMember("read_io_ps")) {
+                res->read_io_ps = tasks_json[i]["requirement"]["read_io_ps"].GetInt64();
+            }
+            if (tasks_json[i]["requirement"].HasMember("write_io_ps")) {
+                res->write_io_ps = tasks_json[i]["requirement"]["write_io_ps"].GetInt64();
+            }
+            if (tasks_json[i]["requirement"].HasMember("io_weight")) {
+                res->io_weight = tasks_json[i]["requirement"]["io_weight"].GetInt();
+                if (res->io_weight < 10 || res->io_weight > 1000) {
+                    fprintf(stderr, "invalid io_weight value %d, io_weight value should in range of [10 - 1000]\n",
+                    tasks_json[i]["requirement"]["io_weight"].GetInt());
+                    return -1;
+                }
+            }
+
             tasks.push_back(task);
         }
     }

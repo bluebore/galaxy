@@ -196,8 +196,17 @@ struct ProcIOStatistics {
     int64_t cancelled_write_bytes;
 };
 
+struct BlkioStatistics {
+    int64_t read;
+    int64_t write;
+    int64_t sync;
+    int64_t async;
+    int64_t total;
+};
+
 struct CGroupIOStatistics{
     std::map<int, ProcIOStatistics> processes;
+    BlkioStatistics blkio;
 };
 
 class CGroupIOCollector{
@@ -205,10 +214,13 @@ class CGroupIOCollector{
 public:
     CGroupIOCollector();
     ~CGroupIOCollector();
-    static bool Collect(const std::string& cgroup_path,
+    static bool Collect(const std::string& freezer_path,
+                        const std::string& blkio_path,
                         CGroupIOStatistics* stat);
 private:
     static bool GetProcIOStat(int pid, ProcIOStatistics* stat);
+    static bool GetBlkioStat(const std::string& group_path,
+                             BlkioStatistics* blkio);
 };
 
 class CGroupResourceCollector : public ResourceCollector {

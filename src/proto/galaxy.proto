@@ -81,6 +81,9 @@ message Resource {
     optional int64 write_bytes_ps = 7;
     optional int64 syscr_ps = 8;
     optional int64 syscw_ps = 9;
+    optional int64 read_io_ps = 10;
+    optional int64 write_io_ps = 11;
+    optional int32 io_weight = 12;
 }
 
 enum MemIsolationType {

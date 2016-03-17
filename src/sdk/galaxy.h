@@ -26,6 +26,9 @@ struct ResDescription {
     std::vector<VolumeDescription> disks;
     int64_t read_bytes_ps;
     int64_t write_bytes_ps;
+    int64_t read_io_ps;
+    int64_t write_io_ps;
+    int32_t io_weight;
     int64_t syscr_ps;
     int64_t syscw_ps;
 };
