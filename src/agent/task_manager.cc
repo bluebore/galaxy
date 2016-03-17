@@ -287,10 +287,9 @@ int TaskManager::ReloadTask(const TaskInfo& task) {
     if (task_info->desc.has_mem_isolation_type() && 
         task_info->desc.mem_isolation_type() == kMemIsolationCgroup && FLAGS_agent_use_galaxy_oom_killer){
         LOG(INFO, "task %s use galaxy oom killer ", task_info->task_id.c_str());
-    }
-    killer_pool_.DelayTask(FLAGS_agent_memory_check_interval,
+        killer_pool_.DelayTask(FLAGS_agent_memory_check_interval,
                           boost::bind(&TaskManager::MemoryCheck, this, task_info->task_id));
-
+    }
     LOG(INFO, "task %s is reload", task_info->task_id.c_str());
     background_thread_.DelayTask(
                     50, 
@@ -337,10 +336,9 @@ int TaskManager::CreateTask(const TaskInfo& task) {
                task_info->desc.mem_isolation_type() == 
                     kMemIsolationCgroup && FLAGS_agent_use_galaxy_oom_killer){
         LOG(INFO, "task %s use galaxy oom killer ", task_info->task_id.c_str());
-    }
-    killer_pool_.DelayTask(FLAGS_agent_memory_check_interval,
+        killer_pool_.DelayTask(FLAGS_agent_memory_check_interval,
                           boost::bind(&TaskManager::MemoryCheck, this, task_info->task_id));
-
+    }
     PrepareIOCollector(task_info);
     LOG(INFO, "task %s is add", task.task_id.c_str());
     background_thread_.DelayTask(
@@ -400,7 +398,7 @@ void TaskManager::CollectIO(const std::string& task_id) {
                 write_bytes_ps += proc_it->second.write_bytes - proc_it->second.cancelled_write_bytes
                     - old_proc_it->second.write_bytes + old_proc_it->second.cancelled_write_bytes;
                 syscr_ps += proc_it->second.syscr - old_proc_it->second.syscr;
-                syscw_ps += proc_it->second.wchar - old_proc_it->second.syscw;
+                syscw_ps += proc_it->second.syscw - old_proc_it->second.syscw;
             }
             task->status.mutable_resource_used()->set_read_bytes_ps(read_bytes_ps);
             task->status.mutable_resource_used()->set_write_bytes_ps(write_bytes_ps);
@@ -1106,12 +1104,9 @@ bool TaskManager::HandleInitTaskMemCgroup(std::string& subsystem , TaskInfo* tas
     if (task->desc.has_mem_isolation_type() && 
             task->desc.mem_isolation_type() == 
                     kMemIsolationLimit) {
-        int ret = cgroups::Write(mem_path, "memory.excess_mode", "1"); //soft limit
-        if (ret == 0) {
-            ret = cgroups::Write(mem_path,
-                                 "memory.limit_in_bytes",
+        int ret = cgroups::Write(mem_path,
+                                 "memory.soft_limit_in_bytes",
                                  boost::lexical_cast<std::string>(memory_limit));    
-        }
         if (ret != 0) {
             LOG(WARNING, "set memory soft limit %ld failed for %s",
                     memory_limit, mem_path.c_str()); 
