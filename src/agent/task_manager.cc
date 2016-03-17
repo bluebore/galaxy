@@ -405,7 +405,7 @@ void TaskManager::CollectIO(const std::string& task_id) {
                 write_bytes_ps += proc_it->second.write_bytes - proc_it->second.cancelled_write_bytes
                     - old_proc_it->second.write_bytes + old_proc_it->second.cancelled_write_bytes;
                 syscr_ps += proc_it->second.syscr - old_proc_it->second.syscr;
-                syscw_ps += proc_it->second.wchar - old_proc_it->second.syscw;
+                syscw_ps += proc_it->second.syscw - old_proc_it->second.syscw;
             }
             int64_t read_io_ps = current.blkio.read - task->old_io_stat.blkio.read;
             int64_t write_io_ps = current.blkio.write - task->old_io_stat.blkio.write;

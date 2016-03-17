@@ -373,7 +373,7 @@ int BuildJobFromConfig(const std::string& config, ::baidu::galaxy::JobDescriptio
                     task.envs.insert(task_envs[i].GetString());
                 }
             }
-            task.cpu_isolation_type= "kCpuIsolationHard";
+            task.cpu_isolation_type= "kCpuIsolationSoft";
             if (tasks_json[i].HasMember("cpu_isolation_type")) {
                 task.cpu_isolation_type = tasks_json[i]["cpu_isolation_type"].GetString();
             }
