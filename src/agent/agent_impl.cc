@@ -520,6 +520,7 @@ void AgentImpl::CheckSysHealth() {
         LOG(INFO, "CollectStatistics not ready");
     } else if (coll_rlt == 0) {
         LOG(INFO, "CollectStatistics healthy");
+        recover_threshold_++;
         if ((recover_threshold_ > FLAGS_agent_recover_threshold 
                 && state_ == kOffline) || state_ == kInit) {
             OnlineAgentRequest request;

@@ -22,7 +22,7 @@ then
     echo "boost exist"
 else
     echo "start install boost...."
-    wget -O boost_1_57_0.tar.gz https://github.com/imotai/common_deps/releases/download/boost/boost_1_57.tar.gz >/dev/null
+    wget --no-check-certificate -O boost_1_57_0.tar.gz https://github.com/imotai/common_deps/releases/download/boost/boost_1_57.tar.gz >/dev/null
     tar zxf boost_1_57_0.tar.gz >/dev/null
     rm -rf ${DEPS_PREFIX}/boost_1_57_0
     mv boost_1_57_0 ${DEPS_PREFIX}
@@ -34,7 +34,7 @@ then
     echo "python exist"
 else
     echo "start download python"
-    wget https://www.python.org/ftp/python/2.7.11/Python-2.7.11.tgz > /dev/null
+    wget --no-check-certificate https://www.python.org/ftp/python/2.7.11/Python-2.7.11.tgz > /dev/null
     tar zxf Python-2.7.11.tgz >/dev/null
     cd Python-2.7.11
     ./configure --prefix=${DEPS_PREFIX}  --disable-shared >/dev/null
@@ -48,7 +48,7 @@ then
     echo "setuptools exist"
 else
     echo "start download setuptools"
-    wget https://pypi.python.org/packages/source/s/setuptools/setuptools-19.2.tar.gz
+    wget --no-check-certificate https://pypi.python.org/packages/source/s/setuptools/setuptools-19.2.tar.gz
     tar -zxvf setuptools-19.2.tar.gz >/dev/null
     cd setuptools-19.2
     python setup.py install >/dev/null
