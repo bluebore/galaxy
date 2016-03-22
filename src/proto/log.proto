@@ -160,6 +160,7 @@ message ClusterStat {
     optional int64 total_pod_count = 14;
     optional int64 total_memory_assigned = 15;
     optional string id = 16;
+    optional int32 safe_mode = 17;
 }
 
 message JobPodPair {

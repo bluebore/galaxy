@@ -33,7 +33,13 @@ SCHEDULER_SRC = $(wildcard src/scheduler/scheduler*.cc)
 SCHEDULER_OBJ = $(patsubst %.cc, %.o, $(SCHEDULER_SRC))
 SCHEDULER_HEADER = $(wildcard src/scheduler/*.h)
 
-AGENT_SRC = $(wildcard src/agent/agent*.cc) src/agent/pod_manager.cc src/agent/task_manager.cc src/agent/utils.cc src/agent/persistence_handler.cc src/agent/cgroups.cc src/agent/resource_collector.cc 
+TRACE_CLIENT_SRC = $(wildcard src/trace_client/*.cc)
+TRACE_CLIENT_OBJ = $(patsubst %.cc, %.o, $(TRACE_CLIENT_SRC))
+
+TRACE_OBJ = $(patsubst %.cpp, %.o, $(wildcard src/trace/*.cpp))
+
+AGENT_SRC = $(wildcard src/agent/agent*.cc) src/agent/pod_manager.cc src/agent/task_manager.cc src/agent/utils.cc src/agent/persistence_handler.cc src/agent/cgroups.cc src/agent/resource_collector.cc
+
 AGENT_OBJ = $(patsubst %.cc, %.o, $(AGENT_SRC))
 AGENT_HEADER = $(wildcard src/agent/*.h) 
 TEST_AGENT_SRC = src/agent/test_agent.cc src/agent/resource_collector.cc src/agent/cgroups.cc src/agent/utils.cc 
@@ -84,19 +90,23 @@ $(MASTER_OBJ): $(MASTER_HEADER) $(UTILS_HEADER)
 $(AGENT_OBJ): $(AGENT_HEADER)
 $(SDK_OBJ): $(SDK_HEADER)
 $(SCHEDULER_OBJ): $(UTILS_HEADER)
+#$(TRACE_CLIENT_OBJ) : $(TRACE_CLIENT_HEADER)
 
 # Targets
-master: $(MASTER_OBJ) $(UTILS_OBJ) $(OBJS)
-	$(CXX) $(MASTER_OBJ) $(UTILS_OBJ) $(OBJS) -o $@  $(LDFLAGS)
+master: $(MASTER_OBJ) $(UTILS_OBJ) $(OBJS) $(TRACE_CLIENT_OBJ)
+	$(CXX) $(MASTER_OBJ) $(UTILS_OBJ) $(OBJS) $(TRACE_CLIENT_OBJ) -o $@  $(LDFLAGS)
 
-scheduler: $(SCHEDULER_OBJ) $(OBJS) $(WATCHER_OBJ) $(UTILS_OBJ) 
-	$(CXX) $(SCHEDULER_OBJ) $(UTILS_OBJ) $(WATCHER_OBJ) $(OBJS) -o $@  $(LDFLAGS)
+scheduler: $(SCHEDULER_OBJ) $(OBJS) $(WATCHER_OBJ) $(UTILS_OBJ) $(TRACE_CLIENT_OBJ)
+	$(CXX) $(SCHEDULER_OBJ) $(UTILS_OBJ) $(WATCHER_OBJ) $(OBJS)  $(TRACE_CLIENT_OBJ) -o $@  $(LDFLAGS)
 
-agent: $(AGENT_OBJ) $(WATCHER_OBJ) $(OBJS)
-	$(CXX) $(UTILS_OBJ) $(AGENT_OBJ) $(WATCHER_OBJ) $(OBJS) -o $@ $(LDFLAGS)
+agent: $(AGENT_OBJ) $(WATCHER_OBJ) $(OBJS) $(TRACE_CLIENT_OBJ)
+	$(CXX) $(UTILS_OBJ) $(AGENT_OBJ) $(WATCHER_OBJ) $(OBJS) $(TRACE_CLIENT_OBJ)  -o $@ $(LDFLAGS)
 
 libgalaxy.a: $(SDK_OBJ) $(OBJS) $(PROTO_HEADER)
 	$(AR) -rs $@ $(SDK_OBJ) $(OBJS)
+
+libtracesdk.a : $(TRACE_CLIENT_OBJ)
+	$(AR) -rs $@  $(TRACE_CLIENT_OBJ)
 
 galaxy: $(CLIENT_OBJ) $(LIBS)
 	$(CXX) $(CLIENT_OBJ) $(LIBS) -o $@ $(LDFLAGS)
@@ -109,6 +119,9 @@ initd_cli: $(INITD_CLI_OBJ) $(LIBS) $(OBJS)
 
 initd_cli_server: $(INITD_SERVER_OBJ) $(LIBS) $(OBJS)
 	$(CXX) $(INITD_SERVER_OBJ) $(LIBS) -o $@ $(LDFLAGS)
+
+trace_log : $(TRACE_OBJ) src/proto/log.pb.o $(LIBS) 
+	$(CXX) $(TRACE_OBJ) src/proto/log.pb.o $(LIBS) -o $@ $(LDFLAGS) -lmysqlclient
 
 test_main: $(TEST_TRACE_OBJ) 
 	$(CXX) $(TEST_TRACE_OBJ) -o $@ $(FTRACE_LIBDIR)/libftrace.a $(LDFLAGS)
@@ -135,6 +148,8 @@ clean:
 	rm -rf $(PROTO_SRC) $(PROTO_HEADER)
 	rm -rf $(PREFIX)
 	rm -rf $(LIBS) 
+	rm -rf $(TRACE_OBJ)
+	rm -rf $(TRACE_CLIENT_OBJ)
 
 install: $(BIN) $(LIBS)
 	mkdir -p $(PREFIX)/bin

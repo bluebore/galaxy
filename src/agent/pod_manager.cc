@@ -21,6 +21,7 @@
 #include "boost/lexical_cast.hpp"
 #include "logging.h"
 #include "agent/utils.h"
+#include "trace_client/trace_galaxy.h"
 
 // for kernel 2.6.32 and glibc not define some clone flag
 #ifndef CLONE_NEWPID        
@@ -283,6 +284,7 @@ int PodManager::CheckPod(const std::string& pod_id) {
         // TODO check initd exits
         if (pod_info.initd_pid > 0) { 
             ::kill(pod_info.initd_pid, SIGKILL);
+            //::kill(pod_info.initd_pid, SIGTERM);
             int status = 0;
             pid_t pid = ::waitpid(pod_info.initd_pid, &status, WNOHANG); 
             if (pid == 0) {
@@ -297,6 +299,10 @@ int PodManager::CheckPod(const std::string& pod_id) {
             LOG(WARNING, "fail to clean %s env", pod_info.pod_id.c_str()); 
             return 0;
         }
+
+        baidu::galaxy::trace::GalaxyAgentTracer::GetInstance()->TracePodFinished(pod_id,
+                                        pod_info.pod_status.state());
+
         LOG(INFO, "remove pod %s of job %s", pod_info.pod_id.c_str(),
                 pod_info.job_name.c_str());
         pods_.erase(pod_it);
@@ -491,6 +497,8 @@ int PodManager::AddPod(const PodInfo& info) {
             return -1;
         }
     }
+
+    baidu::galaxy::trace::GalaxyAgentTracer::GetInstance()->TracePodStart(info.job_id, info.pod_id);
     return 0; 
 }
 

@@ -47,7 +47,6 @@ TERA_LIBDIR = $(TERA_PREFIX)/lib
 RAPID_JSON_LIBDIR = $(RAPID_JSON_PREFIX)/lib
 COMMON_LIBDIR=$(COMMON_PREFIX)/lib
 FTRACE_LIBDIR=$(FTRACE_PREFIX)/lib
-
 PROTOC = $(PROTOBUF_PREFIX)/bin/protoc
 
 ################################################################

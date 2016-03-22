@@ -1,3 +1,6 @@
+
+#include "trace_client/trace_galaxy.h"
+
 // Copyright (c) 2015, Baidu.com, Inc. All Rights Reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
@@ -293,7 +296,7 @@ bool AgentImpl::RestorePods() {
 }
 
 bool AgentImpl::Init() {
-
+    
     resource_capacity_.millicores = FLAGS_agent_millicores_share;
     resource_capacity_.memory = FLAGS_agent_mem_share; 
     if (!file::Mkdir(FLAGS_agent_work_dir)) {
@@ -306,7 +309,11 @@ bool AgentImpl::Init() {
         LOG(WARNING, "init persistence handler failed");
         return false;  
     }
-
+    
+    if ( 0 != baidu::galaxy::trace::GalaxyAgentTracer::GetInstance()->Setup()) {
+        LOG(WARNING, "setup trace failed");
+    }
+            
     if (pod_manager_.Init() != 0) {
         LOG(WARNING, "init pod manager failed");
         return false; 
@@ -320,6 +327,7 @@ bool AgentImpl::Init() {
     if (!RegistToMaster()) {
         return false; 
     }
+
     background_threads_.DelayTask(
             FLAGS_agent_heartbeat_interval, boost::bind(&AgentImpl::KeepHeartBeat, this));
 
@@ -470,10 +478,16 @@ void AgentImpl::CollectPodStat(const std::string& podid) {
         LOG(WARNING, "pod %s does not exist", podid.c_str());
         return;
     }
+    
     LOG(INFO, "trace pod %s", podid.c_str());
     Trace::TracePodStat(&pod_info.pod_status,
                         pod_info.pod_desc.requirement().millicores(),
                         pod_info.pod_desc.requirement().memory());
+    
+    baidu::galaxy::trace::GalaxyAgentTracer::GetInstance()->TracePodStatus(&pod_info.pod_status,
+            pod_info.pod_desc.requirement().millicores(),
+             pod_info.pod_desc.requirement().memory());
+    
     trace_pool_.DelayTask(FLAGS_agent_trace_pod_interval,
             boost::bind(&AgentImpl::CollectPodStat, this, podid));
 }
