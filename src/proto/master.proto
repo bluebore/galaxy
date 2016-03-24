@@ -57,6 +57,7 @@ message JobInfo {
     optional string latest_version = 7;
     optional int64 create_time = 8;
     optional int64 update_time = 9;
+    optional string uid = 10;
 }
 
 message ScheduleInfo {
@@ -74,6 +75,7 @@ message UserDescriptor {
 
 message SubmitJobRequest {
     optional JobDescriptor job = 1;
+    optional string sid = 2;
 }
 
 message SubmitJobResponse {
@@ -82,8 +84,9 @@ message SubmitJobResponse {
 }
 
 message UpdateJobRequest {
-    optional string jobid = 1;
+    optional string name = 1;
     optional JobDescriptor job = 2;
+    optional string sid = 3;
 }
 
 message UpdateJobResponse {
@@ -107,7 +110,8 @@ message ResumeJobResponse {
 }
 
 message TerminateJobRequest {
-    optional string jobid = 1;
+    optional string job_name = 1;
+    optional string sid = 2;
 }
 
 message TerminateJobResponse {
@@ -249,7 +253,7 @@ message PodOverview {
 }
 
 message ShowTaskRequest {
-    optional string jobid = 1;
+    optional string name = 1;
     optional string endpoint = 2;
 }
 
@@ -323,6 +327,26 @@ message GetMasterStatusResponse {
     optional Status status = 17;
 }
 
+message LoginRequest {
+    optional string name = 1;
+    optional string password = 2;
+}
+
+message LoginResponse {
+    optional Status status = 1;
+    optional string sid = 2;
+}
+
+message AddUserRequest {
+    optional User user = 1;
+    // the current user session id
+    optional string sid = 2;
+}
+
+message AddUserResponse {
+    optional Status status = 1;
+}
+
 message PreemptEntity {
     optional string jobid = 1;
     optional string podid = 2;
@@ -354,6 +378,29 @@ message OnlineAgentResponse {
     optional Status status = 1;
 }
 
+message ShowQuotaRequest {
+    optional string sid = 1;
+}
+
+message ShowQuotaResponse {
+    optional Status status = 1;
+    optional int64 cpu_quota = 2;
+    optional int64 memory_quota = 3;
+    optional int64 cpu_assigned = 4;
+    optional int64 memory_assigned = 5;
+}
+
+message AssignQuotaRequest {
+    optional string sid = 1;
+    optional int64 cpu_quota = 2;
+    optional int64 memory_quota = 3;
+    optional string name = 4;
+}
+
+message AssignQuotaResponse {
+    optional Status status = 1;
+}
+
 service Master {
     rpc SubmitJob(SubmitJobRequest) returns (SubmitJobResponse);
     rpc UpdateJob(UpdateJobRequest) returns (UpdateJobResponse);
@@ -370,11 +417,6 @@ service Master {
 
     rpc SwitchSafeMode(SwitchSafeModeRequest) returns (SwitchSafeModeResponse);
 
-    // rpc AddUser() returns ();
-    // rpc DeleteUser() returns ();
-    // rpc UpdateUser() returns ();
-    // rpc ListUsers() returns ();
-
     rpc GetPendingJobs(GetPendingJobsRequest) returns (GetPendingJobsResponse);
     rpc GetResourceSnapshot(GetResourceSnapshotRequest) returns (GetResourceSnapshotResponse);
     rpc GetJobDescriptor(GetJobDescriptorRequest) returns (GetJobDescriptorResponse);
@@ -383,6 +425,12 @@ service Master {
 
     rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse);
     rpc LabelAgents(LabelAgentRequest) returns (LabelAgentResponse);
+
+    rpc Login(LoginRequest) returns (LoginResponse);
+    rpc AddUser(AddUserRequest) returns (AddUserResponse);
     rpc OfflineAgent(OfflineAgentRequest) returns (OfflineAgentResponse);
     rpc OnlineAgent(OnlineAgentRequest) returns (OnlineAgentResponse);
+
+    rpc AssignQuota(AssignQuotaRequest) returns (AssignQuotaResponse);
+    rpc ShowQuota(ShowQuotaRequest) returns (ShowQuotaResponse);
 }

@@ -117,6 +117,7 @@ public:
 
     void BuildSyncJobRequest(GetJobDescriptorRequest* request);
     void SyncJobDescriptor(const GetJobDescriptorResponse* response);
+
 private:
 
     bool CanPreempt(const AgentInfo& agent_info);
@@ -128,7 +129,6 @@ private:
 
     int32_t ChooseReducingPod(std::vector<JobInfo>& reducing_jobs,
                               std::vector<boost::shared_ptr<PodScaleDownCell> >& reducing_pods);
-
     template<class T>
     void Shuffle(std::vector<T>& list) {
         for (size_t i = list.size(); i > 1; i--) {
@@ -153,6 +153,7 @@ private:
     Mutex sched_mutex_;
     boost::unordered_map<std::string, AgentInfo>* resources_;
     boost::unordered_map<std::string, JobDescriptor>* jobs_;
+    // uid and quota pair
     RpcClient rpc_client_;
     ThreadPool thread_pool_;
 };

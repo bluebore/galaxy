@@ -17,6 +17,8 @@ DECLARE_int32(scheduler_get_pending_job_period);
 DECLARE_int32(scheduler_sync_resource_timeout);
 DECLARE_int32(scheduler_sync_resource_period);
 DECLARE_int32(scheduler_sync_job_period);
+DECLARE_int32(scheduler_sync_quota_period);
+DECLARE_int32(scheduler_sync_quota_timeout);
 
 namespace baidu {
 namespace galaxy {
@@ -74,7 +76,6 @@ void SchedulerIO::SyncJobDescriptor() {
 void SchedulerIO::SyncJobDescriptorCallBack(const GetJobDescriptorRequest* request,
                                    GetJobDescriptorResponse* response,
                                    bool failed, int) {
-    MutexLock lock(&master_mutex_);
     boost::scoped_ptr<const GetJobDescriptorRequest> request_ptr(request);
     boost::scoped_ptr<GetJobDescriptorResponse> response_ptr(response);
     if (failed || response_ptr->status() != kOk) {
@@ -154,7 +155,6 @@ void SchedulerIO::SyncResources() {
 void SchedulerIO::SyncResourcesCallBack(const GetResourceSnapshotRequest* request,
                                         GetResourceSnapshotResponse* response,
                                         bool failed, int) {
-    MutexLock lock(&master_mutex_);
     if (!failed) {
         int32_t agent_count = scheduler_.SyncResources(response);
         LOG(INFO, "sync resource from master successfully, agent count %d",
@@ -165,7 +165,6 @@ void SchedulerIO::SyncResourcesCallBack(const GetResourceSnapshotRequest* reques
     delete response;
     thread_pool_.DelayTask(FLAGS_scheduler_sync_resource_period, boost::bind(&SchedulerIO::SyncResources, this));
 }
-
 
 
 } // galaxy

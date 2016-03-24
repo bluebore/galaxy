@@ -160,10 +160,24 @@ struct MasterStatus {
     need_update_job_count(0){}
 };
 
+struct QuotaStatus {
+    int64_t cpu_quota;
+    int64_t cpu_assigned;
+    int64_t memory_quota;
+    int64_t memory_assigned;
+};
+
 struct PreemptPropose {
     std::pair<std::string, std::string> pending_pod;
     std::vector<std::pair<std::string, std::string> > preempted_pods;
     std::string addr;
+};
+
+struct UserInformation {
+    std::string uid;
+    std::string name;
+    std::string password;
+    std::string workspace;
 };
 
 class Galaxy {
@@ -177,13 +191,17 @@ public:
     static Galaxy* ConnectGalaxy(const std::string& master_addr);
 
     //create a new job
-    virtual bool SubmitJob(const JobDescription& job, std::string* job_id) = 0;
+    virtual bool SubmitJob(const JobDescription& job,
+                           const std::string& sid,
+                           std::string* job_id) = 0;
     //update job for example update the replicate_count
-    virtual bool UpdateJob(const std::string& jobid, const JobDescription& job) = 0;
+    virtual bool UpdateJob(const std::string& jobname, const JobDescription& job,
+                           const std::string& sid) = 0;
     //list all jobs in galaxys
     virtual bool ListJobs(std::vector<JobInformation>* jobs) = 0;
     //termintate job
-    virtual bool TerminateJob(const std::string& job_id) = 0;
+    virtual bool TerminateJob(const std::string& job_name,
+                              const std::string& sid) = 0;
     //list all nodes of cluster
     virtual bool ListAgents(std::vector<NodeDescription>* nodes) = 0;
     virtual bool LabelAgents(const std::string& label, 
@@ -194,7 +212,7 @@ public:
                                std::vector<PodInformation>* pods) = 0;
     virtual bool GetPodsByAgent(const std::string& endpoint,
                                 std::vector<PodInformation>* pods) = 0;
-    virtual bool GetTasksByJob(const std::string& jobid,
+    virtual bool GetTasksByJob(const std::string& name,
                                std::vector<TaskInformation>* tasks) = 0;
     virtual bool GetTasksByAgent(const std::string& endpoint,
                                  std::vector<TaskInformation>* tasks) = 0;
@@ -202,8 +220,15 @@ public:
     virtual bool SwitchSafeMode(bool mode) = 0;
     virtual bool Preempt(const PreemptPropose& propose) = 0;
     virtual bool GetMasterAddr(std::string* master_addr) = 0;
+    virtual bool Login(const std::string& name, 
+                       const std::string& password,
+                       std::string* sid) = 0;
     virtual bool OfflineAgent(const std::string& agent_addr) = 0;
     virtual bool OnlineAgent(const std::string& agent_addr) = 0;
+    virtual bool GetQuota(const std::string& sid, QuotaStatus* quota) = 0;
+    virtual bool AssignQuota(const std::string& sid, const std::string& name,
+                             int64_t cpu_quota, int64_t memory_quota) = 0;
+    virtual bool AddUser(const std::string& sid, const UserInformation& user) = 0;
 };
 
 } // namespace galaxy

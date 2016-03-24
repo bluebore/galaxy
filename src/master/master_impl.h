@@ -7,6 +7,7 @@
 #include "proto/master.pb.h"
 #include "job_manager.h"
 #include "ins_sdk.h"
+#include "master/user_manager.h"
 
 using ::galaxy::ins::sdk::InsSDK;
 
@@ -96,6 +97,16 @@ public:
                            ::baidu::galaxy::SwitchSafeModeResponse* response,
                            ::google::protobuf::Closure* done);
 
+      virtual void Login(::google::protobuf::RpcController* controller,
+                         const LoginRequest* request,
+                         LoginResponse* response,
+                         ::google::protobuf::Closure* done);
+
+      virtual void AddUser(::google::protobuf::RpcController* controller,
+                           const AddUserRequest* request,
+                           AddUserResponse* response,
+                           ::google::protobuf::Closure* done);
+ 
       virtual void OfflineAgent(::google::protobuf::RpcController* controller,
                                  const ::baidu::galaxy::OfflineAgentRequest* request,
                                  ::baidu::galaxy::OfflineAgentResponse* response,
@@ -105,6 +116,15 @@ public:
                                 const ::baidu::galaxy::OnlineAgentRequest* request,
                                 ::baidu::galaxy::OnlineAgentResponse* response,
                                 ::google::protobuf::Closure* done);
+      
+      virtual void ShowQuota(::google::protobuf::RpcController* controller,
+                             const ::baidu::galaxy::ShowQuotaRequest* request,
+                             ::baidu::galaxy::ShowQuotaResponse* response,
+                             ::google::protobuf::Closure* done);
+      virtual void AssignQuota(::google::protobuf::RpcController* controller,
+                             const ::baidu::galaxy::AssignQuotaRequest* request,
+                             ::baidu::galaxy::AssignQuotaResponse* response,
+                             ::google::protobuf::Closure* done);
 
       void OnSessionTimeout();
       void OnLockChange(std::string lock_session_id);
@@ -114,10 +134,13 @@ private:
       void ReloadJobInfo();
       void ReloadLabelInfo();
       void ReloadAgent();
+      bool PrePropose(const ScheduleInfo& sched_info);
+      bool PostPropose(const ScheduleInfo& sched_info);
+      bool UpdateQuotaWithNewJob(const JobInfo& job, const JobDescriptor& new_desc);
 private:
       JobManager job_manager_;
       InsSDK* nexus_;
-
+      UserManager* user_manager_;
 };
 
 }

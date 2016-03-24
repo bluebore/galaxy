@@ -18,6 +18,8 @@
 #include "proto/master.pb.h"
 #include "proto/galaxy.pb.h"
 #include "rpc/rpc_client.h"
+#include "master/idx_tag.h"
+#include "master/user_manager.h"
 
 namespace baidu {
 namespace galaxy {
@@ -37,35 +39,37 @@ typedef std::map<JobId, std::map<PodId, PodStatus*> > PodMap;
 typedef google::protobuf::RepeatedPtrField<baidu::galaxy::JobIdDiff> JobIdDiffList;
 typedef google::protobuf::RepeatedPtrField<baidu::galaxy::JobEntity> JobEntityList;
 
-struct id_tag {};
-struct addr_tag {};
-struct pod_id_tag {};
-struct name_tag{};
-
 // the index of job, uid index will be added latter 
 // so multi index is needed
 struct JobIndex {
     std::string id_;
     std::string name_;
+    std::string uid_;
+    std::string user_name_;
 };
 
 // the name and id should be unique
 typedef boost::multi_index_container<
      JobIndex,
      boost::multi_index::indexed_by<
-          boost::multi_index::hashed_unique<
+         boost::multi_index::hashed_unique<
              boost::multi_index::tag<id_tag>,
              BOOST_MULTI_INDEX_MEMBER(JobIndex , std::string, id_)
          >,
          boost::multi_index::hashed_unique<
              boost::multi_index::tag<name_tag>,
              BOOST_MULTI_INDEX_MEMBER(JobIndex, std::string, name_)
-        >
+         >,
+         boost::multi_index::ordered_non_unique<
+             boost::multi_index::tag<uid_tag>,
+             BOOST_MULTI_INDEX_MEMBER(JobIndex, std::string, uid_)
+         >
     >
 > JobSet;
 
 typedef boost::multi_index::index<JobSet, id_tag>::type JobSetIdIndex;
 typedef boost::multi_index::index<JobSet, name_tag>::type JobSetNameIndex;
+typedef boost::multi_index::index<JobSet, uid_tag>::type JobSetUidIndex;
 
 struct Job {
     JobState state_;
@@ -75,6 +79,8 @@ struct Job {
     std::map<Version, PodDescriptor> pod_desc_;
     JobUpdateState update_state_;
     Version latest_version;
+    std::string uid_;
+    std::string user_name_;
     int64_t create_time;
     int64_t update_time;
 };
@@ -115,6 +121,9 @@ typedef boost::multi_index::index<PreemptTaskSet, addr_tag>::type PreemptTaskAdd
 
 class JobManager {
 public:
+    Status Add(const JobId& job_id, 
+               const JobDescriptor& job_desc,
+               const User& user);
     void Start();
     Status Add(const JobId& job_id, const JobDescriptor& job_desc);
     Status Update(const JobId& job_id, const JobDescriptor& job_desc);
@@ -144,19 +153,21 @@ public:
     Status GetJobInfo(const JobId& jobid, JobInfo* job_info);
     void KeepAlive(const std::string& agent_addr);
     void DeployPod();
+    void ReloadJobInfo(const JobInfo& job_info, const User& owner);
     void ReloadJobInfo(const JobInfo& job_info);
     void ReloadAgent(const AgentPersistenceInfo& agent);
     Status SetSafeMode(bool mode);
     Status LabelAgents(const LabelCell& label_cell);
-    bool GetJobIdByName(const std::string& job_name, std::string* jobid);
+    bool GetJobByName(const std::string& job_name, JobInfo* job);
     Status GetPods(const std::string& jobid, PodOverviewList* pods);
-    Status GetTaskByJob(const std::string& jobid, TaskOverviewList* tasks);
+    Status GetTaskByJob(const std::string& name, TaskOverviewList* tasks);
     Status GetTaskByAgent(const std::string& endpoint, TaskOverviewList* tasks);
     Status GetPodsByAgent(const std::string& endpoint, PodOverviewList* pods);
     Status GetStatus(::baidu::galaxy::GetMasterStatusResponse* response);
     bool Preempt(const PreemptEntity& pending_pod,
                  const std::vector<PreemptEntity>& preempted_pods,
                  const std::string& addr);
+    bool IsOwner(const std::string& job_id, const std::string& uid);
     bool OfflineAgent(const std::string& endpoints);
     bool OnlineAgent(const std::string& endpoints);
 private:
@@ -279,7 +290,7 @@ private:
     // nexus
     ::galaxy::ins::sdk::InsSDK* nexus_;
 
-    CondVar pod_cv_; 
+    CondVar pod_cv_;
 };
 
 }

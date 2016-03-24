@@ -45,7 +45,7 @@ private:
     void SyncJobDescriptorCallBack(const GetJobDescriptorRequest* request,
                                    GetJobDescriptorResponse* response,
                                    bool failed, int);
- 
+
 private:
     std::string master_addr_;
     RpcClient rpc_client_;

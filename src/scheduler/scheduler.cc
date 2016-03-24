@@ -463,6 +463,10 @@ int32_t Scheduler::ChoosePods(std::vector<JobInfo>& pending_jobs,
               job_it->jobid().c_str(), job_it->latest_version().c_str());
             continue;
         }
+        if (need_schedule.size() <= 0) {
+            LOG(WARNING, "job %s has no enough quota to deploy pod", job_it->jobid().c_str());
+            continue;
+        }
         boost::shared_ptr<PodScaleUpCell> need_schedule_cell(new PodScaleUpCell());
         need_schedule_cell->proposed = false;
         need_schedule_cell->pod = pod_desc;
@@ -476,6 +480,7 @@ int32_t Scheduler::ChoosePods(std::vector<JobInfo>& pending_jobs,
     LOG(INFO, "total %d pods need be scheduled", all_pod_needs);
     return all_pod_needs;
 }
+
 
 int32_t Scheduler::ChooseReducingPod(std::vector<JobInfo>& reducing_jobs,
                                      std::vector<boost::shared_ptr<PodScaleDownCell> >& reducing_pods) {

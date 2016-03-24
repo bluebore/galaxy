@@ -1,0 +1,13 @@
+{
+
+    "users":[
+        {
+            "name":"root", 
+            "super":true, 
+            "password":"root",
+            "workspace":"/root",
+            "cpu":100000,
+            "memory":"1T"
+        }
+    ]
+}

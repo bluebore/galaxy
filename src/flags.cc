@@ -24,11 +24,15 @@ DEFINE_int32(master_cluster_trace_interval, 60000, "the period of trace job stat
 DEFINE_int32(master_preempt_interval, 2000, "the period of preempt");
 DEFINE_string(master_lock_path, "/master_lock", "master lock name on nexus");
 DEFINE_string(master_path, "/master", "master path on nexus");
+DEFINE_int32(master_session_timeout, 60 * 60 * 1000, "user session timeout , the default is one hour");
+DEFINE_int32(master_session_gc_period, 60 * 1000, "the period to clean timeout session");
 DEFINE_string(safemode_store_path, "/safemode", "master safemode path on nexus");
 DEFINE_string(safemode_store_key, "safemode_switch", "master safemode key on nexus");
 DEFINE_string(jobs_store_path, "/jobs", "");
+DEFINE_string(users_store_path, "/users", "");
 DEFINE_string(agents_store_path, "/agents", "");
 DEFINE_string(labels_store_path, "/labels", "");
+DEFINE_string(quotas_store_path, "/quotas", "");
 DEFINE_int32(max_need_update_job_size, 10, "the max size of need update job size ");
 DEFINE_int32(max_scale_down_size, 10, "the max size of scale down jobs that schedule fetches");
 DEFINE_int32(max_scale_up_size, 10, "the max size of scale up jobs that schedule fetches");
@@ -40,6 +44,8 @@ DEFINE_int32(scheduler_sync_resource_timeout, 1000, "the timeout that scheduler 
 DEFINE_int32(scheduler_sync_resource_period, 2000, "the period that scheduler sync resource from master");
 DEFINE_int32(scheduler_sync_job_period, 2000, "the period that scheduler sync job from master");
 DEFINE_int32(scheduler_sync_job_timeout, 2000, "the time that scheduler sync job from master");
+DEFINE_int32(scheduler_sync_quota_period, 2000, "the period that scheduler sync quota from master");
+DEFINE_int32(scheduler_sync_quota_timeout, 2000, "the time that scheduler sync quota from master");
 DEFINE_int32(scheduler_feasibility_factor, 2, "the feasibility factor which schedulder use to calc agent for pending job");
 
 DEFINE_double(scheduler_cpu_used_factor, 10.0, "the cpu used factor for calc agent load score");

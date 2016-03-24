@@ -1,6 +1,11 @@
+SANDBOX_DIR=`pwd`
 echo "start nexus"
-cd ../thirdsrc/ins/sandbox && nohup ./start_all.sh > ins_start.log 2>&1 &
+cd ../thirdsrc/ins/sandbox && rm -rf data && rm -rf binlog && nohup ./start_all.sh > ins_start.log 2>&1 &
 sleep 2
+cd $SANDBOX_DIR
+export PATH=../thirdparty/bin:$PATH
+cd ../optools && sh complie-proto.sh &&  python galaxy_admin.py -a $SANDBOX_DIR/users.json
+cd $SANDBOX_DIR
 galaxyflag=`pwd`/galaxy.flag
 echo "start master"
 nohup  ../master --flagfile=$galaxyflag >master.log 2>&1 &
