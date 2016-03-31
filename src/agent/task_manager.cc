@@ -33,8 +33,6 @@ DECLARE_string(gce_cgroup_root);
 DECLARE_string(gce_support_subsystems);
 DECLARE_string(agent_work_dir);
 DECLARE_string(agent_global_cgroup_path);
-DECLARE_string(agent_global_hardlimit_path);
-DECLARE_string(agent_global_softlimit_path);
 DECLARE_int32(agent_detect_interval);
 DECLARE_int32(agent_io_collect_interval);
 DECLARE_int32(agent_memory_check_interval);
@@ -145,58 +143,29 @@ bool TaskManager::InitCpuSubSystem() {
         return false;
     }
     hierarchies_["cpu"] = hierarchy;
-    std::string hardlimit_folder = hierarchy + "/" + FLAGS_agent_global_hardlimit_path;
-    if (!file::IsExists(hardlimit_folder)) {
+    std::string folder = hierarchy + "/" + FLAGS_agent_global_cgroup_path;
+    if (!file::IsExists(folder)) {
         // add hard_limit folder
-        bool mkdir_ok = file::Mkdir(hardlimit_folder);
+        bool mkdir_ok = file::Mkdir(folder);
         if (!mkdir_ok) {
-            LOG(WARNING, "mkdir global cpu hardlimit path %s failed", hardlimit_folder.c_str());
+            LOG(WARNING, "mkdir global cpu path %s failed", folder.c_str());
             return false;
         } 
     }
-    int write_ok = cgroups::Write(hardlimit_folder, 
-                                  "cpu.cfs_quota_us",
-                                  boost::lexical_cast<std::string>("-1"));
 
+    int total_core = FLAGS_agent_millicores_share * (CPU_CFS_PERIOD / 1000);
+    assert(total_core > 1000);
+    std::stringstream ss;
+    ss << total_core;
+    
+
+    int write_ok = cgroups::Write(folder, 
+                                  "cpu.cfs_quota_us",
+                                  ss.str());
     if (write_ok != 0) {
         LOG(WARNING, "fail to write cpu global limit %d %s/%s ",
-                -1,
-                hardlimit_folder.c_str(), "cpu.cfs_quota_us");
-        return false;
-    }
-    std::string softlimit_folder = hierarchy + "/" + FLAGS_agent_global_softlimit_path;
-    // add soft_limit
-    if (!file::IsExists(softlimit_folder)) {
-        bool mkdir_ok = file::Mkdir(softlimit_folder);
-        if (!mkdir_ok) {
-            LOG(WARNING, "mkdir global cpu softlimit path %s failed", softlimit_folder.c_str());
-            return false;
-        }
-    }
-    int32_t softlimit_cores = FLAGS_agent_millicores_share * (CPU_CFS_PERIOD / 1000); 
-    write_ok = cgroups::Write(softlimit_folder, 
-                                  "cpu.cfs_quota_us",
-                                  boost::lexical_cast<std::string>(softlimit_cores));
-    if (write_ok != 0) {
-        LOG(WARNING, "fail to write softlimit quota %d to %s", softlimit_cores, softlimit_folder.c_str());
-        return false;
-    }
-    return true;
-}
-
-bool TaskManager::HandleHardlimitChange(int32_t hardlimit_cores) {
-    tasks_mutex_.AssertHeld();
-    if (hierarchies_.find("cpu") == hierarchies_.end()) {
-        LOG(WARNING, "cpu subsystem is disabled");
-        return true;
-    }
-    std::string softlimit_folder = hierarchies_["cpu"] + "/" + FLAGS_agent_global_softlimit_path;
-    int32_t softlimit_cores = (FLAGS_agent_millicores_share - hardlimit_cores) * (CPU_CFS_PERIOD / 1000);
-    int write_ok = cgroups::Write(softlimit_folder, 
-                                  "cpu.cfs_quota_us",
-                                  boost::lexical_cast<std::string>(softlimit_cores));
-    if (write_ok != 0) {
-        LOG(WARNING, "fail to write softlimit quota %d to %s", softlimit_cores, softlimit_folder.c_str());
+                total_core,
+                folder.c_str(), "cpu.cfs_quota_us");
         return false;
     }
     return true;
@@ -360,23 +329,28 @@ int TaskManager::PrepareIOCollector(TaskInfo* task_info) {
 
 void TaskManager::CollectIO(const std::string& task_id) {
     std::string freezer_path;
+    std::string blkio_path;
     {
         MutexLock scope_lock(&tasks_mutex_);
         std::map<std::string, TaskInfo*>::iterator it = tasks_.find(task_id); 
         if (it == tasks_.end()) {
             return;
         }
-        std::map<std::string, std::string>::iterator cg_it = it->second->cgroups.find("freezer");
-        if (cg_it != it->second->cgroups.end()) {
-            freezer_path = cg_it->second;
+        std::map<std::string, std::string>::iterator cg_freezer_it = it->second->cgroups.find("freezer");
+        if (cg_freezer_it != it->second->cgroups.end()) {
+            freezer_path = cg_freezer_it->second;
+        }
+        std::map<std::string, std::string>::iterator cg_blkio_it = it->second->cgroups.find("blkio");
+        if (cg_blkio_it != it->second->cgroups.end()) {
+            blkio_path = cg_blkio_it->second;
         }
     }
     CGroupIOStatistics current;
-    bool ok = CGroupIOCollector::Collect(freezer_path, &current);
+    bool ok = CGroupIOCollector::Collect(freezer_path, blkio_path, &current);
     if (!ok) {
         LOG(WARNING, "fail to collect io stat for task %s",
                 task_id.c_str());
-    }else {
+    } else {
         MutexLock scope_lock(&tasks_mutex_);
         std::map<std::string, TaskInfo*>::iterator it = tasks_.find(task_id); 
         if (it == tasks_.end()) {
@@ -402,13 +376,18 @@ void TaskManager::CollectIO(const std::string& task_id) {
                 syscr_ps += proc_it->second.syscr - old_proc_it->second.syscr;
                 syscw_ps += proc_it->second.wchar - old_proc_it->second.syscw;
             }
+            int64_t read_io_ps = current.blkio.read - task->old_io_stat.blkio.read;
+            int64_t write_io_ps = current.blkio.write - task->old_io_stat.blkio.write;
             task->status.mutable_resource_used()->set_read_bytes_ps(read_bytes_ps);
             task->status.mutable_resource_used()->set_write_bytes_ps(write_bytes_ps);
-            LOG(INFO, "pod %s of job %s read_bytes_ps %s/s write_bytes_ps %s/s",
+            LOG(INFO, "task %s of pod %s of job %s read_bytes_ps %s/s write_bytes_ps %s/s read_io_ps %s/s write_io_ps %s/s",
+                    task->task_id.c_str(),
                     task->pod_id.c_str(),
                     task->job_name.c_str(),
                     ::baidu::common::HumanReadableString(read_bytes_ps).c_str(),
-                    ::baidu::common::HumanReadableString(write_bytes_ps).c_str());
+                    ::baidu::common::HumanReadableString(write_bytes_ps).c_str(),
+                    boost::lexical_cast<std::string>(read_io_ps).c_str(),
+                    boost::lexical_cast<std::string>(write_io_ps).c_str());
             task->status.mutable_resource_used()->set_syscr_ps(syscr_ps);
             task->status.mutable_resource_used()->set_syscw_ps(syscw_ps);
             task->old_io_stat = current;
@@ -545,58 +524,62 @@ int TaskManager::TerminateTask(TaskInfo* task_info) {
     if (task_info == NULL) {
         return -1; 
     }
-    std::string stop_command = task_info->desc.stop_command();
-    task_info->stage = kTaskStageSTOPPING;
-    SetupTerminateProcessKey(task_info);
-    // send rpc to initd to execute stop process
-    ExecuteRequest initd_request; 
-    ExecuteResponse initd_response;
-    initd_request.set_key(task_info->stop_process.key());
-    initd_request.set_commands(stop_command);
-    if (FLAGS_agent_namespace_isolation_switch
-            && task_info->desc.namespace_isolation()) {
-        initd_request.set_chroot_path(task_info->task_chroot_path); 
-        std::string* chroot_path = initd_request.add_envs();
-        chroot_path->append("CHROOT_PATH=");
-        chroot_path->append(task_info->task_chroot_path);
-    }
-    initd_request.set_path(task_info->task_workspace);
-    initd_request.set_cgroup_path(task_info->cgroup_path);
-    initd_request.set_user(FLAGS_agent_default_user);
 
-    if (task_info->initd_stub == NULL 
-            && !rpc_client_->GetStub(task_info->initd_endpoint, 
-                                     &(task_info->initd_stub))) {
-        LOG(WARNING, "get stub failed"); 
-        return -1;
-    }
+    if (0 ==  task_info->stop_timeout_point) {
+        std::string stop_command = task_info->desc.stop_command();
+        task_info->stage = kTaskStageSTOPPING;
+        SetupTerminateProcessKey(task_info);
 
-    bool ret = rpc_client_->SendRequest(task_info->initd_stub,
-                                        &Initd_Stub::Execute,
-                                        &initd_request,
-                                        &initd_response,
-                                        5, 1);
-    if (!ret) {
-        LOG(WARNING, "stop command [%s] rpc failed for %s",
-                stop_command.c_str(),
-                task_info->task_id.c_str()); 
-        return -1;
-    } else if (initd_response.has_status()
-                && initd_response.status() != kOk) {
-        LOG(WARNING, "stop command [%s] failed %s for %s",
-                stop_command.c_str(),
-                Status_Name(initd_response.status()).c_str(),
-                task_info->task_id.c_str()); 
-        return -1;
+        // send rpc to initd to execute stop process
+        ExecuteRequest initd_request; 
+        ExecuteResponse initd_response;
+        initd_request.set_key(task_info->stop_process.key());
+        initd_request.set_commands(stop_command);
+        if (FLAGS_agent_namespace_isolation_switch
+                    && task_info->desc.namespace_isolation()) {
+            initd_request.set_chroot_path(task_info->task_chroot_path); 
+            std::string* chroot_path = initd_request.add_envs();
+            chroot_path->append("CHROOT_PATH=");
+            chroot_path->append(task_info->task_chroot_path);
+        }
+        initd_request.set_path(task_info->task_workspace);
+        initd_request.set_cgroup_path(task_info->cgroup_path);
+        initd_request.set_user(FLAGS_agent_default_user);
+
+        if (task_info->initd_stub == NULL 
+                    && !rpc_client_->GetStub(task_info->initd_endpoint, 
+                        &(task_info->initd_stub))) {
+            LOG(WARNING, "get stub failed"); 
+            return -1;
+        }
+
+        bool ret = rpc_client_->SendRequest(task_info->initd_stub,
+                    &Initd_Stub::Execute,
+                    &initd_request,
+                    &initd_response,
+                    5, 1);
+        if (!ret) {
+            LOG(WARNING, "stop command [%s] rpc failed for %s",
+                        stop_command.c_str(),
+                        task_info->task_id.c_str()); 
+            return -1;
+        } else if (initd_response.has_status()
+                    && initd_response.status() != kOk) {
+            LOG(WARNING, "stop command [%s] failed %s for %s",
+                        stop_command.c_str(),
+                        Status_Name(initd_response.status()).c_str(),
+                        task_info->task_id.c_str()); 
+            return -1;
+        }
+        int32_t now_time = common::timer::now_time();
+        task_info->stop_timeout_point = now_time + 100;
+
+        LOG(INFO, "stop command [%s] start success for %s and forceing to kill will be %d , now is %d ",
+                    stop_command.c_str(),
+                    task_info->task_id.c_str(),
+                    task_info->stop_timeout_point,
+                    now_time);
     }
-    int32_t now_time = common::timer::now_time();
-    // TODO config stop timeout len
-    task_info->stop_timeout_point = now_time + 100;
-    LOG(INFO, "stop command [%s] start success for %s and forceing to kill will be %d , now is %d ",
-            stop_command.c_str(),
-            task_info->task_id.c_str(),
-            task_info->stop_timeout_point,
-            now_time);
 
     return 0;
 }
@@ -647,16 +630,6 @@ int TaskManager::CleanTask(TaskInfo* task_info) {
                 task_info->task_id.c_str()); 
         task_info->status.set_state(kTaskError);
         return -1;
-    }
-    if (!task_info->desc.has_cpu_isolation_type()
-        ||  task_info->desc.cpu_isolation_type() == kCpuIsolationHard) {
-        int32_t old_hardlimit_cores = hardlimit_cores_;
-        hardlimit_cores_ -= task_info->desc.requirement().millicores();
-        bool ok = HandleHardlimitChange(hardlimit_cores_);
-        if (!ok) {
-            LOG(WARNING, "fail move cpu quota from hard limit to sofelimit , the hardlimit is %d", hardlimit_cores_); 
-            hardlimit_cores_ = old_hardlimit_cores;
-        }
     }
      
     LOG(INFO, "task %s clean success", task_info->task_id.c_str());
@@ -1154,53 +1127,40 @@ bool TaskManager::HandleInitTaskCpuCgroup(std::string& subsystem, TaskInfo* task
         LOG(WARNING, "cpu subsystem is disabled");
         return true;
     }
+
+    std::string cpu_path = hierarchies_["cpu"] + "/" + FLAGS_agent_global_cgroup_path 
+        + "/" + task->task_id;
+    if (!file::Mkdir(cpu_path)) {
+        LOG(WARNING, "create dir %s failed for %s", cpu_path.c_str(), task->task_id.c_str());
+        return false;
+    } 
+    task->cgroups[subsystem] = cpu_path;
+
     if (task->desc.has_cpu_isolation_type()
-        && task->desc.cpu_isolation_type() == kCpuIsolationSoft) {
-        LOG(INFO, "create soft limit task %s", task->task_id.c_str());
-        std::string cpu_path = hierarchies_["cpu"] + "/" + FLAGS_agent_global_softlimit_path 
-            + "/" + task->task_id;
-        if (!file::Mkdir(cpu_path)) {
-            LOG(WARNING, "create dir %s failed for %s", cpu_path.c_str(), task->task_id.c_str());
-            return false;
-        } 
-        task->cgroups[subsystem] = cpu_path;
+                && task->desc.cpu_isolation_type() == kCpuIsolationSoft) {
         int32_t cpu_limit = task->desc.requirement().millicores();
         if (cgroups::Write(cpu_path,
-                           "cpu.shares",
-                           boost::lexical_cast<std::string>(cpu_limit)) != 0) {
+                        "cpu.shares",
+                        boost::lexical_cast<std::string>(cpu_limit)) != 0) {
             LOG(WARNING, "set cpu shares %d failed for %s",
-                    cpu_limit, cpu_path.c_str()); 
+                        cpu_limit, cpu_path.c_str()); 
             return false;
         }
+
         if (cgroups::Write(cpu_path,
-                           "cpu.cfs_quota_us",
-                           boost::lexical_cast<std::string>(-1)
-                           ) != 0) {
+                        "cpu.cfs_quota_us",
+                        boost::lexical_cast<std::string>(-1)
+                        ) != 0) {
             LOG(WARNING, "disable cpu limit failed for %s", cpu_path.c_str()); 
             return false;
         } 
     } else {
-        LOG(INFO, "create hard limit task %s", task->task_id.c_str());
-        std::string cpu_path = hierarchies_["cpu"] + "/" + FLAGS_agent_global_hardlimit_path + "/" + task->task_id;
-        if (!file::Mkdir(cpu_path)) {
-            LOG(WARNING, "create dir %s failed for %s", cpu_path.c_str(), task->task_id.c_str());
-            return false;
-        }
-        task->cgroups[subsystem] = cpu_path;
-        int32_t old_hardlimit_cores = hardlimit_cores_;
-        hardlimit_cores_ += task->desc.requirement().millicores();
         int32_t limit_cores = task->desc.requirement().millicores() * (CPU_CFS_PERIOD / 1000);
         if (cgroups::Write(cpu_path,
-                           "cpu.cfs_quota_us",
-                           boost::lexical_cast<std::string>(limit_cores)
-                           ) != 0) {
+                        "cpu.cfs_quota_us",
+                        boost::lexical_cast<std::string>(limit_cores)
+                        ) != 0) {
             LOG(WARNING, "set cpu limit failed for %s", cpu_path.c_str()); 
-            return false;
-        }
-        bool ok = HandleHardlimitChange(hardlimit_cores_);
-        if (!ok) {
-            LOG(WARNING, "fail to adjust hardlimit to %d", hardlimit_cores_);
-            hardlimit_cores_ = old_hardlimit_cores;
             return false;
         }
     }
@@ -1260,6 +1220,52 @@ bool TaskManager::HandleInitTaskBlkioCgroup(std::string& subsystem, TaskInfo* ta
                 task->pod_id.c_str(),
                 task->job_name.c_str());
     }
+    int64_t read_io_ps = task->desc.requirement().read_io_ps();
+    if (read_io_ps > 0) {
+        std::string read_io_ps_string = boost::lexical_cast<std::string>(major_number) + ":0 "
+            + boost::lexical_cast<std::string>(read_io_ps);
+        if (cgroups::Write(blkio_path,
+                "blkio.throttle.read_iops_device",
+                read_io_ps_string) != 0) {
+            LOG(WARNING, "set read io ps fail for %s", blkio_path.c_str());
+            return false;
+        };
+    } else {
+        LOG(WARNING, "ignore read io ps of task  podid %s of job %s",
+                task->pod_id.c_str(),
+                task->job_name.c_str());
+    }
+    int64_t write_io_ps = task->desc.requirement().write_io_ps();
+    if (write_io_ps > 0) {
+        std::string write_io_ps_string = boost::lexical_cast<std::string>(major_number) + ":0 "
+            + boost::lexical_cast<std::string>(write_io_ps);
+        if (cgroups::Write(blkio_path,
+            "blkio.throttle.write_iops_device",
+            write_io_ps_string) != 0) {
+            LOG(WARNING, "set write io ps fail for %s", blkio_path.c_str());
+            return false;
+        };
+    } else {
+        LOG(WARNING, "ignore write io ps of task podid %s of job %s",
+                task->pod_id.c_str(),
+                task->job_name.c_str());
+    }
+    int64_t io_weight = task->desc.requirement().io_weight();
+    if (io_weight >= 10 && io_weight <= 1000) {
+        std::string io_weight_string = boost::lexical_cast<std::string>(major_number) + ":0 "
+            + boost::lexical_cast<std::string>(io_weight);
+        if (cgroups::Write(blkio_path,
+            "blkio.weight_device",
+            io_weight_string) != 0) {
+            LOG(WARNING, "set io weight fail for %s", blkio_path.c_str());
+            return false;
+        };
+    } else {
+        LOG(WARNING, "ignore io weight of task podid %s of job %s",
+                task->pod_id.c_str(),
+                task->job_name.c_str());
+    }
+
     return true;
 }
 

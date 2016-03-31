@@ -18,7 +18,7 @@
             {
                 "binary": "",
                 "source_type": "kSourceTypeCommand",
-                "start_command": "dd if=/dev/sda of=/dev/null",
+                "start_command": "sleep 1000",
                 "requirement": {
                      "millicores": 500,
                      "memory": "2G",

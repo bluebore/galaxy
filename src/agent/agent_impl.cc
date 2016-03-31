@@ -19,6 +19,7 @@ DECLARE_string(master_port);
 DECLARE_int32(agent_background_threads_num);
 DECLARE_int32(agent_heartbeat_interval);
 DECLARE_int32(agent_trace_pod_interval);
+DECLARE_string(agent_build);
 DECLARE_string(agent_ip);
 DECLARE_string(agent_port);
 DECLARE_string(agent_work_dir);
@@ -45,7 +46,8 @@ AgentImpl::AgentImpl() :
     resource_capacity_(),
     master_watcher_(NULL),
     mutex_master_endpoint_(),
-    state_(kInit) {
+    state_(kInit),
+    build_(FLAGS_agent_build) {
     rpc_client_ = new RpcClient();    
     endpoint_ = FLAGS_agent_ip;
     endpoint_.append(":");
@@ -72,6 +74,7 @@ void AgentImpl::Query(::google::protobuf::RpcController* /*cntl*/,
     resp->set_status(kOk);
     AgentInfo agent_info; 
     agent_info.set_endpoint(endpoint_);
+    agent_info.set_build(build_);
     agent_info.mutable_total()->set_millicores(
             FLAGS_agent_millicores_share);
     agent_info.mutable_total()->set_memory(

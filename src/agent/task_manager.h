@@ -72,7 +72,6 @@ protected:
                                         + "_stop"); 
     }
     bool InitCpuSubSystem();
-    bool HandleHardlimitChange(int32_t hardlimit_cores);
     bool HandleInitTaskCpuCgroup(std::string& subsystem, TaskInfo* task);
     bool HandleInitTaskMemCgroup(std::string& subsystem, TaskInfo* task);
     bool HandleInitTaskComCgroup(std::string& subsystem, TaskInfo* task);

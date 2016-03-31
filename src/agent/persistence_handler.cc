@@ -60,9 +60,11 @@ bool PersistenceHandler::SavePodInfo(const PodInfo& pod_info) {
         return false;
     }
 
+
+    leveldb::WriteOptions ops;
+    ops.sync = true;
     leveldb::Status write_status = 
-        persistence_handler_->Put(leveldb::WriteOptions(), 
-                                  key, value);
+        persistence_handler_->Put(ops, key, value);
     if (!write_status.ok()) {
         LOG(WARNING, "persistence for pod %s write failed %s",
                      key.c_str(),
@@ -123,8 +125,10 @@ bool PersistenceHandler::DeletePodInfo(const std::string& pod_id) {
         return false;
     }
     std::string key = pod_id; 
+    leveldb::WriteOptions ops;
+    ops.sync = true;
     leveldb::Status status = 
-        persistence_handler_->Delete(leveldb::WriteOptions(), key);
+        persistence_handler_->Delete(ops, key);
     if (!status.ok()) {
         LOG(WARNING, "delete pod %s failed %s", 
                      key.c_str(), 

@@ -49,6 +49,7 @@ DEFINE_double(scheduler_cpu_overload_threashold, 0.9, "the max cpu used");
 DEFINE_int32(scheduler_agent_overload_turns_threashold, 3, "agent overload times");
 
 // agent
+DEFINE_string(agent_build, __DATE__" "__TIME__, "agent version");
 DEFINE_string(agent_port, "8080", "agent listen port");
 DEFINE_int32(agent_http_port, 8222, "agent http server port");
 DEFINE_int32(agent_background_threads_num, 2, "agent background threads");
@@ -71,10 +72,7 @@ DEFINE_int32(agent_rpc_initd_timeout, 2, "agent monitor initd interval, unit sec
 DEFINE_int32(agent_initd_port_begin, 9000, "agent initd port used begin");
 DEFINE_int32(agent_initd_port_end, 9500, "agent initd port used end");
 DEFINE_string(agent_persistence_path, "./data", "agent persistence path");
-// hard limit
-DEFINE_string(agent_global_hardlimit_path, "galaxy", "agent cpu hard limit root");
-// soft limit
-DEFINE_string(agent_global_softlimit_path, "softlimit", "agent cpu soft limit root");
+
 DEFINE_string(agent_global_cgroup_path, "galaxy", "agent cgroup global path");
 DEFINE_int32(agent_detect_interval, 1000, "agent detect process running interval");
 DEFINE_int32(agent_io_collect_interval, 1000, "agent collect io interval");

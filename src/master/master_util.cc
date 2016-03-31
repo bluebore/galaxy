@@ -9,6 +9,7 @@
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
+#include <boost/algorithm/string/replace.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <boost/lexical_cast.hpp>
 #include <gflags/gflags.h>
@@ -166,6 +167,11 @@ void MasterUtil::ResetLabels(AgentInfo* agent,
         agent->add_tags(*it); 
     }
     return;
+}
+
+std::string MasterUtil::ShortName(const std::string& job_name) {
+    std::string name = boost::replace_all_copy(job_name, " ", "-");
+    return name.substr(0, 20);
 }
 
 }

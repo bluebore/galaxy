@@ -108,6 +108,7 @@ private:
     GlobalResourceCollector resource_collector_;
     AgentState state_;
     int32_t recover_threshold_;
+    std::string build_;
 };
 
 }   // ending namespace galaxy

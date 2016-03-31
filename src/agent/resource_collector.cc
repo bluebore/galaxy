@@ -920,12 +920,14 @@ CGroupIOCollector::CGroupIOCollector(){}
 
 CGroupIOCollector::~CGroupIOCollector(){}
 
-bool CGroupIOCollector::Collect(const std::string& cgroup_path,
-                                 CGroupIOStatistics* stat) {
+bool CGroupIOCollector::Collect(const std::string& freezer_path,
+                                const std::string& blkio_path,
+                                CGroupIOStatistics* stat) {
+    // get ProcIOStat
     std::vector<int> pids;
-    bool ok = ::baidu::galaxy::cgroups::GetPidsFromCgroup(cgroup_path, &pids);
+    bool ok = ::baidu::galaxy::cgroups::GetPidsFromCgroup(freezer_path, &pids);
     if (!ok) {
-        LOG(WARNING, "fail to get pid from cgroup %s", cgroup_path.c_str());
+        LOG(WARNING, "fail to get pid from cgroup %s", freezer_path.c_str());
         return false;
     }
 
@@ -939,6 +941,14 @@ bool CGroupIOCollector::Collect(const std::string& cgroup_path,
         }
         stat->processes.insert(std::make_pair(*pid_it, proc_stat));
     }
+
+    // get BlkioStat
+    ok = GetBlkioStat(blkio_path, &(stat->blkio));
+    if (!ok) {
+       LOG(WARNING, "fail to get blkio statistics from cgroup %s", blkio_path.c_str());
+        return false;
+    }
+
     return true;
 }
 
@@ -966,19 +976,84 @@ bool CGroupIOCollector::GetProcIOStat(int pid, ProcIOStatistics* stat) {
             stat->rchar = boost::lexical_cast<int64_t>(parts[2]);
         } else if (parts[0] == "wchar") { 
             stat->wchar = boost::lexical_cast<int64_t>(parts[2]);
-        } else if (parts[0] == "syscr") { 
+        } else if (parts[0] == "syscr") {
             stat->syscr = boost::lexical_cast<int64_t>(parts[2]);
-        } else if (parts[0] == "syscw") { 
+        } else if (parts[0] == "syscw") {
             stat->syscw = boost::lexical_cast<int64_t>(parts[2]);
-        } else if (parts[0] == "read_bytes") { 
+        } else if (parts[0] == "read_bytes") {
             stat->read_bytes = boost::lexical_cast<int64_t>(parts[2]);
-        } else if (parts[0] == "write_bytes") { 
+        } else if (parts[0] == "write_bytes") {
             stat->write_bytes = boost::lexical_cast<int64_t>(parts[2]);
-        } else if (parts[0] == "cancelled_write_bytes") { 
+        } else if (parts[0] == "cancelled_write_bytes") {
             stat->cancelled_write_bytes = boost::lexical_cast<int64_t>(parts[2]);
         }
     }
     ifs.close();
+    return true;
+}
+
+bool CGroupIOCollector::GetBlkioStat(const std::string& group_path,
+                                     BlkioStatistics* blkio) {
+    if (blkio == NULL) {
+        return false;
+    }
+
+    int32_t major_number;
+    bool ok = file::GetDeviceMajorNumberByPath(FLAGS_agent_work_dir, major_number);
+    if (!ok) {
+        LOG(WARNING, "get device major fail");
+        return false;
+    }
+    std::string device_name = boost::lexical_cast<std::string>(major_number) + ":0";
+
+    std::string value;
+    if (0 != cgroups::Read(group_path,
+                           "blkio.throttle.io_serviced",
+                           &value)) {
+        LOG(WARNING, "get blkio.throttle.io_serviced falied %s",
+                     group_path.c_str());
+        return false;
+    }
+
+    std::vector<std::string> lines;
+    boost::split(lines, value, boost::is_any_of("\n"));
+    if (lines.size() <= 1) {
+        LOG(WARNING, "read contents format err %s %s",
+                      group_path.c_str(), value.c_str());
+        return false;
+    }
+
+    for (size_t i = 0; i < lines.size(); i++) {
+        std::string& line = lines[i];
+        if (line.empty()) {
+            continue;
+        }
+        std::istringstream ss(line);
+        std::string name;
+        std::string type;
+        uint64_t val;
+        ss >> name >> type >> val;
+        if (ss.fail()) {
+            LOG(WARNING, "line format err %s", line.c_str());
+            return false;
+        }
+
+        if (name == device_name) {
+            if ("Read" == type) {
+                blkio->read = val;
+            } else if ("Write" == type) {
+                blkio->write = val;
+            } else if ("Sync" == type) {
+                blkio->sync = val;
+            } else if ("Async" == type) {
+                blkio->async = val;
+            } else if ("Total" == type) {
+                blkio->total = val;
+                break;
+            }
+        }
+    }
+
     return true;
 }
 

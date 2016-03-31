@@ -30,7 +30,7 @@ public:
                         std::set<std::string>* right_diff);
     static void ResetLabels(AgentInfo* agent, const std::set<std::string>& labels);
     static std::string UUID();
-    static std::string ShortJobName(const JobDescriptor& job_desc);
+    static std::string ShortName(const std::string& job_name);
 };
 
 }   
