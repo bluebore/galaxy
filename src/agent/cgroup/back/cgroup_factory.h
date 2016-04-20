@@ -3,22 +3,22 @@
 // found in the LICENSE file.
 #pragma once
 
-#include "subsystem.h"
+#include "cgroup.h"
+
 #include <boost/shared_ptr.hpp>
+#include <map>
 
 namespace baidu {
 namespace galaxy {
 namespace cgroup {
-
-class MemorySubsystem : public Subsystem {
+            
+class CgroupFactory {
 public:
-    MemorySubsystem();
-    ~MemorySubsystem();
+    void Register(const std::string& name, boost::shared_ptr<Cgroup> subsystem);
+    boost::shared_ptr<Cgroup> CreateCgroup(const std::string& name);
     
-    boost::shared_ptr<google::protobuf::Message> Status();
-    boost::shared_ptr<Subsystem> Clone();
-    std::string Name();
-    int Construct();
+private:
+    std::map<const std::string, boost::shared_ptr<Cgroup> > _m_cgroup;
 };
 
 } //namespace cgroup

@@ -28,6 +28,7 @@ void AgentImpl::CreateContainer(::google::protobuf::RpcController* controller,
                                 const ::baidu::galaxy::proto::CreateContainerRequest* request,
                                 ::baidu::galaxy::proto::CreateContainerResponse* response,
                                 ::google::protobuf::Closure* done) {
+    // 
 
 }
 

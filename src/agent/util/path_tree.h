@@ -20,21 +20,24 @@
 
 namespace baidu {
 namespace galaxy {
-namespace util {
-
-class PathTree {
-public:
-    PathTree(const std::string& root_path);
-    ~PathTree();
+namespace path {
     
     const std::string RootPath();
     const std::string GcDir();
     const std::string WorkDir();
     const std::string ContainerDir(const std::string& container);
     const std::string AppRootDir();
-private:
-};
+    
+    const std::string CgroupRootPath();
+    const std::string CgroupPath(const std::string& subsystem_name,
+            const std::string& container_id,
+            const std::string& group_id);
+    
+    const std::string VolumSourcePath(const std::string& disk, const std::string& container_id);
+    
+    
+
 
 } //namespace util
 } //namespace galaxy
-} //namespace baidu
+} //namespace path

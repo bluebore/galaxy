@@ -29,13 +29,13 @@ public:
     Process();
     ~Process();
     static pid_t SelfPid();
-    Process* SetEnv(const std::string& key, const std::string& value);
-    Process*  SetRunUser(std::string& user, std::string& usergroup);
+    void AddEnv(const std::string& key, const std::string& value);
+    int  SetRunUser(const std::string& user);
     
-    Process*  RedirectStderr(const std::string& path);
-    Process*  RedirectStdout(const std::string& path);
+    int RedirectStderr(const std::string& path);
+    int RedirectStdout(const std::string& path);
     
-    int Clone(boost::function<int (void*)>* _routine, int32_t flag);
+    int Clone(boost::function<int (void*)>* routine, int32_t flag);
     int Fork(boost::function<int (void*)>* _routine);
     pid_t Pid();
     

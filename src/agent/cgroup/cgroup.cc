@@ -3,64 +3,78 @@
 // found in the LICENSE file.
 
 #include "cgroup.h"
-
-#include <boost/lexical_cast/lexical_cast_old.hpp>
-#include <stdio.h>
+#include "subsystem_factory.h"
+#include "subsystem.h"
+#include "freezer_subsystem.h"
 
 namespace baidu {
-namespace galaxy {
-namespace cgroup {
+    namespace galaxy {
+        namespace cgroup {
+            
+            Cgroup::Cgroup(const boost::shared_ptr<SubsystemFactory> factory) :
+                factory_(factory){
+            }
+            
+            Cgroup::~Cgroup() {
+                
+            }
+            
+            void Cgroup::SetContainerId(const std::string& container_id) {
+                container_id_ = container_id;
+            }
+            
+            void Cgroup::SetDescrition(boost::shared_ptr<baidu::galaxy::proto::Cgroup> cgroup) {
+                cgroup_ = cgroup;
+            }
 
-const static int64_t CFS_PERIOD = 100000L;   // cpu.cfs_period_us
-const static int64_t CFS_SHARE = 1000L;      // unit
-const static int64_t MILLI_CORE = 1000L;     // unit
-
-int Attach(const std::string& file, int64_t value) {
-    return Attach(file, boost::lexical_cast<std::string>(value));
+            int Cgroup::Construct() {
+                std::vector<std::string> subsystems;
+                factory_->GetSubsystems(subsystems);
+           
+                for (size_t i = 0; i < subsystems.size(); i++) {
+                    
+                    boost::shared_ptr<Subsystem> ss = factory_->CreateSubsystem(subsystems[i]);
+                    if (ss.get() != NULL) {
+                        if (subsystems[i] == "freezer") {
+                            freezer_ = boost::dynamic_pointer_cast<FreezerSubsystem>(ss);
+                            assert(NULL != freezer_.get());
+                        } else {
+                            subsystem_.push_back(ss);
+                        }
+                    } else {
+                        break;
+                    }
+                }
+                
+                if (subsystems.size() != subsystem_.size() - 1 || NULL == freezer_.get()) {
+                    // destroy
+                }
+                return 0;
+            }
+            
+            // Fixme: freeze first, and than kill
+            int Cgroup::Destroy() {
+                int ret = 0;
+                for (size_t i = 0; i < subsystem_.size(); i++) {
+                    if (0 != subsystem_[i]->Destroy()) {
+                        ret = -1;
+                    }
+                }
+                return ret;
+            }
+            
+            boost::shared_ptr<google::protobuf::Message> Report() {
+                boost::shared_ptr<google::protobuf::Message> ret;
+                return ret;
+                
+            }
+            
+            int ExportEnv(std::map<std::string, std::string>& evn) {
+                return 0;
+            }
+            
+        }
+    }
 }
 
-int Attach(const std::string& file, const std::string& value) {
-    FILE* fd = ::fopen(file.c_str(), "we");
-    if (NULL == fd) {
-        return -1;
-    }
 
-    int ret = ::fprintf(fd, "%s", value.c_str());
-    ::fclose(fd);
-    if (ret <= 0) {
-        return -1;
-    }
-    return 0;
-}
-
-int64_t CfsToMilliCore(int64_t cfs) {
-    if (cfs <=0) {
-        return -1L;
-    }
-    return cfs * MILLI_CORE / CFS_PERIOD;
-}
-
-int64_t ShareToMilliCore(int64_t share) {
-    if (share <=0) {
-        return 0;
-    }
-    return share * MILLI_CORE / CFS_SHARE;
-}
-
-int64_t MilliCoreToCfs(int64_t millicore) {
-    if (millicore <=0) {
-        return -1L;
-    }
-    return millicore * CFS_PERIOD / MILLI_CORE;
-}
-
-int64_t MilliCoreToShare(int64_t millicore) {
-    if (millicore <=0) {
-        return 0L;
-    }
-    return millicore * CFS_SHARE / MILLI_CORE;
-}
-
-} //namespace cgroup
-} //namespace galaxy
-} //namespace baidu

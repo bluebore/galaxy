@@ -31,26 +31,24 @@ pid_t Process::SelfPid() {
     return getpid();
 }
 
-Process* Process::SetEnv(const std::string& key, const std::string& value) {
+void Process::AddEnv(const std::string& key, const std::string& value) {
     _m_env[key] = value;
-    return this;
 }
 
-Process* Process::SetRunUser(std::string& user, std::string& usergroup) {
+// Fix me: check user exist
+int Process::SetRunUser(const std::string& user) {
     _user = user;
-    return this;
-
+    return 0;
 }
 
-Process* Process::RedirectStderr(const std::string& path) {
+int Process::RedirectStderr(const std::string& path) {
     _stderr_path = path;
-    return this;
-
+    return 0;
 }
 
-Process* Process::RedirectStdout(const std::string& path) {
+int Process::RedirectStdout(const std::string& path) {
     _stdout_path = path;
-    return this;
+    return 0;
 }
 
 int Process::Clone(boost::function<int (void*) >* _routine, int32_t flag) {
@@ -131,7 +129,6 @@ int Process::CloneRoutine(void* param) {
     if (0 != ::setpgid(pid, pid)) {
         std::cerr << "set pgid failed" << std::endl;
     }
-    
     return context->routine(context);
 }
 
