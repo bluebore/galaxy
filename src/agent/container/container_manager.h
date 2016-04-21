@@ -6,20 +6,20 @@
 namespace baidu {
 namespace galaxy {
 namespace agent {
-            
+
 class ContainerManager {
 public:
-boost::shared_ptr<baidu::galaxy::container::Container> CreateContainer() {
-    // check resource
-    // alloc resource
-    // create crgoup
-    // command
-    // process
-}
+    boost::shared_ptr<baidu::galaxy::container::Container> CreateContainer() {
+        // check resource
+        // alloc resource
+        // create crgoup
+        // command
+        // process
+    }
 
-int ReleaseContainer();
+    int ReleaseContainer();
 
-void ListContainer();
+    void ListContainer();
 
 };
 

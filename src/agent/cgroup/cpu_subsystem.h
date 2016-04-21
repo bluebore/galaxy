@@ -10,12 +10,12 @@
 namespace baidu {
 namespace galaxy {
 namespace cgroup {
-            
+
 class CpuSubsystem : public Subsystem {
 public:
     CpuSubsystem();
     ~CpuSubsystem();
-    
+
     std::string Name();
     int Construct();
     boost::shared_ptr<Subsystem> Clone();

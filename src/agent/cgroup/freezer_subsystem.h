@@ -6,23 +6,23 @@
 #include "subsystem.h"
 
 namespace baidu {
-    namespace galaxy {
-        namespace cgroup {
+namespace galaxy {
+namespace cgroup {
 
-            class FreezerSubsystem : public Subsystem {
-            public:
-                FreezerSubsystem();
-                ~FreezerSubsystem();
+class FreezerSubsystem : public Subsystem {
+public:
+    FreezerSubsystem();
+    ~FreezerSubsystem();
 
-                int Freeze();
-                int Thaw();
+    int Freeze();
+    int Thaw();
 
-                boost::shared_ptr<google::protobuf::Message> Status();
-                boost::shared_ptr<Subsystem> Clone();
-                std::string Name();
-                int Construct();
+    boost::shared_ptr<google::protobuf::Message> Status();
+    boost::shared_ptr<Subsystem> Clone();
+    std::string Name();
+    int Construct();
 
-            };
-        }
-    }
+};
+}
+}
 }

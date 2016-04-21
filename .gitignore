@@ -22,3 +22,8 @@ _testmain.go
 *.exe
 *.test
 *.prof
+*~
+*.swp
+*.pb.h
+*.pb.cc
+

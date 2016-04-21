@@ -12,11 +12,11 @@
 namespace baidu {
 namespace galaxy {
 namespace proto {
-    class Cgroup;
+class Cgroup;
 }
 
 namespace cgroup {
-     
+
 class Subsystem {
 public:
     Subsystem() {}
@@ -25,27 +25,27 @@ public:
         container_id_ = container_id;
         return this;
     }
-    
+
     Subsystem* SetCgroup(boost::shared_ptr<baidu::galaxy::proto::Cgroup> cgroup) {
         cgroup_ = cgroup;
         return this;
     }
-    
+
     virtual boost::shared_ptr<google::protobuf::Message> Status() = 0;
     virtual boost::shared_ptr<Subsystem> Clone() = 0;
     virtual std::string Name() = 0;
     virtual int Construct() = 0;
-    
+
     virtual int Destroy();
     virtual int Attach(pid_t pid);
     virtual int GetProcs(std::vector<int>& pids);
     virtual std::string Path();
     //virtual bool Empty();
-    
+
 protected:
     std::string container_id_;
     boost::shared_ptr<baidu::galaxy::proto::Cgroup> cgroup_;
-    
+
 };
 
 int Attach(const std::string& file, int64_t value);

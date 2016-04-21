@@ -9,38 +9,38 @@
 #include <string>
 
 namespace baidu {
-    namespace galaxy {
-        namespace proto {
-            class VolumRequired;
-        }
-        
-        namespace volum {
-            
-            class Volum {
-            public:
-                Volum();
-                ~Volum();
-                void SetContainerId(const std::string& container_id);
-                void SetDescrition(const boost::shared_ptr<baidu::galaxy::proto::VolumRequired> vr);
-                const boost::shared_ptr<baidu::galaxy::proto::VolumRequired> Descrition();
-                int Construct();
-                int Mount();
-                int Destroy();
-                int64_t Used();
-                
-                std::string ToString();
-                
-            private:
-                std::string SourcePath();
-                std::string TargePath();
-                int ConstructTmpfs();
-                int ConstructDir();
+namespace galaxy {
+namespace proto {
+class VolumRequired;
+}
 
-                boost::shared_ptr<baidu::galaxy::proto::VolumRequired> vr_;
-                std::string container_id_;
-                Mounter mounter_;
-                
-            };
-        }
-    }
+namespace volum {
+
+class Volum {
+public:
+    Volum();
+    ~Volum();
+    void SetContainerId(const std::string& container_id);
+    void SetDescrition(const boost::shared_ptr<baidu::galaxy::proto::VolumRequired> vr);
+    const boost::shared_ptr<baidu::galaxy::proto::VolumRequired> Descrition();
+    int Construct();
+    int Mount();
+    int Destroy();
+    int64_t Used();
+
+    std::string ToString();
+
+private:
+    std::string SourcePath();
+    std::string TargePath();
+    int ConstructTmpfs();
+    int ConstructDir();
+
+    boost::shared_ptr<baidu::galaxy::proto::VolumRequired> vr_;
+    std::string container_id_;
+    Mounter mounter_;
+
+};
+}
+}
 }

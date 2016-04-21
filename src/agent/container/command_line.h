@@ -6,7 +6,7 @@
 namespace baidu {
 namespace galaxy {
 namespace container {
-            
+
 class CommandLine {
 public:
     CommandLine* SetId(const std::string& id);

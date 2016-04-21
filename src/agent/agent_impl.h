@@ -15,28 +15,28 @@ namespace galaxy {
 class AgentImpl : public baidu::galaxy::proto::Agent {
 public:
 
-AgentImpl();
-virtual ~AgentImpl();
+    AgentImpl();
+    virtual ~AgentImpl();
 
-void CreateContainer(::google::protobuf::RpcController* controller,
-                     const ::baidu::galaxy::proto::CreateContainerRequest* request,
-                     ::baidu::galaxy::proto::CreateContainerResponse* response,
-                     ::google::protobuf::Closure* done);
+    void CreateContainer(::google::protobuf::RpcController* controller,
+            const ::baidu::galaxy::proto::CreateContainerRequest* request,
+            ::baidu::galaxy::proto::CreateContainerResponse* response,
+            ::google::protobuf::Closure* done);
 
-void RemoveContainer(::google::protobuf::RpcController* controller,
-                     const ::baidu::galaxy::proto::RemoveContainerRequest* request,
-                     ::baidu::galaxy::proto::RemoveContainerResponse* response,
-                     ::google::protobuf::Closure* done);
+    void RemoveContainer(::google::protobuf::RpcController* controller,
+            const ::baidu::galaxy::proto::RemoveContainerRequest* request,
+            ::baidu::galaxy::proto::RemoveContainerResponse* response,
+            ::google::protobuf::Closure* done);
 
-void ListContainers(::google::protobuf::RpcController* controller,
-                    const ::baidu::galaxy::proto::ListContainersRequest* request,
-                    ::baidu::galaxy::proto::ListContainersResponse* response,
-                    ::google::protobuf::Closure* done);
+    void ListContainers(::google::protobuf::RpcController* controller,
+            const ::baidu::galaxy::proto::ListContainersRequest* request,
+            ::baidu::galaxy::proto::ListContainersResponse* response,
+            ::google::protobuf::Closure* done);
 
-void Query(::google::protobuf::RpcController* controller,
-           const ::baidu::galaxy::proto::QueryRequest* request,
-           ::baidu::galaxy::proto::QueryResponse* response,
-           ::google::protobuf::Closure* done);
+    void Query(::google::protobuf::RpcController* controller,
+            const ::baidu::galaxy::proto::QueryRequest* request,
+            ::baidu::galaxy::proto::QueryResponse* response,
+            ::google::protobuf::Closure* done);
 
 
 

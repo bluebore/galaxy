@@ -6,20 +6,20 @@
 #include "subsystem.h"
 
 namespace baidu {
-    namespace galaxy {
-        namespace cgroup {
+namespace galaxy {
+namespace cgroup {
 
-            class TcpThrotSubsystem : public Subsystem {
-            public:
-                TcpThrotSubsystem();
-                ~TcpThrotSubsystem();
+class TcpThrotSubsystem : public Subsystem {
+public:
+    TcpThrotSubsystem();
+    ~TcpThrotSubsystem();
 
-                std::string Name();
-                int Construct();
-                boost::shared_ptr<google::protobuf::Message> Status();
-                boost::shared_ptr<Subsystem> Clone();
+    std::string Name();
+    int Construct();
+    boost::shared_ptr<google::protobuf::Message> Status();
+    boost::shared_ptr<Subsystem> Clone();
 
-            };
-        }
-    }
+};
+}
+}
 }
