@@ -6,6 +6,8 @@
 #include "subsystem.h"
 
 #include <boost/shared_ptr.hpp>
+#include <boost/core/noncopyable.hpp>
+
 #include <map>
 #include <vector>
 
@@ -13,9 +15,9 @@ namespace baidu {
 namespace galaxy {
 namespace cgroup {
 
-class SubsystemFactory {
+class SubsystemFactory : public boost::noncopyable {
 public:
-    void Register(const std::string& name, boost::shared_ptr<Subsystem> subsystem);
+    SubsystemFactory* Register(Subsystem* malloc_subsystem);
     boost::shared_ptr<Subsystem> CreateSubsystem(const std::string& name);
     void GetSubsystems(std::vector<std::string>& subsystems);
 

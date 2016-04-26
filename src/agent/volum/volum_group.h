@@ -29,10 +29,12 @@ public:
     void SetContainerId(const std::string& container_id);
 
     int Construct();
-    int Mount();
+    int Mount(const std::string& user);
     int Destroy();
     int ExportEnv(std::map<std::string, std::string>& env);
     boost::shared_ptr<google::protobuf::Message> Report();
+
+    static int MountRootfs();
 
 private:
     boost::shared_ptr<Volum> Construct(boost::shared_ptr<baidu::galaxy::proto::VolumRequired> volum);

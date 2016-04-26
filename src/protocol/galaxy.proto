@@ -94,6 +94,17 @@ message MemoryRequired {
     optional bool excess = 2;
 }
 
+message TcpthrotRequired {
+    optional int64 recv_bps_quota = 1;
+    optional bool recv_bps_excess = 2;
+    optional int64 send_bps_quota = 3;
+    optional bool send_bps_excess = 4;
+}
+
+message BlkioRequired {
+    optional int32 weight = 1;
+}
+
 // dynamic port ?, only one port?
 // report resource
 message PortRequired {
@@ -114,6 +125,7 @@ message VolumRequired {
     optional string dest_path = 5;    
     optional bool readonly = 6;       // default: false
     optional bool exclusive = 7;      // default: false
+    optional bool use_symlink = 8;    // use symlink or not, workspace dir use symlink default
 }
 
 /////////////////////////////////////////
@@ -240,13 +252,15 @@ message Cgroup {
    optional string id = 1; 
    optional CpuRequired cpu = 2;
    optional MemoryRequired memory = 3;
-    
+   optional TcpthrotRequired tcp_throt = 4;
+   optional BlkioRequired blkio = 5;
 }
 
 // resource manager -> agent
 message ContainerDescription {
    // optional ContainerGroup = 1; 
    // optional ContainerId id = 2;
+    optional string run_user = 1;
     optional VolumRequired workspace_volum = 3;
     repeated VolumRequired data_volums = 4;      //
     optional string cmd_line = 5;                // appmaster or appwork
@@ -258,8 +272,8 @@ enum ContainerStatus {
     kContainerPending = 1;    // in pending queue
     kContainerIniting = 2;    // initing
     kContainerReady = 3;      // ready, no process in container 
-    kContainerRunning = 4;    // running 
-    kContainerError = 5;      // an error occure
+    kContainerError = 4;      // an error occure
+    kContainerDestroying = 5; // 
     kContainerFinished = 6;   // released by resource manager
 }
 

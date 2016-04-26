@@ -5,6 +5,10 @@
 #include "cgroup/cgroup.h"
 #include "protocol/galaxy.pb.h"
 #include "volum/volum_group.h"
+#include "agent/util/user.h"
+#include "agent/util/path_tree.h"
+
+#include <unistd.h>
 
 namespace baidu {
 namespace galaxy {
@@ -57,6 +61,42 @@ int Container::Construct() {
     if (0 != volum_group_->Construct()) {
         return -1;
     }
+
+    // clone
+    return 0;
+}
+
+
+int Container::RunRoutine(Container* container) {
+    assert(NULL != container);
+
+    // mount root fs
+    if (0 != baidu::galaxy::volum::VolumGroup::MountRootfs()) {
+        return -1;
+    }
+
+    // mount workspace & datavolum
+    if (0 != container->volum_group_->Mount(container->desc_.run_user())) {
+        return -1;
+    }
+
+    // change root
+    if(0 != ::chroot(baidu::galaxy::path::ContainerRootPath(container->Id()).c_str())) {
+        return -1;
+    }
+    
+    // change user or sh -l
+    if(!baidu::galaxy::user::Su(container->desc_.run_user())) {
+        return -1;
+    }
+    
+    // start appworker 
+    char* argv[] = {
+        const_cast<char*>("sh"),
+        const_cast<char*>("-c"),
+        const_cast<char*>(container->desc_.cmd_line().c_str()),
+        NULL};
+    ::execv("/bin/sh", argv);
 
     return 0;
 }

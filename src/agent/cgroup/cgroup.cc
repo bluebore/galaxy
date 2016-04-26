@@ -7,6 +7,8 @@
 #include "subsystem.h"
 #include "freezer_subsystem.h"
 
+#include <iostream>
+
 namespace baidu {
 namespace galaxy {
 namespace cgroup {
@@ -27,26 +29,43 @@ void Cgroup::SetDescrition(boost::shared_ptr<baidu::galaxy::proto::Cgroup> cgrou
 }
 
 int Cgroup::Construct() {
+    assert(subsystem_.empty());
     std::vector<std::string> subsystems;
     factory_->GetSubsystems(subsystems);
 
+    bool ok = true;
     for (size_t i = 0; i < subsystems.size(); i++) {
         boost::shared_ptr<Subsystem> ss = factory_->CreateSubsystem(subsystems[i]);
+        assert(NULL != ss.get());
 
-        if (ss.get() != NULL) {
-            if (subsystems[i] == "freezer") {
-                freezer_ = boost::dynamic_pointer_cast<FreezerSubsystem>(ss);
-                assert(NULL != freezer_.get());
-            } else {
-                subsystem_.push_back(ss);
-            }
+        ss->SetContainerId(container_id_);
+        ss->SetCgroup(cgroup_);
+
+        if (subsystems[i] == "freezer") {
+            freezer_ = boost::dynamic_pointer_cast<FreezerSubsystem>(ss);
+            assert(NULL != freezer_.get());
         } else {
+            subsystem_.push_back(ss);
+        }
+
+        if (0 != ss->Construct()) {
+            ok = false;
             break;
         }
     }
 
-    if (subsystems.size() != subsystem_.size() - 1 || NULL == freezer_.get()) {
+    if (!ok) {
         // destroy
+        for (size_t i = 0; i < subsystem_.size(); i++) {
+            subsystem_[i]->Destroy();
+        }
+        subsystem_.clear();
+
+        if (NULL != freezer_.get()) {
+            freezer_->Destroy();
+            freezer_.reset();
+        }
+        return -1;
     }
 
     return 0;
@@ -60,6 +79,12 @@ int Cgroup::Destroy() {
         if (0 != subsystem_[i]->Destroy()) {
             ret = -1;
         }
+    }
+    subsystem_.clear();
+
+    if (NULL !=  freezer_.get()) {
+         freezer_->Destroy();
+         freezer_.reset();
     }
 
     return ret;

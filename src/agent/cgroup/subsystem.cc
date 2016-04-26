@@ -3,7 +3,6 @@
 // found in the LICENSE file.
 
 #include "subsystem.h"
-#include "util/path_tree.h"
 #include "protocol/galaxy.pb.h"
 
 #include <boost/filesystem/path.hpp>
@@ -18,7 +17,7 @@ namespace galaxy {
 namespace cgroup {
 
 int Subsystem::Destroy() {
-    boost::filesystem::path path(baidu::galaxy::path::CgroupPath(Name(), container_id_, cgroup_->id()));
+    boost::filesystem::path path(this->Path());
     boost::system::error_code ec;
 
     if (!boost::filesystem::exists(path, ec)) {
@@ -30,7 +29,13 @@ int Subsystem::Destroy() {
 }
 
 std::string Subsystem::Path() {
-    return baidu::galaxy::path::CgroupPath(Name(), container_id_, cgroup_->id());
+    std::string id = container_id_ + "_" + cgroup_->id();
+
+    boost::filesystem::path path("galaxy");
+    path.append(this->Name());
+    path.append(id);
+    return path.string();
+
 }
 
 int Subsystem::Attach(pid_t pid) {

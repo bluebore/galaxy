@@ -27,7 +27,6 @@ public:
     int Mount();
     int Destroy();
     int64_t Used();
-
     std::string ToString();
 
 private:

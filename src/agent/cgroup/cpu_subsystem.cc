@@ -34,7 +34,7 @@ int CpuSubsystem::Construct() {
     int ret = -1;
     boost::system::error_code ec;
 
-    if (!boost::filesystem::exists(path) && boost::filesystem::create_directories(path, ec)) {
+    if (!boost::filesystem::exists(path) && !boost::filesystem::create_directories(path, ec)) {
         return ret;
     }
 

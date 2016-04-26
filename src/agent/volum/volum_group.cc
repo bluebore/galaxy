@@ -60,7 +60,7 @@ int VolumGroup::Construct() {
     return 0;
 }
 
-int VolumGroup::Mount() {
+int VolumGroup::Mount(const std::string& user) {
     if (0 != workspace_volum_->Mount()) {
         return -1;
     }
@@ -70,6 +70,8 @@ int VolumGroup::Mount() {
             return -1;
         }
     }
+
+    // change owner
 
     return 0;
 }
@@ -106,6 +108,11 @@ boost::shared_ptr<Volum> VolumGroup::Construct(boost::shared_ptr<baidu::galaxy::
     }
 
     return volum;
+}
+
+
+int VolumGroup::MountRootfs() {
+    return -1;
 }
 
 }

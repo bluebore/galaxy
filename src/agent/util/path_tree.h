@@ -25,10 +25,9 @@ namespace path {
     const std::string RootPath();
     const std::string GcDir();
     const std::string WorkDir();
-    const std::string ContainerDir(const std::string& container);
     const std::string AppRootDir();
     
-    const std::string CgroupRootPath();
+    const std::string ContainerRootPath(const std::string& container_id);
     const std::string CgroupPath(const std::string& subsystem_name,
             const std::string& container_id,
             const std::string& group_id);

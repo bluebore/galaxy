@@ -27,4 +27,12 @@ env.Program('agent', Glob('src/agent/*.cc') + Glob('src/utils/*.cc') + Glob('src
             + ['src/protocol/agent.pb.cc', 'src/protocol/galaxy.pb.cc'])
 
 
+#example
+test_cpu_subsystem_src=['src/agent/cgroup/cpu_subsystem.cc', 'src/agent/cgroup/subsystem.cc', 'src/protocol/galaxy.pb.cc', 'src/agent/util/path_tree.cc', 'src/example/test_cpu_subsystem.cc']
+env.Program('test_cpu_subsystem', test_cpu_subsystem_src)
 
+test_cgroup_src=Glob('src/agent/cgroup/*.cc') + ['src/example/test_cgroup.cc', 'src/protocol/galaxy.pb.cc']
+env.Program('test_cgroup', test_cgroup_src)
+
+test_process_src=['src/example/test_process.cc', 'src/agent/container/process.cc']
+env.Program('test_process', test_process_src)
