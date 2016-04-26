@@ -1,40 +1,50 @@
 // Copyright (c) 2016, Baidu.com, Inc. All Rights Reserved
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-#pragma once
 
+#pragma once
 #include <boost/shared_ptr.hpp>
 #include <google/protobuf/message.h>
 
-#include <sys/types.h>
 #include <string>
+#include <map>
 
 namespace baidu {
 namespace galaxy {
+namespace proto {
+class Cgroup;
+};
 namespace cgroup {
-     
+
+class FreezerSubsystem;
+class Subsystem;
+class SubsystemFactory;
+
 class Cgroup {
 public:
-    Cgroup() {}
-    virtual ~Cgroup() {}
-    
-    virtual std::string Name() = 0;
-    virtual int Construct() = 0;
-    virtual int Destroy() = 0;
-    virtual int Attach(pid_t pid) = 0;
-    virtual boost::shared_ptr<google::protobuf::Message> Status() = 0;
-    virtual boost::shared_ptr<Cgroup> Clone() = 0;
-    virtual int GetProcs() = 0;
+    Cgroup(const boost::shared_ptr<SubsystemFactory> factory);
+    ~Cgroup();
+    void SetContainerId(const std::string& container_id);
+    void SetDescrition(boost::shared_ptr<baidu::galaxy::proto::Cgroup> cgroup);
+
+    int Construct();
+    int Destroy();
+    boost::shared_ptr<google::protobuf::Message> Report();
+    int ExportEnv(std::map<std::string, std::string>& evn);
+
+    int Freezen();
+    int Thaw();
+    int Kill();
+    bool Empty();
+
+private:
+    std::vector<boost::shared_ptr<Subsystem> > subsystem_;
+    boost::shared_ptr<FreezerSubsystem> freezer_;
+
+    std::string container_id_;
+    boost::shared_ptr<baidu::galaxy::proto::Cgroup> cgroup_;
+    const boost::shared_ptr<SubsystemFactory> factory_;
 };
-
-int Attach(const std::string& file, int64_t value);
-int Attach(const std::string& file, const std::string& value);
-
-int64_t CfsToMilliCore(int64_t cfs);
-int64_t ShareToMilliCore(int64_t share);
-int64_t MilliCoreToCfs(int64_t millicore);
-int64_t MilliCoreToShare(int64_t millicore);
-
-} //namespace cgroup
-} //namespace galaxy
-} //namespace baidu
+}
+}
+}

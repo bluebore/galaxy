@@ -4,7 +4,8 @@ package baidu.galaxy.proto;
 option cc_generic_services = true;
 
 message CreateContainerRequest {
-    optional ContainerDescription container = 1;
+    optional string id = 1;
+    optional ContainerDescription container = 2;
 }
 
 message CreateContainerResponse {

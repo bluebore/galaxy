@@ -11,16 +11,16 @@
 #include <map>
 #include <vector>
 
-#ifndef CLONE_NEWPID        
+#ifndef CLONE_NEWPID
 #define CLONE_NEWPID 0x20000000
 #endif
 
 #ifndef CLONE_NEWUTS
 #define CLONE_NEWUTS 0x04000000
-#endif 
+#endif
 
 
-namespace baidu{
+namespace baidu {
 namespace galaxy {
 namespace container {
 
@@ -28,47 +28,53 @@ class Process {
 public:
     Process();
     ~Process();
+    
+    // return pid of call process
     static pid_t SelfPid();
-    Process* SetEnv(const std::string& key, const std::string& value);
-    Process*  SetRunUser(std::string& user, std::string& usergroup);
-    
-    Process*  RedirectStderr(const std::string& path);
-    Process*  RedirectStdout(const std::string& path);
-    
-    int Clone(boost::function<int (void*)>* _routine, int32_t flag);
-    int Fork(boost::function<int (void*)>* _routine);
+    void AddEnv(const std::string& key, const std::string& value);
+    void AddEnv(const std::map<std::string, std::string>& env);
+    int  SetRunUser(const std::string& user);
+
+    int RedirectStderr(const std::string& path);
+    int RedirectStdout(const std::string& path);
+
+    int Clone(boost::function<int (void*)> routine, void* param, int32_t flag);
+    int Fork(boost::function<int (void*)> routine, void* param);
+    int Wait(int& status);
     pid_t Pid();
-    
-    
+
+
 private:
     class Context {
     public:
         Context() : self(NULL),
-                stdout_fd(-1),
-                stderr_fd(-1),
-                routine(NULL) {
-            
+            stdout_fd(-1),
+            stderr_fd(-1),
+            routine(NULL),
+            parameter(NULL) {
         }
     public:
         Process* self;
         int stdout_fd;
         int stderr_fd;
         boost::function<int (void*)> routine;
+        void* parameter;
         std::vector<int> fds;
+        std::map<std::string, std::string> envs;
     };
-    
+
     static int CloneRoutine(void* self);
-    
+
     int ListFds(pid_t pid, std::vector<int>& fd);
- 
-    pid_t _pid;
-    
-    std::string _user;
+
+    pid_t pid_;
+
+    std::string user_;
     std::string _user_group;
-    std::string _stderr_path;
-    std::string _stdout_path;
-    std::map<std::string, std::string> _m_env;
-    
+    std::string stderr_path_;
+    std::string stdout_path_;
+    std::map<std::string, std::string> env_;
+
 };
 
 } //namespace container
