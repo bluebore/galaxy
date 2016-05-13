@@ -197,7 +197,7 @@ Status JobManager::Add(const JobId& job_id, const JobDescriptor& job_desc) {
         TaskDescriptor* task_desc = job->desc_.mutable_pod()->mutable_tasks(i);
         if (!task_desc->has_cpu_isolation_type()) {
             // add default value
-            task_desc->set_cpu_isolation_type(kCpuIsolationHard);
+            task_desc->set_cpu_isolation_type(kCpuIsolationSoft);
         }
         if (!task_desc->has_mem_isolation_type()) { 
             // add default value
