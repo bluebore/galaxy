@@ -61,11 +61,6 @@ invalid config file, [app.json] is not a correct json format file
 [app.json] error: Missing a comma or '}' after an object member.
 at overview offset [273], at line number [14]
 ```
-
-两种方法：
-1. 在当前目录按照**配置galaxy.flag**中的方法构造galaxy.flag文件
-2. 按照**配置galaxy.flag**中的方法构造flag文件，并使用--flagfile=选项指明
-
 #galaxy_client使用方法
 运行./galaxy_client获取运行方法, flagfile的默认值是./galaxy.flag, 若需要指定别的flag文件，运行时加上--flagfile=选项
 ```
