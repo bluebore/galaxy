@@ -1,0 +1,87 @@
+{
+    "name": "example",
+    "type": "kJobService",
+    "deploy": {
+        "replica": 1,
+        "step": 1,
+        "interval": 1,
+        "max_per_host": 1,
+        "tag": "example",
+        "pools": "example1,test"
+    },
+    "pod": {
+        "workspace_volum": {
+            "size": "300M",
+            "type": "kEmptyDir",
+            "medium": "kDisk",
+            "dest_path": "/home/work",
+            "readonly": false,
+            "exclusive": false,
+            "use_symlink": true
+        },
+        "data_volums": [
+            {
+                "size": "800M",
+                "type": "kEmptyDir",
+                "medium": "kDisk",
+                "dest_path": "/home/data/0",
+                "readonly": false,
+                "exclusive": false,
+                "use_symlink": true
+            }
+        ],
+        "tasks": [
+            {
+                "cpu": {
+                    "millicores": 1000,
+                    "excess": false
+                },
+                "mem": {
+                    "size": "800M",
+                    "excess": false
+                },
+                "tcp": {
+                    "recv_bps_quota": "30M",
+                    "recv_bps_excess": false,
+                    "send_bps_quota": "30M",
+                    "send_bps_excess": false
+                },
+                "blkio": {
+                    "weight": 500
+                },
+                "ports": [
+                    {
+                        "name": "port00",
+                        "port": "12300"
+                    }
+                ],
+                "exec_package": {
+                    "start_cmd": "sh_start.sh",
+                    "stop_cmd": "sh app_stop.sh",
+                    "package": {
+                        "source_path": "ftp://***.baidu.com/home/users/***/exec/0/linkbase.tar.gz",
+                        "dest_path": "/home/spider/0",
+                        "version": "1.0.0"
+                    }
+                },
+                "data_package": {
+                    "reload_cmd": "sh -x reload.sh",
+                    "packages": [
+                        {
+                            "source_path": "ftp://***.baidu.com/home/users/***/data/00/linkbase.dict.tar.gz",
+                            "dest_path": "/home/spider/00/dict",
+                            "version": "1.0.0"
+                        }
+                    ]
+                },
+                "services": [
+                    {
+                        "service_name": "service00",
+                        "port_name": "port00",
+                        "user_bns": false
+                    }
+                ]
+            }
+        ]
+    }
+}

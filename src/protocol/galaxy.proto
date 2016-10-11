@@ -1,0 +1,521 @@
+package baidu.galaxy.proto;
+
+//////////////////////////////////////////
+////////user
+//////////////////////////////////////////
+message User {
+    optional string user = 1;
+    optional string token = 2;
+}
+
+message Quota {
+    optional int64 millicore = 1;
+    optional int64 memory = 2;
+    optional int64 disk = 3;
+    optional int64 ssd  = 4;
+    optional int64 replica = 5;
+}
+
+enum Authority {
+    // job
+    kAuthorityCreateContainer = 1;
+    kAuthorityRemoveContainer = 2;
+    kAuthorityUpdateContainer = 3;
+    kAuthorityListContainer = 4;
+
+    kAuthoritySubmitJob = 5;
+    kAuthorityRemoveJob = 6;
+    kAuthorityUpdateJob = 7;
+    kAuthorityListJobs = 8;
+
+    // pool
+
+    // tag
+
+    // auhority
+}
+
+enum ResourceError {
+    kResOk = 0;
+    kNoCpu = 1;
+    kNoMemory = 2;
+    kNoMedium = 3;
+    kNoDevice = 4;
+    kNoPort = 5;
+    kPortConflict = 6;
+    kTagMismatch = 7;
+    kNoMemoryForTmpfs = 8;
+    kPoolMismatch = 9;
+    kTooManyPods = 10;
+    kNoVolumContainer = 11;
+    kTooManyBatchPods = 12;
+}
+
+enum AuthorityAction {
+    kActionAdd = 1;
+    kActionRemove = 2;
+    kActionSet = 3;
+    kActionClear = 4;
+}
+
+enum ContainerType {
+    kNormalContainer = 1;
+    kVolumContainer = 2;
+}
+
+message Grant {
+    optional string pool = 1;
+    optional AuthorityAction action = 2;
+    repeated Authority authority = 3;
+}
+
+
+///////////////////////////////////////////
+///// resource
+///////////////////////////////////////////
+
+message Resource {
+    optional int64 total = 1;
+    optional int64 assigned = 2;
+    optional int64 used = 3;
+}
+
+
+enum VolumMedium {
+    kSsd = 1;
+    kDisk = 2;
+    kBfs = 3;
+    kTmpfs = 4;
+}
+
+message VolumResource {
+    optional VolumMedium medium = 1;
+    optional Resource volum = 2;
+    optional string device_path = 3;
+}
+
+message Volum {
+    optional string path = 1;    // deveice_path(/home/disk1)----->(bind) path(/home/disk3)
+    optional int64 used_size = 2;
+    optional int64 assigned_size = 3;
+    optional VolumMedium medium = 4;
+    optional bool exclusive = 5;
+    optional string device_path = 6;
+}
+
+message CpuRequired {
+    optional int64 milli_core = 1;
+    optional bool excess = 2;
+}
+
+message MemoryRequired {
+    optional int64 size = 1;
+    optional bool excess = 2;
+}
+
+message TcpthrotRequired {
+    optional int64 recv_bps_quota = 1;
+    optional bool recv_bps_excess = 2;
+    optional int64 send_bps_quota = 3;
+    optional bool send_bps_excess = 4;
+}
+
+message BlkioRequired {
+    optional int32 weight = 1;
+}
+
+// dynamic port ?, only one port?
+// report resource
+message PortRequired {
+    optional string port_name = 1;
+    optional string port = 2;       // "dynamic" or number
+    optional string real_port = 3;  //allocated on agent
+}
+
+enum VolumType {
+    kEmptyDir = 1;  
+    kHostDir = 2;
+}
+
+message VolumRequired {
+    optional int64 size = 1;
+    optional VolumType type = 2;
+    optional VolumMedium medium = 3;
+    optional string source_path = 4;  // bind source_path --> dest_path
+    optional string dest_path = 5;    
+    optional bool readonly = 6;       // default: false
+    optional bool exclusive = 7;      // default: false
+    optional bool use_symlink = 8;    // use symlink or not, workspace dir use symlink default
+}
+
+/////////////////////////////////////////
+///// Job
+/////////////////////////////////////////
+enum JobType {
+    kJobMonitor = 0;
+    kJobService = 100;
+    kJobBatch = 200;
+    kJobBestEffort = 300;
+}
+
+// update incrementally may cause new problems: version confusion 
+// Appmaster must save descrition of last 2 versions, and  a complete desc.
+enum JobStatus {
+   kJobPending = 1;
+   kJobRunning = 2;
+   kJobFinished = 3;
+   kJobDestroying = 4;
+   kJobUpdating = 5;
+   kJobUpdatePause = 6;
+}
+
+enum JobEvent {
+    kFetch = 1;
+    kUpdate = 2;
+    kRemove = 3;
+    kRemoveFinish = 4;
+    kUpdateFinish = 5;
+    kPauseUpdate = 6;
+    kUpdateContinue = 7;
+    kUpdateRollback = 8;
+}
+
+// Task or pod
+enum PodStatus {
+    kPodPending = 1;
+    kPodReady = 2;
+    kPodDeploying = 3;
+    kPodStarting = 4;
+    kPodServing = 5;
+    kPodFailed = 6;
+    kPodFinished = 7;
+    kPodRunning = 8;
+    kPodStopping = 9;
+    kPodTerminated = 10;
+}
+
+enum PodStage {
+    kPodStageCreating = 0;
+    kPodStageRebuilding = 1;
+    kPodStageReloading = 2;
+    kPodStageTerminating = 3;
+};
+
+enum ProcessStatus {
+    kProcessRunning = 0;
+    kProcessFinished = 1;
+    kProcessFailed = 2;
+    kProcessKilled = 3;
+    kProcessCoreDump = 4;
+}
+
+message ProcessInfo {
+   optional string key = 1;
+   optional int32 pid = 2;
+   optional ProcessStatus status = 3;
+   optional int32 exit_code = 4;
+}
+
+enum TaskStatus {
+    kTaskPending = 1;
+    kTaskDeploying = 2;
+    kTaskStarting = 3;
+    kTaskRunning = 4;
+    kTaskStopping = 5;
+    kTaskFailed = 6;
+    kTaskFinished = 7;
+    kTaskTerminated = 8;
+}
+
+message TaskInfo {
+    optional string taskid = 1;
+    optional string podid = 2;
+    optional string jobid = 3;
+    optional string workspace = 4;
+    optional string chroot_path = 5;
+    optional TaskDescription desc = 6;
+    optional TaskStatus status = 7;
+}
+
+message Package {
+    optional string source_path = 1; // support nfs/hdfs/ftp
+    optional string dest_path = 2; // local path
+    optional string version = 3;
+}
+message ImagePackage {
+    optional Package package = 1;
+    optional string start_cmd = 2;
+    optional string stop_cmd = 3;
+    optional string health_cmd = 4;
+}
+
+message DataPackage {
+    repeated Package packages = 1;
+    optional string reload_cmd = 3;
+}
+
+message Deploy {
+    optional uint32 replica = 1;
+    optional uint32 step = 2;
+    optional uint32 interval = 3;
+    optional uint32 max_per_host = 4;
+    optional string tag = 5;
+    repeated string pools = 6;
+    optional uint32 update_break_count = 7;
+}
+
+message Service {
+    optional string service_name = 1;  // must be uniq, which is guaranteed by user
+    optional string port_name = 2;     // name
+    optional bool use_bns = 3;
+    optional string tag = 4;
+    optional string health_check_type = 5;
+    optional string health_check_script = 6;
+    optional string token = 7;
+}
+
+message ServiceInfo {
+    optional string name = 1;
+    optional string port = 2;
+    optional string ip = 3;
+    optional Status status = 4;
+    optional string deploy_path = 5;
+    optional string hostname = 6;
+    optional string task_id = 7;
+}
+
+message TaskDescription {
+    // set by user or by
+    optional string id = 1;
+    // resource
+    optional CpuRequired cpu = 2;
+    optional MemoryRequired memory = 3;
+    repeated PortRequired ports = 4;
+    optional BlkioRequired blkio = 5;
+    optional TcpthrotRequired tcp_throt = 6;
+
+    // package
+    optional ImagePackage exe_package = 7;
+    optional DataPackage data_package = 8;
+
+    // service
+    repeated Service services = 9;
+}
+
+// user -> resource manager
+message PodDescription {
+    // workspace volum
+    optional VolumRequired workspace_volum = 3;
+    // Resource, volum is owned by Pod/
+    repeated VolumRequired data_volums = 4;
+    // tasks
+    repeated TaskDescription tasks = 5;
+    // schedule-policy is necessary ?
+}
+
+message JobDescription {
+    optional string name = 1;
+    optional uint32 priority = 2;
+    optional string version = 3;
+    optional Deploy deploy = 4;
+    optional PodDescription pod = 5;
+    optional string run_user = 6;
+    optional string tag = 7;
+    repeated string pool_names = 8;
+    repeated string volum_jobs = 9;
+}
+
+
+///////////////////////////////////////
+////container
+///////////////////////////////////////
+
+message Cgroup {
+   optional string id = 1; 
+   optional CpuRequired cpu = 2;
+   optional MemoryRequired memory = 3;
+   optional TcpthrotRequired tcp_throt = 4;
+   optional BlkioRequired blkio = 5;
+   repeated PortRequired ports = 6;
+}
+
+
+// resource manager -> agent
+message ContainerDescription {
+    optional int32 priority = 1;
+    optional string run_user = 2;
+    optional string version = 3;
+    optional VolumRequired workspace_volum = 4;
+    repeated VolumRequired data_volums = 5;      //
+    optional string cmd_line = 6;                 // appmaster or appwork
+    repeated Cgroup cgroups = 7;
+    optional int32 max_per_host = 8;
+    optional string tag = 9;
+    repeated string pool_names = 10;
+    repeated string volum_jobs = 11; // set by user: dependent volum jobs' id 
+    repeated string volum_containers = 12; //set by Resman
+    optional ContainerType container_type = 13 [default = kNormalContainer];
+}
+
+message ContainerMeta {
+    optional ContainerDescription container = 1;
+    optional string group_id = 2;
+    optional string container_id = 3;
+    optional int64 created_time = 4;
+    optional int32 pid = 5;
+    optional int64 destroy_time = 6;
+}
+
+enum ContainerStatus {
+    kContainerPending = 1;     // in pending queue
+    kContainerAllocating = 2;   // 
+    kContainerReady = 3;       // ready, no process in container 
+    kContainerFinish = 4;      // finish , when appworker exit with code 0
+    kContainerError = 5;       // an error occure
+    kContainerDestroying = 6;  // 
+    kContainerTerminated = 7;  // released by resource manager
+}
+
+enum ContainerGroupStatus {
+    kContainerGroupNormal = 1;
+    kContainerGroupTerminated = 2;
+}
+
+// agent -> manager
+
+message ContainerInfo {
+    optional string id = 1;
+    optional string group_id = 2;
+    optional int64 created_time = 3;
+    optional ContainerStatus status = 4; 
+    optional ContainerDescription container_desc = 5; //when RM need full report
+    // resource?
+    optional int64 cpu_used = 6;
+    optional int64 memory_used = 7;
+    repeated Volum volum_used = 8;
+    repeated string port_used = 9;
+
+    // statistics, eg: error cnt or other exceptions
+    optional uint32 restart_counter = 10;
+}
+
+///////////////////////////////////////
+////status
+///////////////////////////////////////
+enum Status {
+   kOk = 1;
+   kError = 2;
+   kTerminate = 3;
+   kAddAgentFail = 4;
+   kDeny = 5;
+   kJobNotFound = 6;
+   kCreateContainerGroupFail = 7;
+   kRemoveContainerGroupFail = 8;
+   kUpdateContainerGroupFail = 9;
+   kRemoveAgentFail = 10;
+   kCreateTagFail = 11;
+   kAddAgentToPoolFail = 12;
+   kAddUserFail = 13;
+   kRemoveUserFail = 14;
+   kGrantUserFail = 15;
+   kAssignQuotaFail = 16;
+   kRebuild = 17;
+   kReload = 18;
+   kStatusConflict = 19;
+   kJobTerminateFail = 20;
+   kSuspend = 21;
+   kQuit = 22;
+   kPodNotFound = 23;
+   kUserNotMatch = 24;
+}
+
+message ErrorCode {
+    optional Status status = 1;
+    optional string reason = 2;
+}
+
+enum AgentStatus {
+    kAgentUnknown = 0;
+    kAgentAlive = 1;
+    kAgentDead = 2;
+    kAgentOffline = 3;
+}
+
+// agent -> resource manager
+message AgentInfo {
+    // agent version
+    optional string version = 1;
+    optional int64 start_time = 2;
+
+    // host healthy
+    optional bool unhealthy = 3;
+
+    // container
+    repeated ContainerInfo container_info = 4;
+
+    // resource
+    optional Resource cpu_resource = 5;
+    optional Resource memory_resource = 6;
+    repeated VolumResource volum_resources = 7;
+
+    // exception statistics, eg: failed num of pod ..
+}
+
+//some statistics proto
+message ContainerStatistics {
+    optional string id = 1;
+    optional ContainerStatus status = 2;
+    optional string endpoint = 3;
+    optional Resource cpu = 4;
+    optional Resource memory = 5;
+    repeated VolumResource volums = 6; //different kinds of medium
+    optional ResourceError last_res_err = 7;
+}
+
+message ContainerGroupStatistics {
+    optional string id = 1;
+    optional string name = 2;
+    optional ContainerGroupStatus status = 3;
+    optional uint32 replica = 4;
+    optional uint32 ready = 5;
+    optional uint32 pending = 6;
+    optional uint32 allocating = 7;
+    optional Resource cpu = 8;
+    optional Resource memory = 9;
+    repeated VolumResource volums = 10; //different kinds of medium
+    optional int64 submit_time = 11;
+    optional int64 update_time = 12;
+    optional string user_name = 13;
+    optional uint32 destroying = 14;
+    optional ContainerType container_type = 15;
+}
+
+//proto that used to be saved in nexus
+
+message AgentMeta {
+    optional string endpoint = 1;
+    optional string pool = 2;
+}
+
+message UserMeta {
+    optional User user = 1;
+    repeated Grant grants = 2;
+    optional Quota quota = 3;
+}
+
+message ContainerGroupMeta {
+    optional string id = 1;
+    optional string name = 2;
+    optional string user_name = 3; 
+    optional uint32 replica = 4;
+    optional uint32 update_interval = 5;
+    optional ContainerDescription desc = 6;
+    optional ContainerGroupStatus status = 7;
+    optional int64 submit_time = 8;
+    optional int64 update_time = 9;
+}
+
+message TagMeta {
+    optional string tag = 1;
+    repeated string endpoints = 2;
+}

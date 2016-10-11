@@ -1,0 +1,65 @@
+import "galaxy.proto";
+package baidu.galaxy.proto;
+
+option cc_generic_services = true;
+
+message CreateContainerRequest {
+    optional string id = 1;
+    optional string container_group_id = 2;
+    optional ContainerDescription container = 3;
+}
+
+message CreateContainerResponse {
+    optional ErrorCode code = 1;
+}
+
+message RemoveContainerRequest {
+    optional string id = 1;
+    optional string container_group_id = 2;
+}
+
+message RemoveContainerResponse {
+    optional ErrorCode code = 1;
+}
+
+message ListContainersRequest {
+
+}
+
+message ListContainersResponse {
+    optional ErrorCode code = 1;
+    repeated ContainerInfo container_infos = 2;
+}
+
+message QueryRequest {
+    optional bool full_report = 1;
+}
+
+message QueryResponse {
+    optional ErrorCode code = 1;
+    optional AgentInfo agent_info = 2;
+}
+
+service Agent {
+    rpc CreateContainer(CreateContainerRequest) returns(CreateContainerResponse);
+    rpc RemoveContainer(RemoveContainerRequest) returns(RemoveContainerResponse);
+    rpc ListContainers(ListContainersRequest) returns(ListContainersResponse);
+    //rpc UpdateContainer();
+    rpc Query(QueryRequest) returns(QueryResponse);
+}
+
+
+// internal used
+
+message ContainerMetrix {
+    optional int64 time = 1;
+    optional int64 cpu_used_in_millicore = 2;
+    optional int64 memory_used_in_byte = 3;
+}
+
+message CgroupMetrix {
+    optional int64 cpu_used_in_millicore = 2;
+    optional int64 memory_used_in_byte = 3;
+    optional int64 container_cpu_time = 4;
+    optional int64 system_cpu_time = 5;
+}

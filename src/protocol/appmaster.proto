@@ -1,0 +1,185 @@
+import "galaxy.proto";
+package baidu.galaxy.proto;
+
+option cc_generic_services = true;
+
+message SubmitJobRequest {
+    optional User user = 1;
+    optional JobDescription job = 2;
+    optional string hostname = 3;
+}
+message SubmitJobResponse {
+    optional ErrorCode error_code = 1;
+    optional string jobid = 2;
+}
+
+enum UpdateJobOperate {
+    kUpdateJobStart = 1;
+    kUpdateJobContinue = 2;
+    kUpdateJobRollback = 3;
+    kUpdateJobPause = 4;
+}
+
+message UpdateJobRequest {
+    optional User user = 1;
+    optional string jobid = 2;
+    optional string hostname = 3;
+    optional uint32 interval = 4;
+    optional JobDescription job = 5;
+    optional UpdateJobOperate operate = 6;
+    optional uint32 update_break_count = 7; //continue, mutiple breakpoint
+}
+message UpdateJobResponse {
+    optional ErrorCode error_code = 1;
+}
+message RemoveJobRequest {
+    optional User user = 1;
+    optional string jobid = 2;
+    optional string hostname = 3;
+}
+message RemoveJobResponse {
+    optional ErrorCode error_code = 1;
+}
+
+message ListJobsRequest {
+    optional User user = 1;
+} 
+
+message ListJobsResponse {
+    optional ErrorCode error_code = 1;
+    repeated JobOverview jobs = 2; 
+}
+
+message ShowJobRequest {
+    optional User user = 1;
+    optional string jobid = 2;
+}
+
+message JobOverview {
+    optional JobDescription desc = 1;
+    optional string jobid = 2;
+    optional JobStatus status = 3;
+    optional int32 running_num = 4;
+    optional int32 pending_num = 5;
+    optional int32 deploying_num = 6;
+    optional int32 death_num = 7;
+    optional int32 fail_count = 8;
+    optional int64 create_time = 9;
+    optional int64 update_time = 10;
+    optional User user = 11;
+}
+
+enum UpdateAction {
+    kActionNull = 1;
+    kActionRebuild = 2;
+    kActionReload = 3;
+    kActionRecreate = 4;
+}
+
+message PodInfo {
+    optional string podid = 1;
+    optional string jobid = 2;
+    optional string endpoint = 3;
+    optional PodStatus status = 4;
+    optional string version = 5;
+    optional int64 start_time = 6;
+    optional int64 update_time = 7;
+    optional int32 fail_count = 8; 
+    optional int64 heartbeat_time = 9;
+    optional int64 last_normal_time = 10;
+    optional int64 send_rebuild_time = 11;
+    repeated ServiceInfo services = 12;
+    optional PodStatus reload_status = 13;
+}
+
+message JobInfo {
+    optional string jobid = 1;
+    optional JobDescription desc = 2;
+    repeated PodInfo pods = 3;
+    optional JobStatus status = 4;
+    optional string version = 7;
+    optional int64 create_time = 8;
+    optional int64 update_time = 9;
+    optional JobDescription last_desc = 10;
+    optional User user = 11;
+    optional UpdateAction action = 12;
+    optional string last_version = 13;
+}
+
+message ShowJobResponse {
+    optional ErrorCode error_code = 1;
+    optional JobInfo job = 2;
+}
+
+//ignore exec
+message ExecuteCmdRequest {
+    optional User user = 1;
+    optional string jobid = 2;
+    optional string cmd = 3;
+}
+
+message ExecuteCmdResponse {
+    optional ErrorCode error_code = 1;
+}
+
+
+message FetchTaskRequest {
+    optional string jobid = 1;
+    optional string podid = 2;
+    optional string endpoint = 3;
+    optional int64 start_time = 4;
+    optional PodStatus status = 5;
+    optional int32 fail_count = 6;
+    optional int64 update_time = 7;
+    optional PodStatus reload_status = 8;
+    repeated ServiceInfo services = 9;
+}
+
+message FetchTaskResponse {
+    optional ErrorCode error_code = 1;
+    optional PodDescription pod = 2;
+    optional int64 update_time = 3;
+    repeated ServiceInfo services = 4;
+}
+
+
+message StopJobRequest {
+    optional User user = 1;
+    optional string jobid = 2;
+    optional string hostname = 3;
+}
+
+message StopJobResponse {
+    optional ErrorCode error_code = 1;
+}
+
+message RecoverInstanceRequest {
+    optional User user = 1;
+    optional string jobid = 2;
+    optional string podid = 3;
+}
+
+message RecoverInstanceResponse {
+    optional ErrorCode error_code = 1;
+}
+
+service AppMaster {
+    //for app-worker: report & task assignment
+    rpc FetchTask(FetchTaskRequest) returns (FetchTaskResponse);
+
+   // rpc Status(StatusRequest) returns (StatusResponse);
+
+    //job man
+    rpc SubmitJob(SubmitJobRequest) returns (SubmitJobResponse);
+    
+    rpc UpdateJob(UpdateJobRequest) returns (UpdateJobResponse);
+
+    rpc StopJob(StopJobRequest) returns (StopJobResponse);
+    rpc RemoveJob(RemoveJobRequest) returns (RemoveJobResponse);
+    rpc ListJobs(ListJobsRequest)   returns (ListJobsResponse);
+    rpc ShowJob(ShowJobRequest) returns (ShowJobResponse);
+    rpc RecoverInstance(RecoverInstanceRequest) returns(RecoverInstanceResponse);
+    //[optional]
+    rpc ExecuteCmd(ExecuteCmdRequest) returns (ExecuteCmdResponse); 
+    // op
+}

@@ -1,0 +1,109 @@
+import "galaxy.proto";
+package baidu.galaxy.proto;
+
+option cc_generic_services = true;
+
+message Process {
+    optional string process_id = 1;
+    optional int32 pid = 2;
+    optional ProcessStatus status = 3;
+    optional int32 exit_code = 4;
+    optional int32 fail_retry_times = 5;
+}
+
+message ProcessManager {
+    repeated Process processes = 1;
+}
+
+message Port {
+    optional string name = 1;
+    optional string port = 2;
+}
+
+message PortMap {
+    repeated Port ports = 1;
+}
+
+message CgroupPath {
+     optional string cgroup = 1;
+     optional string path = 2;
+}
+
+message CgroupPathMap {
+    repeated CgroupPath cgroup_paths = 1;
+}
+
+message TaskEnv {
+    optional string user = 1;
+    optional string job_id = 2;
+    optional string pod_id = 3;
+    optional string task_id = 4;
+    repeated string cgroup_subsystems = 5;
+    repeated CgroupPath cgroup_paths = 6;
+    repeated Port ports = 7;
+    optional string workspace_path = 9;
+    optional string workspace_abspath = 10;
+}
+
+message Task {
+    optional string task_id = 1;
+    optional TaskDescription desc = 2;
+    optional TaskStatus status = 3;
+    optional TaskStatus prev_status = 4;
+    optional TaskStatus reload_status = 5;
+    optional int32 packages_size = 6;
+    optional int32 fail_retry_times = 7;
+    optional TaskEnv env = 8;
+    optional int32 timeout_point = 9;
+    optional int32 check_timeout_point = 10;
+}
+
+message TaskManager {
+    repeated Task tasks = 1;
+    optional ProcessManager process_manager = 2;
+}
+
+message PodEnv {
+    optional string user = 1;
+    optional string workspace_path = 2;
+    optional string workspace_abspath = 3;
+    optional string job_id = 4;
+    optional string pod_id = 5;
+    optional string ip = 6;
+    optional string hostname = 7;
+    repeated string task_ids = 8;
+    repeated string cgroup_subsystems = 9;
+    repeated CgroupPathMap task_cgroup_paths = 10;
+    repeated PortMap task_ports = 11;
+}
+
+message Pod {
+    optional string pod_id = 1;
+    optional PodStatus status = 2;
+    optional PodStatus reload_status = 3;
+    optional PodStage stage = 4;
+    optional PodEnv env = 5;
+    optional PodDescription desc = 6;
+    optional int32 fail_count = 7;
+    repeated ServiceInfo services = 8;
+    optional Status health = 9;
+}
+
+message PodManager {
+    optional Pod pod = 1;
+    optional TaskManager task_manager = 2;
+}
+
+message AppWorker {
+    optional int64 start_time = 1;
+    optional int64 update_time = 2;
+    optional Status update_status = 3;
+    optional string hostname = 4;
+    optional string endpoint = 5;
+    optional string ip = 6;
+    optional string job_id = 7;
+    optional string pod_id = 8;
+    optional string appmaster_endpoint = 9;
+    optional PodManager pod_manager = 10;
+}
+
