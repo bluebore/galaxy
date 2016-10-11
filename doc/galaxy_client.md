@@ -73,11 +73,11 @@ galaxy_client.
 galaxy_client [--flagfile=flagfile]
 Usage:
       galaxy_client submit -f jobconfig(json format)
-      galaxy_client update -f jobconfig(json format) -i id [-t breakpoint -o pause|continue|rollback]
+      galaxy_client update -f jobconfig(json format) -i id [-t breakpoint -o pause|continue|rollback|cancel]
       galaxy_client remove -i id
       galaxy_client list [-o cpu,mem,volums]
       galaxy_client show -i id [-o cpu,mem,volums]
-      galaxy_client recover -i id -I podid
+      galaxy_client recover -i id [-I podid]
       galaxy_client exec -i id -c cmd
       galaxy_client json [-i jobid -n jobname -t num_task -d num_data_volums -p num_port -a num_packages in data_package -s num_service]
 Options: 
@@ -164,7 +164,7 @@ Options:
         1. -f (必选) 指定job描述配置文件 ，文件格式是json格式
         2. -i (必选) 指定需要更新的jobid, 当仅需要批量更新job，不考虑暂停点，则-f和-i两个参数足够了
         3. -t (可选) 指定暂停点，更新job时，job更新的副本数达到这个值时则暂停更新
-        4. -o (可选) 指定更新job时的操作，pause表示暂停，continue表示继续，rollback表示回滚
+        4. -o (可选) 指定更新job时的操作，pause表示暂停，continue表示继续，rollback表示回滚，cancel表示取消更新
         5. --flagfile(可选)，指定flag文件，默认是./galaxy.flag
     用法:
         批量更新：./galaxy_client update -i jobid -f job.json  
@@ -173,6 +173,7 @@ Options:
         多断点更新：./galaxy_client update -i jobid -t 5 -o continue
         暂停更新：./galaxy_client update -i jobid -o pause
         回滚：./galaxy_client update -i jobid -o rollback
+        取消：./galaxy_client update -i jobid -o cancel
     说明：
         如果需要停止一个job且保留容器，请更新json文件中的exec_package选项中的version内容并将启动脚本内容改为下面的内容，使用命令./galaxy_client update -i jobid -f job.json
 ```
@@ -319,9 +320,10 @@ services infomation
 ### recover 重新拉起一个失败的pod
     参数：
         1. -i（必选） 指定jobid
-        2. -I（必选） 指定podid
+        2. -I（可选） 指定podid，如果不指定则恢复所有失败的pod
     用法：
         ./galaxy_client -i jobid -I podid
+        ./galaxy_client -i jobid
 
 ### exec 执行命令
     参数:

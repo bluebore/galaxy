@@ -129,6 +129,7 @@ enum UpdateJobOperate {
     kUpdateJobContinue = 2,
     kUpdateJobRollback = 3,
     kUpdateJobPause = 4,
+    kUpdateJobCancel = 5,
 };
 enum JobType {
     kJobMonitor = 0,
