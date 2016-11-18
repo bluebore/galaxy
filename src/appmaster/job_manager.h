@@ -57,6 +57,7 @@ using ::baidu::galaxy::proto::kUpdateFinish;
 using ::baidu::galaxy::proto::kPauseUpdate;
 using ::baidu::galaxy::proto::kUpdateContinue;
 using ::baidu::galaxy::proto::kUpdateRollback;
+using ::baidu::galaxy::proto::kUpdateCancel;
 using ::baidu::galaxy::proto::kActionNull;
 using ::baidu::galaxy::proto::kActionReload;
 using ::baidu::galaxy::proto::kActionRebuild;
@@ -118,6 +119,7 @@ public:
     Status Terminate(const JobId& jobid, const User& user);
     Status PauseUpdate(const JobId& job_id);
     Status ContinueUpdate(const JobId& job_id, int32_t break_point);
+    Status CancelUpdate(const JobId& job_id);
     Status Rollback(const JobId& job_id);
 
 
@@ -155,6 +157,7 @@ private:
     Status RemoveJob(Job* job, void* arg);
     Status ClearJob(Job* job, void* arg);
     Status PauseUpdateJob(Job* job, void * arg);
+    Status CancelUpdateJob(Job* job, void * arg);
     PodInfo* CreatePod(Job* job,
                 std::string podid,
                 std::string endpoint);

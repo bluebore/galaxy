@@ -78,7 +78,10 @@ void JobManager::BuildFsm() {
         BuildFsmValue(kJobUpdating, boost::bind(&JobManager::RollbackJob, this, _1, _2))));
     fsm_.insert(std::make_pair(BuildFsmKey(kJobUpdatePause, kRemove),
         BuildFsmValue(kJobDestroying, boost::bind(&JobManager::RemoveJob, this, _1, _2))));
-    
+    fsm_.insert(std::make_pair(BuildFsmKey(kJobUpdating, kUpdateCancel),
+        BuildFsmValue(kJobRunning, boost::bind(&JobManager::CancelUpdateJob, this, _1, _2))));
+    fsm_.insert(std::make_pair(BuildFsmKey(kJobUpdatePause, kUpdateCancel),
+        BuildFsmValue(kJobRunning, boost::bind(&JobManager::CancelUpdateJob, this, _1, _2))));
     for (FSM::iterator it = fsm_.begin(); it != fsm_.end(); it++) {
         LOG(INFO) << "key:" << it->first << " value: " << JobStatus_Name(it->second->next_status_);
     }
@@ -252,7 +255,7 @@ void JobManager::CheckPodAlive(PodInfo* pod, Job* job) {
             }
             //pod_checker_.DelayTask(60 * 1000, boost::bind(&JobManager::CheckDeployingAlive, 
             //                        this, pod->podid(), job->id_));
-            if(job->reloading_pods_.find(pod->podid()) != job->reloading_pods_.end()) {
+            if (job->reloading_pods_.find(pod->podid()) != job->reloading_pods_.end()) {
                 job->reloading_pods_.erase(pod->podid());
             }
             if (job->recreate_pods_.find(pod->podid()) != job->recreate_pods_.end()) {
@@ -433,6 +436,34 @@ Status JobManager::Rollback(const JobId& job_id) {
     return kOk;
 }
 
+Status JobManager::CancelUpdate(const JobId& job_id) {
+    MutexLock lock(&mutex_);
+    std::map<JobId, Job*>::iterator it = jobs_.find(job_id);
+    if (it == jobs_.end()) {
+        LOG(WARNING) << __FUNCTION__ << " " << job_id << "failed."
+            << "job not found";
+        return kJobNotFound;
+    }
+    Job* job = it->second;
+    std::string fsm_key = BuildFsmKey(job->status_, kUpdateCancel);
+    std::map<std::string, FsmTrans*>::iterator fsm_it = fsm_.find(fsm_key);
+    if (fsm_it != fsm_.end()) {
+        Status rlt = fsm_it->second->trans_func_(job, NULL);
+        if (kOk != rlt) {
+            return rlt;
+        }
+        job->status_ = fsm_it->second->next_status_;
+        LOG(INFO) << "job[" << job->id_ << "] status trans to : " <<
+            JobStatus_Name(job->status_);
+        SaveToNexus(job);
+    } else {
+        LOG(INFO) << "job[" << job->id_ << "][" << JobStatus_Name(job->status_)
+            << "] reject event [" << JobEvent_Name(kUpdateRollback) << "]" << __FUNCTION__;
+        return kStatusConflict;
+    }
+    return kOk;
+}
+
 Status JobManager::Terminate(const JobId& jobid,
                             const User& user) {
     MutexLock lock(&mutex_);
@@ -560,7 +591,17 @@ Status JobManager::RollbackJob(Job* job, void* arg) {
     return kOk;
 }
 
-Status JobManager::PauseUpdateJob(Job* job, void * arg) {
+Status JobManager::PauseUpdateJob(Job* job, void* arg) {
+    return kOk;
+}
+
+Status JobManager::CancelUpdateJob(Job* job, void* arg) {
+    mutex_.AssertHeld();
+    job->updated_cnt_ = 0;
+    job->desc_.mutable_deploy()->set_update_break_count(0);
+    job->deploying_pods_.clear();
+    job->reloading_pods_.clear();
+    job->recreate_pods_.clear();
     return kOk;
 }
 
@@ -730,7 +771,7 @@ Status JobManager::TryReCreate(Job* job, PodInfo* podinfo) {
         return kSuspend;
     } else {        
         job->recreate_pods_.insert(podinfo->podid());
-        return kQuit;
+            return kQuit;
     }
 }
 
@@ -1317,6 +1358,17 @@ Status JobManager::RecoverPod(const User& user, const std::string jobid, const s
     Job* job = job_it->second;
     if (job->user_.user() != user.user() || job->user_.token() != user.token()) {
         return kUserNotMatch;
+    }
+    if (podid.empty()) {
+        std::map<std::string, PodInfo*>::iterator it = job->pods_.find(podid);
+        for (; it != job->pods_.end(); it++) {
+            PodInfo* pod = it->second;
+            if (pod->status() == kPodFailed) {
+                pod->set_last_normal_time(0);
+                LOG(INFO) << __FUNCTION__ << " : " << podid;
+            }
+        }
+        return kOk;
     }
     std::map<std::string, PodInfo*>::iterator it = job->pods_.find(podid);
     if (it == job->pods_.end()) {

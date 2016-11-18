@@ -379,6 +379,18 @@ void AppMasterImpl::UpdateJob(::google::protobuf::RpcController* controller,
         VLOG(10) << response->DebugString();
         done->Run();
         return;
+    } else if (request->has_operate() && request->operate() == kUpdateJobCancel) {
+        Status status = job_manager_.CancelUpdate(request->jobid());
+        if (status != kOk) {
+            response->mutable_error_code()->set_status(status);
+            response->mutable_error_code()->set_reason(Status_Name(status));
+            done->Run();
+            return;
+        }
+        response->mutable_error_code()->set_status(status);
+        response->mutable_error_code()->set_reason("cancel update job ok");
+        done->Run();
+        return;
     }
     
     MutexLock lock(&resman_mutex_);
@@ -525,7 +537,11 @@ void AppMasterImpl::RecoverInstance(::google::protobuf::RpcController* controlle
                                     const ::baidu::galaxy::proto::RecoverInstanceRequest* request,
                                     ::baidu::galaxy::proto::RecoverInstanceResponse* response,
                                     ::google::protobuf::Closure* done) {
-    Status status = job_manager_.RecoverPod(request->user(), request->jobid(), request->podid());
+    std::string pod_id;
+    if (request->has_podid()) {
+        pod_id = request->podid();
+    }
+    Status status = job_manager_.RecoverPod(request->user(), request->jobid(), pod_id);
     LOG(INFO) << "DEBUG: RecoverInstance req"
         << request->DebugString()
         << "DEBUG END";
