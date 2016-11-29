@@ -10,7 +10,7 @@ env_gen.Protoc(['src/protocol/appworker.pb.h','src/protocol/appworker.pb.cc'], '
 
 env = Environment(
         CPPPATH = ['.', 'src', 'src/agent', 'thirdparty/boost_1_57_0/', './thirdparty/include', './thirdparty/rapidjson/include', 'src/utils'] ,
-        LIBS = ['sofa-pbrpc', 'protobuf', 'snappy', 'glog', 'gflags', 'tcmalloc', 'unwind', 'ins_sdk', 'pthread', 'z', 'rt', 'boost_filesystem', 'gtest', 'common', 'leveldb'],
+        LIBS = ['ins_sdk', 'sofa-pbrpc', 'protobuf', 'snappy', 'glog', 'gflags', 'tcmalloc', 'unwind', 'pthread', 'z', 'rt', 'boost_filesystem', 'gtest', 'common', 'leveldb'],
         LIBPATH = ['./thirdparty/lib', './thirdparty/boost_1_57_0/stage/lib'],
         CCFLAGS = '-g2 -Wall -Werror -Wno-unused-but-set-variable',
         LINKFLAGS = '-Wl,-rpath-link ./thirdparty/boost_1_57_0/stage/lib')
@@ -20,6 +20,12 @@ env.Program('resman', Glob('src/resman/*.cc') + Glob('src/utils/*.cc')
 
 env.Program('appmaster', Glob('src/appmaster/*.cc') + Glob('src/utils/*.cc')
             + ['src/protocol/appmaster.pb.cc', 'src/protocol/galaxy.pb.cc', 'src/protocol/resman.pb.cc', 'src/naming/private_sdk.cc'])
+
+env.Program('appmaster_v2', Glob('src/appmaster_v2/job/*.cc') 
+    + Glob('src/utils/*.cc') 
+    + Glob('src/protocol/*.pb.cc')
+    + Glob('src/appmaster_v2/*.cc')
+    + Glob('src/appmaster_v2/nexus/*.cc'))
 
 env.Program('appworker', Glob('src/appworker/*.cc') + Glob('src/utils/*.cc')
             + ['src/protocol/galaxy.pb.cc', 'src/protocol/appmaster.pb.cc', 'src/protocol/appworker.pb.cc'])
@@ -47,8 +53,17 @@ env.Program('agent_unittest', agent_unittest_src)
 cpu_tool_src = ['src/example/cpu_tool.cc']
 env.Program('cpu_tool', cpu_tool_src)
 
-jail_src = ['src/tools/gjail.cc', 'src/agent/util/input_stream_file.cc', 'src/agent/util/user.cc']
+jail_src = ['src/tools/gjail/gjail.cc', 'src/agent/util/input_stream_file.cc', 'src/agent/util/user.cc']
 env.Program('gjail', jail_src)
+
+probe_src = ['src/tools/gprobe/gprobe.cc', 'src/protocol/galaxy.pb.cc', 'src/protocol/agent.pb.cc', 'src/agent/util/output_stream_file.cc', 'src/agent/util/util.cc']
+env.Program('gprobe', probe_src)
+
+get_service_from_nexus_src = ['src/tools/meta_probe/get_service_from_nexus.cc', 'src/protocol/galaxy.pb.cc', 'src/protocol/appmaster.pb.cc']
+env.Program('get_service_from_nexus', get_service_from_nexus_src)
+
+get_user_meta_from_nexus_src = ['src/tools/meta_probe/get_user_meta_from_nexus.cc', 'src/protocol/galaxy.pb.cc']
+env.Program('get_user_meta_from_nexus', get_user_meta_from_nexus_src)
 
 container_meta_src = ['src/example/container_meta.cc','src/protocol/galaxy.pb.cc', 'src/agent/container/serializer.cc', 'src/agent/util/dict_file.cc']
 env.Program('container_meta', container_meta_src)
@@ -78,3 +93,9 @@ env.Program('test_filesystem', ['src/example/test_boost_filesystem.cc'])
 env.Program('test_appworker_utils', ['src/example/test_appworker_utils.cc', 'src/appworker/utils.cc'])
 
 env.Program('test_volum_collector', ['src/example/test_volum_collector.cc', 'src/agent/volum/volum_collector.cc', 'src/agent/agent_flags.cc'])
+
+
+######################## tmp #################
+test_glog_src=['src/example/test_glog.cc']
+env.Program('test_glog', test_glog_src)
+

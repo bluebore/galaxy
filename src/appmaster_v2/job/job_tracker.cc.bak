@@ -1,0 +1,288 @@
+// Copyright (c) 2016, Baidu.com, Inc. All Rights Reserved
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+#include "job_tracker.h"
+#include "timer.h"
+#include "protocol/appmaster.pb.h"
+#include "glog/logging.h"
+#include "gflags/gflags.h"
+#include <boost/bind.hpp>
+#include <boost/function.hpp>
+
+#include <iostream>
+
+DECLARE_int32(appmaster_check_deadpod_interval);
+DECLARE_int32(appmaster_check_deploy_interval);
+DECLARE_int32(master_pod_dead_threshhold);
+
+namespace baidu {
+namespace galaxy {
+namespace am {
+
+JobTracker::JobTracker(const JobId& jobid, const baidu::galaxy::proto::JobDescription& desc) :
+    id_(jobid),
+    desc_(new baidu::galaxy::proto::JobDescription()),
+    version_(baidu::common::timer::get_micros()),
+    last_version_(0L),
+    status_(baidu::galaxy::proto::kJobPending),
+    running_(false) {
+    desc_->CopyFrom(desc);
+}
+
+JobTracker::~JobTracker() {
+}
+
+void JobTracker::CheckDeadPodLoop(int32_t interval) {
+    // check heartbeat, remove dead pods
+    if (!running_) {
+        LOG(INFO) << id_ << "donot run, check dead pod loop will exit";
+        return;
+    }
+
+    assert(NULL != running_pool_.get());
+    boost::mutex::scoped_lock lock(mutex_);
+    int64_t now = baidu::common::timer::get_micros();
+    std::list<boost::shared_ptr<RuntimePod> >::iterator iter = runtime_pods_.begin();
+
+    while (iter != runtime_pods_.end()) {
+        if (now - (*iter)->heartbeat_time() > FLAGS_master_pod_dead_threshhold * 1000000L) {
+            // remove pod from queue and index
+            std::map<PodId, boost::shared_ptr<RuntimePod> >::iterator it
+                = runtime_pods_index_.find((*iter)->id());
+            LOG(WARNING) << (*iter)->id()
+                         << " is dead, and will be removed from queue: detail msg: "
+                         << (*iter)->ToString();
+            assert(it != runtime_pods_index_.end());
+            runtime_pods_index_.erase(it);
+            runtime_pods_.erase(iter++);
+            continue;
+        }
+
+        iter++;
+    }
+
+    running_pool_->DelayTask(interval * 1000,
+        boost::bind(&JobTracker::CheckDeadPodLoop, this, interval));
+}
+
+
+void JobTracker::CheckDeployLoop(int32_t interval) {
+    // check deploy step
+    if (!running_) {
+        LOG(INFO) << id_ << "donot run, check deploy pod loop will exit";
+        return;
+    }
+
+    assert(NULL != running_pool_.get());
+    boost::mutex::scoped_lock lock(mutex_);
+
+    if (proto::kJobUpdating == status_
+            || proto::kJobRunning == status_
+            || proto::kJobPending == status_) {
+        std::list<boost::shared_ptr<RuntimePod> >::iterator iter = runtime_pods_.begin();
+        int32_t deploying_cnt = 0;
+        int32_t need_deploying_cnt = 0;
+
+        while (iter != runtime_pods_.end()) {
+            if ((*iter)->InDeploying(version_, 60)) {
+                deploying_cnt++;
+            } else if ((*iter)->NeedUpdate()) {
+                need_deploying_cnt++;
+            }
+
+            iter++;
+        }
+
+        if (need_deploying_cnt > 0
+                && deploying_cnt < (int)desc_->deploy().step()) {
+            iter = runtime_pods_.begin();
+            int32_t to_deploy_cnt = (int)desc_->deploy().step() - deploying_cnt;
+            int real_add_cnt = 0;
+
+            while (iter != runtime_pods_.end() && to_deploy_cnt) {
+                if ((*iter)->NeedUpdate()) {
+                    (*iter)->set_expect_version(version_);
+                    to_deploy_cnt--;
+                    real_add_cnt++;
+                }
+
+                iter++;
+            }
+
+            LOG(INFO) << "deploying:" << id_ << "deploying_cnt : " << deploying_cnt
+                      << " | need_deploying_cnt: " << need_deploying_cnt
+                      << " | deploy_step: " << desc_->deploy().step()
+                      << " | deploying_cnt: " << deploying_cnt + real_add_cnt
+                      << " | deploying_deta: " << real_add_cnt;
+        }
+    }
+
+    running_pool_->DelayTask(interval * 1000,
+        boost::bind(&JobTracker::CheckDeployLoop, this, interval));
+}
+
+
+void JobTracker::Run(boost::shared_ptr<baidu::common::ThreadPool> running_pool) {
+    assert(NULL == running_pool_.get());
+    running_ = true;
+    running_pool_ = running_pool;
+    CheckDeadPodLoop(FLAGS_appmaster_check_deadpod_interval);
+    CheckDeployLoop(FLAGS_appmaster_check_deploy_interval);
+}
+
+
+baidu::galaxy::util::ErrorCode JobTracker::HandleFetch(
+        const baidu::galaxy::proto::FetchTaskRequest& request,
+        baidu::galaxy::proto::FetchTaskResponse& response) {
+    boost::mutex::scoped_lock lock(mutex_);
+    // 处理多余的pod和重复的pod
+    // 处理重复的
+    std::map<PodId, boost::shared_ptr<RuntimePod> >::const_iterator iter = this->runtime_pods_index_.find(request.podid());
+    boost::shared_ptr<RuntimePod> rt_pod;
+
+    if (iter == this->runtime_pods_index_.end()) {
+        rt_pod.reset(new RuntimePod(request.podid()));
+        rt_pod->set_expect_version(version_)
+        ->update_updating_time();
+        runtime_pods_index_[request.podid()] = rt_pod;
+        runtime_pods_.push_back(rt_pod);
+    } else {
+        // 判断是否是重复的
+        if ((*iter)->second->PodInfo().start_time() != request.start_time()) {
+            if ((*iter)->second->PodInfo().start_time() > request.start_time()) {
+                response.mutable_error_code()->set_status(baidu::galaxy::proto::kOk);
+                LOG(WARNING) << reqeust.id() << ":" << request.start_time()
+                             << " is confict with :" << (*iter)->second->PodInfo().start_time()
+                             << " and will quit";
+                return ERRORCODE_OK;
+            }
+        }
+
+        rt_pod = iter->second;
+    }
+
+    rt_pod->update_heartbeat_time()
+    ->update_pod_info(request);
+
+    if (baidu::galaxy::proto::kJobPending == status_) {
+        // process pending pod
+        response.mutable_error_code()->set_status(baidu::galaxy::proto::kOk);
+        response.mutable_pod()->CopyFrom(desc_->pod());
+        status_ = baidu::galaxy::proto::kJobRunning;
+        response.set_update_time(rt_pod->expect_version());
+        LOG(INFO) << id_ << " transfer to kJobRunning status";
+        status_ = baidu::galaxy::proto::kJobRunning;
+    } else if (baidu::galaxy::proto::kJobRunning == status_) {
+        if (baidu::galaxy::proto::kPodPending == request.status()) {
+            response.mutable_error_code()->set_status(baidu::galaxy::proto::kOk);
+            response.mutable_pod()->CopyFrom(desc_->pod());
+            response.set_update_time(rt_pod->expect_version());
+        } else if (baidu::galaxy::proto::kPodFailed == request.status()) {
+            // just recover every time
+            response.mutable_error_code()->set_status(baidu::galaxy::proto::kRebuild);
+        } else {
+            response.mutable_error_code()->set_status(baidu::galaxy::proto::kSuspend);
+        }
+    } else if (baidu::galaxy::proto::kJobDestroying == status_
+               || baidu::galaxy::proto::kJobFinished == status_) {
+        response.mutable_error_code()->set_status(baidu::galaxy::proto::kQuit);
+    } else if (baidu::galaxy::proto::kJobUpdatePause == status_) {
+        // check version
+        if (request.update_time() == rt_pod->expect_version()) {
+            if (baidu::galaxy::proto::kPodPending == request.status()) {
+                response.mutable_error_code()->set_status(baidu::galaxy::proto::kOk);
+                response.mutable_pod()->CopyFrom(desc_->pod());
+                response.set_update_time(rt_pod->expect_version());
+            } else if (baidu::galaxy::proto::kPodFailed == request.status()) {
+                response.mutable_error_code()->set_status(baidu::galaxy::proto::kRebuild);
+            } else {
+                response.mutable_error_code()->set_status(baidu::galaxy::proto::kSuspend);
+            }
+        } else if (request.update_time() == NULL_POD_VERSION) {
+            //if pod in recreated index
+        } else if (request.update_time() == last_version_) {
+        } else { // other more older version
+        }
+    } else if (baidu::galaxy::proto::kJobUpdating == status_) {
+        // need to update
+        // Fixme
+        if (rt_pod->expect_version() != request.update_time()
+                && rt_pod->expect_version() == version_) {
+            if (request.status() == proto::kPodPending) {
+                response.mutable_error_code()->set_status(baidu::galaxy::proto::kOk);
+                response.mutable_pod()->CopyFrom(desc_->pod());
+                response.set_update_time(rt_pod->expect_version());
+            } else if (request.status() == proto::kPodFailed) {
+                response.mutable_error_code()->set_status(baidu::galaxy::proto::kRebuild);
+            } else {
+                response.mutable_error_code()->set_status(baidu::galaxy::proto::kSuspend);
+            }
+        } else {
+            // process Failed
+            if (request.status() == baidu::galaxy::proto::kPodFailed) {
+                response.mutable_error_code()->set_status(baidu::galaxy::proto::kRebuild);
+            }
+        }
+
+        /* resource donot changed
+          if new version
+                 process Failed and Running pod
+          else if (expect_verion != real_version)
+                 rebuild
+
+         resource change
+         if expect_version != real_version
+            if real_version != 0
+                recreate
+            else
+                process Failed and RunningPod
+         *
+         else if expect_version == real
+            process Failed and Running pod*/
+    } else if (baidu::galaxy::proto::kJobFinished == status_) {
+    }
+
+    return ERRORCODE(proto::kOk, "ok");
+}
+
+void JobTracker::ExportPodDescription(const baidu::galaxy::proto::JobDescription& job,
+        baidu::galaxy::proto::PodDescription& pod) {
+}
+
+baidu::galaxy::util::ErrorCode JobTracker::Update(const baidu::galaxy::proto::JobDescription& desc,
+        int breakpoint) {
+    return ERRORCODE_OK;
+}
+
+baidu::galaxy::util::ErrorCode JobTracker::ContinueUpdating(int breakpoint) {
+    return ERRORCODE_OK;
+}
+
+baidu::galaxy::util::ErrorCode JobTracker::PauseUpdating() {
+    return ERRORCODE_OK;
+}
+
+baidu::galaxy::util::ErrorCode JobTracker::RollbackUpdating() {
+    return ERRORCODE_OK;
+}
+
+// donot realize
+baidu::galaxy::util::ErrorCode JobTracker::CancelUpdating() {
+    return ERRORCODE_OK;
+}
+
+// set for action
+baidu::galaxy::util::ErrorCode JobTracker::ForceAction(const PodId& id,
+        baidu::galaxy::proto::UpdateAction action) {
+    return ERRORCODE_OK;
+}
+
+baidu::galaxy::util::ErrorCode JobTracker::ForceCommand(const PodId& id,
+        const std::string& action) {
+    return ERRORCODE_OK;
+}
+
+}
+}
+}

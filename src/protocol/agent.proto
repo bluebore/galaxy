@@ -55,6 +55,10 @@ message ContainerMetrix {
     optional int64 time = 1;
     optional int64 cpu_used_in_millicore = 2;
     optional int64 memory_used_in_byte = 3;
+
+    optional int64 memory_fail_cnt = 4;
+    optional int64 memory_cache_in_byte = 5;
+    optional int64 memory_rss_in_byte = 6;
 }
 
 message CgroupMetrix {
@@ -62,4 +66,9 @@ message CgroupMetrix {
     optional int64 memory_used_in_byte = 3;
     optional int64 container_cpu_time = 4;
     optional int64 system_cpu_time = 5;
+    optional int32 cpu_limit_in_millicore = 6;
+    optional int64 memory_fail_cnt = 7;
+    optional int64 memory_cache_in_byte = 8;
+    optional int64 memory_rss_in_byte = 9;
+    
 }

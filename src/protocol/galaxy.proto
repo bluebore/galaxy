@@ -178,6 +178,7 @@ enum JobEvent {
     kPauseUpdate = 6;
     kUpdateContinue = 7;
     kUpdateRollback = 8;
+    kUpdateCancel = 9;
 }
 
 // Task or pod
@@ -273,6 +274,7 @@ message Service {
     optional string health_check_type = 5;
     optional string health_check_script = 6;
     optional string token = 7;
+    optional bool use_gns = 8;
 }
 
 message ServiceInfo {
@@ -324,7 +326,8 @@ message JobDescription {
     optional string tag = 7;
     repeated string pool_names = 8;
     repeated string volum_jobs = 9;
-    optional bool v2_support = 10; 
+    optional bool v2_support = 10;
+    optional string appmaster_path = 11;
 }
 
 
@@ -358,6 +361,7 @@ message ContainerDescription {
     repeated string volum_containers = 12; //set by Resman
     optional ContainerType container_type = 13 [default = kNormalContainer];
     optional bool v2_support = 14 [default = false];
+    optional string appmaster_path = 15;
 }
 
 message ContainerMeta {
@@ -400,6 +404,11 @@ message ContainerInfo {
 
     // statistics, eg: error cnt or other exceptions
     optional uint32 restart_counter = 10;
+
+    //
+    optional int64 memory_cache = 11;
+    optional int64 memory_rss = 12;
+    optional int64 memory_fail_cnt = 13;
 }
 
 ///////////////////////////////////////

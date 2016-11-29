@@ -47,6 +47,8 @@ int main(int argc, char* argv[])
     google::ParseCommandLineFlags(&argc, &argv, true);
     google::InitGoogleLogging(argv[0]);
     baidu::galaxy::SetupLog("agent");
+
+
     baidu::galaxy::AgentImpl* agent = new baidu::galaxy::AgentImpl();
     sofa::pbrpc::RpcServerOptions options;
     sofa::pbrpc::RpcServer rpc_server(options);
