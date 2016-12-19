@@ -475,7 +475,7 @@ int ParseTask(const rapidjson::Value& task_json, ::baidu::galaxy::sdk::TaskDescr
             if ((vec_ports[i].compare("dynamic") != 0 && vec_ports[i].compare(vec_ports[i-1]) == 0)
                     || (vec_ports[i-1].compare("dynamic") == 0 
                         && vec_ports[i].compare("dynamic") != 0)) {
-                fprintf(stderr, "ports are not correct in task, ports must be serial\n");
+                fprintf(stderr, "client:ports are not correct in task, ports must be serial\n");
                 return -1;
             }
 
@@ -487,7 +487,7 @@ int ParseTask(const rapidjson::Value& task_json, ::baidu::galaxy::sdk::TaskDescr
                }
                ++int_port;
                if (vec_ports[i].compare(::baidu::common::NumToString(int_port)) != 0) {
-                   fprintf(stderr, "ports are not correct in task, ports must be serial\n");
+                   fprintf(stderr, "client:ports are not correct in task, ports must be serial\n");
                    return -1;
                }
            }

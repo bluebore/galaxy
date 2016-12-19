@@ -126,6 +126,9 @@ bool JobAction::UpdateJob(const std::string& json_file, const std::string& jobid
     } else if (operation.compare("rollback") == 0) {
         fprintf(stderr, "breakpoint update rollback\n");
         request.operate = baidu::galaxy::sdk::kUpdateJobRollback;
+    } else if (operation.compare("cancel") == 0) {
+        fprintf(stderr, "update cancel\n");
+        request.operate = baidu::galaxy::sdk::kUpdateJobCancel;
     } else if (operation.empty()) {
         if (update_break_count < 0) {
             fprintf(stderr, "update_break_count must not be less than 0\n");
@@ -140,7 +143,7 @@ bool JobAction::UpdateJob(const std::string& json_file, const std::string& jobid
         request.operate = baidu::galaxy::sdk::kUpdateJobStart;
         request.job.deploy.update_break_count = update_break_count;
     } else {
-        fprintf(stderr, "update operation must be start, continue, rollback or default\n");
+        fprintf(stderr, "update operation must be start, continue, rollback, cancel or default\n");
         return false;
     }
 
@@ -903,8 +906,8 @@ bool JobAction::ShowJob(const std::string& jobid, const std::string& soptions, b
 }
 
 bool JobAction::RecoverInstance(const std::string& jobid, const std::string& podid) {
-    if (jobid.empty() || podid.empty()) {
-        fprintf(stderr, "jobid and podid are needed\n");
+    if (jobid.empty()) {
+        fprintf(stderr, "jobid is needed\n");
         return false;
     }
 
@@ -916,7 +919,11 @@ bool JobAction::RecoverInstance(const std::string& jobid, const std::string& pod
     baidu::galaxy::sdk::RecoverInstanceResponse response;
     request.user = user_;
     request.jobid = jobid;
-    request.podid = jobid + "." + podid;
+
+    if (!podid.empty()) {
+        request.podid = jobid + "." + podid;
+    }
+
     bool ret = app_master_->RecoverInstance(request, &response);
     if (ret) {
         printf("recover instance %s success\n", jobid.c_str());

@@ -148,6 +148,8 @@ bool AppMasterImpl::UpdateJob(const UpdateJobRequest& request, UpdateJobResponse
         pb_request.set_operate(::baidu::galaxy::proto::kUpdateJobRollback);
     } else if (request.operate == kUpdateJobPause) {
         pb_request.set_operate(::baidu::galaxy::proto::kUpdateJobPause);
+    } else if (request.operate == kUpdateJobCancel) {
+        pb_request.set_operate(::baidu::galaxy::proto::kUpdateJobCancel);
     } else {
         fprintf(stderr, "update operation must be kUpdateJobStart, \
                     kUpdateJobContinue, kUpdateJobRollback, kUpdateJobPause\n");
@@ -356,12 +358,9 @@ bool AppMasterImpl::RecoverInstance(const RecoverInstanceRequest& request, Recov
         fprintf(stderr, "jobid must not be empty\n");
         return false;
     }
+    
     std::string podid = Strim(request.podid); 
-    if (podid.empty()){
-        fprintf(stderr, "podid must not be empty\n");
-        return false;
-    }
-
+    
     ::baidu::galaxy::proto::RecoverInstanceRequest pb_request;
     ::baidu::galaxy::proto::RecoverInstanceResponse pb_response;
     
