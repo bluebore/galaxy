@@ -1,0 +1,68 @@
+package baidu.lumia;
+
+option cc_generic_services = true;
+option py_generic_services = true;
+
+enum LumiaAgentStatus {
+    kAgentOk = 0;
+    kAgentErrInput = 1;
+    kAgentUnknownInput = 2;
+    kAgentError = 3;
+}
+
+enum TaskState {
+    kTaskRunning = 0;
+    kTaskCompleted = 1;
+    kTaskError = 2;
+}
+
+message DeviceStatus {
+    optional string name = 1;
+    optional bool healthy = 2;
+}
+
+message MountStatus {
+    optional string dev = 1;
+    optional string mount_point = 2;
+    optional bool mounted = 3;
+}
+
+message MinionStatus {
+    repeated DeviceStatus devices = 1;
+    repeated MountStatus mounts = 2;
+    optional int64 datetime = 4;
+    optional bool all_is_well = 5;
+}
+
+message TaskStatus {
+    optional string job_id = 1;
+    optional int32 offset = 2;
+    optional TaskState state = 3; 
+}
+
+message QueryRequest {}
+
+message QueryResponse {
+    optional MinionStatus minion_status = 1;
+    optional int32 status = 2;
+    optional string ip = 3;
+    repeated TaskStatus task_status = 4; 
+}
+
+message ExecRequest {
+    optional string job_id = 1;
+    optional int32 offset = 2;
+    optional bytes content = 3;
+    optional string user = 4;
+}
+
+message ExecResponse {
+    optional int32 status = 1;
+}
+
+
+service LumiaLet {
+    rpc Query(QueryRequest) returns (QueryResponse);
+    rpc Exec(ExecRequest) returns (ExecResponse);
+}
+
